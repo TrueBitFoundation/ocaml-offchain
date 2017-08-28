@@ -30,7 +30,6 @@ type inst =
  | POPBRK
  | BREAK
  | RETURN
- | RETURNBRK
  | LOAD of int
  | STORE of int
  | DROP
@@ -53,6 +52,7 @@ type inst =
 
 type context = {
   ptr : int;
+  bptr : int;
   label : int;
   f_types : (Int32.t, func_type) Hashtbl.t;
 }
@@ -65,9 +65,9 @@ and compile' ctx = function
  | Nop -> ctx, [NOP]
  | Block (ty, lst) ->
    let end_label = ctx.label in
-   let ctx = {ctx with label=ctx.label+1; ptr=ctx.ptr+1} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1} in
    let ctx, body = compile_block ctx lst in
-   {ctx with ptr=ctx.ptr-1}, [PUSHBRK end_label] @ body @ [LABEL end_label; POPBRK]
+   {ctx with bptr=ctx.bptr-1}, [PUSHBRK end_label] @ body @ [LABEL end_label; POPBRK]
  | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit]
  | Test t -> {ctx with ptr = ctx.ptr-1}, [TEST t]
  | Compare i -> {ctx with ptr = ctx.ptr-1}, [CMP i]
@@ -77,9 +77,9 @@ and compile' ctx = function
  | Loop (_, lst) ->
    let start_label = ctx.label in
    let end_label = ctx.label+1 in
-   let ctx = {ctx with label=ctx.label+2} in
+   let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+2} in
    let ctx, body = compile_block ctx lst in
-   {ctx with ptr=ctx.ptr-2}, [LABEL start_label; PUSHBRK end_label;  PUSHBRK start_label] @ body @ [JUMP ctx.label; LABEL end_label; POPBRK; POPBRK]
+   {ctx with ptr=ctx.bptr-2}, [LABEL start_label; PUSHBRK end_label;  PUSHBRK start_label] @ body @ [JUMP ctx.label; LABEL end_label; POPBRK; POPBRK]
  | If (ty, texp, fexp) ->
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
@@ -97,7 +97,7 @@ and compile' ctx = function
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> PUSH {at=no_region; it=Values.I32 x.it}) (def::tab) in
    ctx, lst @ [DUP (List.length lst); POPI (List.length lst); BREAKI]
- | Return -> ctx, [RETURNBRK]
+ | Return ->  compile_break ctx ctx.bptr
  | Drop -> {ctx with ptr=ctx.ptr-1}, [DROP]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
  | CurrentMemory -> {ctx with ptr=ctx.ptr+1}, [CURMEM]
@@ -173,7 +173,7 @@ let compile_module m =
   List.iteri (fun i f ->
     let ty = Hashtbl.find ttab f.it.ftype.it in
     Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
-  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ftab}) m.funcs in
+  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ftab; bptr=0}) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc = function
    | [] -> acc
@@ -191,5 +191,6 @@ let compile_modules lst =
      funcs=List.flatten (List.map (fun m -> m.funcs) lst);
   } in
   compile_module mega
+
 
 

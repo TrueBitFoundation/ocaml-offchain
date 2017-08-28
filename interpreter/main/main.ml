@@ -34,7 +34,7 @@ let argspec = Arg.align
   "-v", Arg.Unit banner, " show version"
 ]
 
-let _ = Merkle.compile
+let _ = Mrun.vm_step
 
 let () =
   Printexc.record_backtrace true;
