@@ -184,4 +184,12 @@ let compile_module m =
   let flat_code = build 0 [] module_codes in
   List.map (resolve_inst2 f_resolve) flat_code
 
+(* perhaps for now just make a mega module *)
+let compile_modules lst =
+  let mega = {empty_module with
+     types=List.flatten (List.map (fun m -> m.types) lst);
+     funcs=List.flatten (List.map (fun m -> m.funcs) lst);
+  } in
+  compile_module mega
+
 
