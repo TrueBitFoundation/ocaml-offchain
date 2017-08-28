@@ -3,7 +3,7 @@ open Types
 open Instance
 open Ast
 open Source
-
+open Merkle
 
 (* Errors *)
 
@@ -48,6 +48,8 @@ and admin_instr' =
   | Local of instance * value ref list * value stack * admin_instr list
   | Invoke of closure
 
+(* why are locals refs???? *)
+
 type config =
 {
   locals : value ref list;
@@ -59,6 +61,18 @@ type config =
 
 let config vs es =
   {locals = []; values = vs; instrs = es; depth = 0; budget = 300}
+
+type tree =
+ | Tree of tree list
+ | Leaf of Int64.t
+
+let tree_of_value = function
+ | I64 x -> Leaf x
+ | I32 x -> Leaf (Int64.of_int32 x)
+ | F32 x -> Leaf (Int64.of_int32 (F32.to_bits x))
+ | F64 x -> Leaf (F64.to_bits x)
+
+(* this will not work because the tree is too complex (deep) *)
 
 let plain e = Plain e.it @@ e.at
 
@@ -108,7 +122,11 @@ let drop n (vs : 'a stack) at =
  *   c : config
  *)
 
+let counter = ref 0
+
 let rec step (inst : instance) (c : config) : config =
+  incr counter;
+  prerr_endline (string_of_int !counter);
   let e = List.hd c.instrs in
   let vs', es' =
     match e.it, c.values with
