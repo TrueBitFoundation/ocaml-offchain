@@ -3,7 +3,7 @@ open Types
 open Instance
 open Ast
 open Source
-open Merkle
+(* open Merkle *)
 
 (* Errors *)
 
@@ -62,6 +62,7 @@ type config =
 let config vs es =
   {locals = []; values = vs; instrs = es; depth = 0; budget = 300}
 
+(*
 type tree =
  | Tree of tree list
  | Leaf of Int64.t
@@ -71,6 +72,7 @@ let tree_of_value = function
  | I32 x -> Leaf (Int64.of_int32 x)
  | F32 x -> Leaf (Int64.of_int32 (F32.to_bits x))
  | F64 x -> Leaf (F64.to_bits x)
+*)
 
 (* this will not work because the tree is too complex (deep) *)
 
