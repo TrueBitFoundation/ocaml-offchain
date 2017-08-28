@@ -20,11 +20,13 @@ type inst =
  | CALL of int
  | LABEL of int
  | PUSHBRK of int
+(*
  | L_JUMP of int
  | L_JUMPI of int
  | L_CALL of int
  | L_LABEL of int
  | L_PUSHBRK of int
+*)
  | POPBRK
  | BREAK
  | RETURN
@@ -41,7 +43,7 @@ type inst =
  | GROW
  | POPI of int
  | BREAKI
- | CALLI
+ | CALLI of int (* indirect call, check from table *)
  | PUSH of literal                  (* constant *)
  | TEST of testop                    (* numeric test *)
  | CMP of relop                  (* numeric comparison *)
@@ -107,7 +109,7 @@ and compile' ctx = function
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALLI]
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALLI 0]
  | Select ->
    {ctx with ptr=ctx.ptr-2}, [SELECT]
  (* Dup ptr will give local 0 *)
@@ -146,10 +148,40 @@ let compile_func ctx func =
   make DROP (List.length par + List.length func.it.locals) @
   [RETURN]
 
+(* This resolves only one function, think more *)
+let resolve_inst tab = function
+ | LABEL _ -> NOP
+ | JUMP l -> JUMP (Hashtbl.find tab l)
+ | JUMPI l -> JUMPI (Hashtbl.find tab l)
+(* | CALL l -> CALL (Hashtbl.find tab l) *)
+ | PUSHBRK l -> PUSHBRK (Hashtbl.find tab l)
+ | a -> a
+
+let resolve_to n lst =
+  let tab = Hashtbl.create 10 in
+  List.iteri (fun i inst -> match inst with LABEL l -> Hashtbl.add tab l (i+n)| _ -> ()) lst;
+  List.map (resolve_inst tab) lst
+
+let resolve_inst2 tab = function
+ | CALL l -> CALL (Hashtbl.find tab l)
+ | a -> a
+
 let compile_module m =
   let ftab = Hashtbl.create 10 in
-  List.iteri (fun i f -> Hashtbl.add ftab (Int32.of_int i) f.it) m.types;
-  List.map (compile_func {ptr=0; label=0; f_types=ftab}) m.funcs
-
+  let ttab = Hashtbl.create 10 in
+  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  List.iteri (fun i f ->
+    let ty = Hashtbl.find ttab f.it.ftype.it in
+    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ftab}) m.funcs in
+  let f_resolve = Hashtbl.create 10 in
+  let rec build n acc = function
+   | [] -> acc
+   | (_,md)::tl ->
+     let sz = List.length acc in
+     Hashtbl.add f_resolve n sz;
+     build (n+1) (acc@resolve_to sz md) tl in
+  let flat_code = build 0 [] module_codes in
+  List.map (resolve_inst2 f_resolve) flat_code
 
 
