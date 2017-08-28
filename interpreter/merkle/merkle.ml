@@ -33,7 +33,6 @@ type inst =
  | LOAD of int
  | STORE of int
  | DROP
- | SELECT
  | DUP of int
  | SWAP of int
  | LOADGLOBAL of int
@@ -41,7 +40,7 @@ type inst =
  | CURMEM
  | GROW
  | POPI of int
- | BREAKI
+ | BREAKTABLE
  | CALLI of int (* indirect call, check from table *)
  | PUSH of literal                  (* constant *)
  | TEST of testop                    (* numeric test *)
@@ -96,7 +95,7 @@ and compile' ctx = function
  | BrTable (tab, def) ->
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> PUSH {at=no_region; it=Values.I32 x.it}) (def::tab) in
-   ctx, lst @ [DUP (List.length lst); POPI (List.length lst); BREAKI]
+   ctx, lst @ [DUP (List.length lst); POPI (List.length lst); BREAKTABLE]
  | Return ->  compile_break ctx ctx.bptr
  | Drop -> {ctx with ptr=ctx.ptr-1}, [DROP]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
@@ -111,7 +110,10 @@ and compile' ctx = function
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALLI 0]
  | Select ->
-   {ctx with ptr=ctx.ptr-2}, [SELECT]
+   let else_label = ctx.label in
+   let end_label = ctx.label+1 in
+   let ctx = {ctx with ptr=ctx.ptr-2; label=ctx.label+2} in
+   ctx, [JUMPI else_label; DROP; DROP; JUMP end_label; LABEL else_label; DUP 1; SWAP 2; DROP; DROP; DROP; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
    {ctx with ptr=ctx.ptr+1}, [DUP (Int32.to_int v.it+ctx.ptr)]
