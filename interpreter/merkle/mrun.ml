@@ -36,7 +36,6 @@ type in_code =
  | NoIn
  | Immed
  | GlobalIn
- | InReg1
  | StackIn0
  | StackIn1
  | StackInReg
@@ -69,14 +68,15 @@ type out_code =
  | GlobalOut
 
 type alu_code =
- | Nop
  | UnaOp of Ast.unop
  | ConvOp of Ast.cvtop
  | BinOp of Ast.binop
  | RelOp of Ast.relop
  | TestOp of Ast.testop
- | Trap | Min
+ | Trap
+ | Min
  | CheckJump
+ | Nop
 
 type stack_ch =
  | StackRegSub
@@ -127,19 +127,64 @@ type registers = {
 
 let i x = I32 (Int32.of_int x)
 
-let micro_step vm =
-  (* fetch code *)
-  let op = get_code vm.code.(vm.pc) in
-  (* init registers *)
-  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  (* read registers *)
-  reg1 <- read_register vm regs op.read_reg1;
-  reg2 <- read_register vm regs op.read_reg2;
-  reg3 <- read_register vm regs op.read_reg3;
-  (* ALU *)
-  reg1 <- handle_alu regs op.alu_code;
-  write_register vm (get_register (fst op.write1) regs) (snd op.write1);
-  write_register vm (get_register (fst op.write2) regs) (snd op.write2);
+let read_register vm reg = function
+ | NoIn -> i 0
+ | Immed -> reg.ireg
+ | GlobalIn -> vm.globals.(value_to_int reg.reg1)
+ | StackIn0 -> vm.stack.(vm.stack_ptr-1)
+ | StackIn1 -> vm.stack.(vm.stack_ptr-2)
+ | StackInReg -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg1)
+ | StackInReg2 -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg2)
+ | ReadPc -> i vm.pc
+ | ReadStackPtr -> i vm.stack_ptr
+ | BreakLocIn -> i (fst (vm.break_stack.(vm.break_ptr-1)))
+ | BreakStackIn -> i (snd (vm.break_stack.(vm.break_ptr-1)))
+ | BreakLocInReg -> i (fst (vm.break_stack.(vm.break_ptr-1-value_to_int reg.reg1)))
+ | BreakStackInReg -> i (snd (vm.break_stack.(vm.break_ptr-1-value_to_int reg.reg1)))
+ | CallIn -> i vm.call_stack.(vm.call_ptr-1)
+ | MemoryIn -> vm.memory.(value_to_int reg.reg1+value_to_int reg.reg2)
+ | MemsizeIn -> i vm.memsize
+ | TableIn -> i vm.calltable.(value_to_int reg.reg1)
+
+let get_register regs = function
+ | Reg1 -> regs.reg1
+ | Reg2 -> regs.reg2
+ | Reg3 -> regs.reg3
+
+let write_register vm regs v = function
+ | NoOut -> ()
+ | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
+ | CallOut -> vm.call_stack.(vm.call_ptr) <- value_to_int v
+ | MemoryOut -> vm.memory.(value_to_int regs.reg1+value_to_int regs.reg2) <- v
+ | StackOut0 -> vm.stack.(vm.stack_ptr) <- v
+ | StackOut1 -> vm.stack.(vm.stack_ptr-1) <- v
+ | StackOutReg1 -> vm.stack.(vm.stack_ptr-value_to_int regs.reg1) <- v
+ | BreakLocOut ->
+   let (a,b) = vm.break_stack.(vm.break_ptr) in
+   vm.break_stack.(vm.break_ptr) <- (value_to_int v, b)
+ | BreakStackOut ->
+   let (a,b) = vm.break_stack.(vm.break_ptr) in
+   vm.break_stack.(vm.break_ptr) <- (a, value_to_int v)
+
+let handle_ptr regs ptr = function
+ | StackRegSub -> ptr - value_to_int regs.reg1
+ | StackReg -> value_to_int regs.reg1
+ | StackReg2 -> value_to_int regs.reg2
+ | StackReg3 -> value_to_int regs.reg3
+ | StackInc -> ptr + 1
+ | StackDec -> ptr - 1
+ | StackNop -> ptr
+
+let handle_alu r1 r2 r3 = function
+ | Min -> i (min (value_to_int r1) (value_to_int r2))
+ | ConvOp op -> Eval_numeric.eval_cvtop op r1
+ | UnaOp op -> Eval_numeric.eval_unop op r1
+ | TestOp op -> value_of_bool (Eval_numeric.eval_testop op r1)
+ | BinOp op -> Eval_numeric.eval_binop op r1 r2
+ | RelOp op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
+ | Trap -> raise VmError
+ | Nop -> r1
+ | CheckJump -> if value_bool r2 then r1 else i (value_to_int r3 + 1)
 
 let get_code = function
  | NOP -> noop
@@ -172,6 +217,28 @@ let get_code = function
  | POPI1 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; alu_code=Min; write1=(Reg1, StackOut1)}
  | POPI2 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackInReg2; write1=(Reg3, StackOutReg1); stack_ch=StackRegSub}
  | BREAKTABLE -> {noop with read_reg1=StackIn0; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDec; stack_ch=StackReg3; pc_ch=StackReg2}
+
+let micro_step vm =
+  (* fetch code *)
+  let op = get_code vm.code.(vm.pc) in
+  (* init registers *)
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  (* read registers *)
+  regs.reg1 <- read_register vm regs op.read_reg1;
+  regs.reg2 <- read_register vm regs op.read_reg2;
+  regs.reg3 <- read_register vm regs op.read_reg3;
+  (* ALU *)
+  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 op.alu_code;
+  (* Write registers *)
+  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  (* update pointers *)
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch ;
+  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
 
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
