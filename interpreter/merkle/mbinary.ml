@@ -61,7 +61,7 @@ let value = function
 
 let get_value v =
   value v;
-  extend (to_bytes s) 8
+  extend (to_bytes s) 32
 
 open Ast
 open Mrun
@@ -277,7 +277,7 @@ this is 21 bytes
 
 *)
 
-let microp_byte op =
+let microp_word op =
   u8 (in_code_byte op.read_reg1);
   u8 (in_code_byte op.read_reg2);
   u8 (in_code_byte op.read_reg3);
@@ -293,4 +293,60 @@ let microp_byte op =
   u8 (if op.mem_ch then 1 else 0);
   value op.immed;
   extend (to_bytes s) 32
+
+type w256 = bytes
+
+open Cryptokit
+
+(* keccak two words, clear control byte *)
+
+let ccb w =
+  let res = Bytes.copy w in
+  Bytes.set res 31 (Char.chr 0);
+  res
+
+let keccak w1 w2 =
+  let hash = Hash.keccak 256 in
+  let w1 = ccb w1 and w2 = ccb w2 in
+  hash#add_string w1;
+  hash#add_string w2;
+  hash#result
+
+let zeroword = get_value (I32 0l)
+
+let make_level arr n =
+  let res = Array.make (n/2) zeroword in
+  for i = 0 to n/2 - 1 do
+     res.(i) <- keccak arr.(i*2) arr.(i*2+1)
+  done;
+  res
+
+let rec make_levels arr =
+  if Array.length arr = 1 then [arr] else
+  let res = make_level arr (Array.length arr) in
+  arr :: make_levels res
+
+let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
+
+let u256 i = get_value (I32 (Int32.of_int i))
+
+let hash_vm vm =
+  let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
+  let hash_mem = get_hash (Array.map (fun v -> get_value v) vm.memory) in
+  let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
+  let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
+  let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
+  let hash = Hash.keccak 256 in
+  hash#add_string hash_code;
+  hash#add_string hash_mem;
+  hash#add_string hash_stack;
+  hash#add_string hash_global;
+  hash#add_string hash_call;
+  hash#result
+
+let test () =
+  let w = Bytes.create 32 in
+  let arr = Array.make (1000000) w in
+  let lst = make_levels arr in
+  prerr_endline (string_of_int (List.length lst))
 

@@ -1,8 +1,9 @@
 open Script
 open Source
 
-open Mbinary
 (* Errors & Tracing *)
+
+let _ = Mbinary.test ()
 
 module Abort = Error.Make ()
 module Assert = Error.Make ()
