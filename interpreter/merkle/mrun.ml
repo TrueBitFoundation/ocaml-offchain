@@ -89,7 +89,7 @@ type alu_code =
  | Convert of Ast.cvtop
  | Binary of Ast.binop
  | Compare of Ast.relop
- | Testof Ast.testop
+ | Test of Ast.testop
  | Trap
  | Min
  | CheckJump
@@ -192,11 +192,11 @@ let handle_ptr regs ptr = function
 
 let handle_alu r1 r2 r3 = function
  | Min -> i (min (value_to_int r1) (value_to_int r2))
- | ConvOp op -> Eval_numeric.eval_cvtop op r1
- | UnaOp op -> Eval_numeric.eval_unop op r1
- | TestOp op -> value_of_bool (Eval_numeric.eval_testop op r1)
- | BinOp op -> Eval_numeric.eval_binop op r1 r2
- | RelOp op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
+ | Convert op -> Eval_numeric.eval_cvtop op r1
+ | Unary op -> Eval_numeric.eval_unop op r1
+ | Test op -> value_of_bool (Eval_numeric.eval_testop op r1)
+ | Binary op -> Eval_numeric.eval_binop op r1 r2
+ | Compare op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
  | Trap -> raise VmError
  | Nop -> r1
  | CheckJump -> if value_bool r2 then r1 else i (value_to_int r3 + 1)
@@ -223,11 +223,11 @@ let get_code = function
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
  | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
  | PUSH lit -> {noop with immed=lit.it; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
- | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=ConvOp op}
- | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=UnaOp op}
- | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=TestOp op}
- | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=BinOp op; stack_ch=StackDec}
- | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=RelOp op; stack_ch=StackDec}
+ | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Convert op}
+ | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Unary op}
+ | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
+ | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=Binary op; stack_ch=StackDec}
+ | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=Compare op; stack_ch=StackDec}
  | CALLI x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3}
  | POPI1 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; alu_code=Min; write1=(Reg1, StackOut1)}
  | POPI2 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackInReg2; write1=(Reg3, StackOutReg1); stack_ch=StackRegSub}
