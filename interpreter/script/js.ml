@@ -399,6 +399,7 @@ let of_command mods cmd =
   | Assertion ass ->
     of_assertion mods ass ^ "\n"
   | Meta _ -> assert false
+  | Merkle _ -> assert false
 
 let of_script scr =
   (if !Flags.harness then harness else "") ^

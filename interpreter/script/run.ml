@@ -443,6 +443,18 @@ let rec run_command cmd =
       let inst = Eval.init m imports in
       bind instances x_opt inst
     end
+  | Merkle def ->
+    ( match def.it with
+    | Textual def ->
+      let code = Merkle.compile_module def.it in
+      let vm = Mrun.create_vm code in
+      prerr_endline "here";
+      for i = 0 to 10000 do
+        ignore i;
+        prerr_endline "here";
+        Mrun.vm_step vm
+      done
+    | _ -> prerr_endline "Not implemented" )
 
   | Register (name, x_opt) ->
     quote := cmd :: !quote;

@@ -19,6 +19,7 @@ type vm = {
   mutable call_ptr : int;
 }
 
+
 exception VmError
 
 let value_bool v = not (v = I32 0l)
@@ -28,7 +29,23 @@ let value_to_int = function
  | I64 i -> Int64.to_int i
  | _ -> 0
 
+let i x = I32 (Int32.of_int x)
+
 let inc_pc vm = vm.pc <- vm.pc+1
+
+let create_vm code =
+  { code = Array.of_list code;
+    stack = Array.make 10000 (i 0);
+    memory = Array.make 10000 (i 0);
+    call_stack = Array.make 10000 0;
+    break_stack = Array.make 10000 (0,0);
+    globals = Array.make 1000 (i 0);
+    calltable = Array.make 10000 0;
+    pc = 0;
+    stack_ptr = 0;
+    memsize = 10000;
+    break_ptr = 0;
+    call_ptr = 0; }
 
 (* microcode *)
 
@@ -124,8 +141,6 @@ type registers = {
   mutable ireg: value;
 (*  mutable op: microp; *)
 }
-
-let i x = I32 (Int32.of_int x)
 
 let read_register vm reg = function
  | NoIn -> i 0
@@ -261,11 +276,13 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.break_ptr <- vm.break_ptr - 1
  | BREAK ->
+   prerr_endline "break";
    let loc, sptr = vm.break_stack.(vm.break_ptr-1) in
    vm.break_ptr <- vm.break_ptr - 1;
    vm.stack_ptr <- sptr;
    vm.pc <- loc
  | RETURN ->
+   prerr_endline "return";
    vm.pc <- vm.call_stack.(vm.call_ptr-1);
    vm.call_ptr <- vm.call_ptr - 1
  | LOAD x ->
@@ -276,15 +293,18 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.memory.(value_to_int vm.stack.(vm.stack_ptr-1) + x) <- vm.stack.(vm.stack_ptr-2);
    vm.stack_ptr <- vm.stack_ptr - 1
  | DROP ->
+   prerr_endline "DROP";
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - 1
  | DUP x ->
+   prerr_endline "DUP";
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
  | SWAP x ->
+   prerr_endline ("SWAP " ^ string_of_int x);
    inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- vm.stack.(vm.stack_ptr-x)
+   vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.globals.(x);
@@ -316,6 +336,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- sptr;
    vm.pc <- loc
  | PUSH lit ->
+   prerr_endline "push";
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- lit.it;
    vm.stack_ptr <- vm.stack_ptr + 1

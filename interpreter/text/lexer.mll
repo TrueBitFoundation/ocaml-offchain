@@ -333,6 +333,7 @@ rule token = parse
   | "export" { EXPORT }
 
   | "module" { MODULE }
+  | "merkle" { MERKLE }
   | "binary" { BIN }
   | "quote" { QUOTE }
 

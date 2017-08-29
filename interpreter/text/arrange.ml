@@ -445,6 +445,7 @@ let assertion mode ass =
 let command mode cmd =
   match cmd.it with
   | Module (x_opt, def) -> definition mode x_opt def
+  | Merkle def -> definition mode None def
   | Register (n, x_opt) ->
     Node ("register " ^ name n ^ var_opt x_opt, [])
   | Action act -> action act

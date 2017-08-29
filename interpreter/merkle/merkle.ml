@@ -79,7 +79,7 @@ and compile' ctx = function
    let end_label = ctx.label+1 in
    let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+2} in
    let ctx, body = compile_block ctx lst in
-   {ctx with ptr=ctx.bptr-2}, [LABEL start_label; PUSHBRK end_label;  PUSHBRK start_label] @ body @ [JUMP ctx.label; LABEL end_label; POPBRK; POPBRK]
+   {ctx with ptr=ctx.bptr-2}, [LABEL start_label; PUSHBRK end_label;  PUSHBRK start_label] @ body @ [JUMP start_label; LABEL end_label; POPBRK; POPBRK]
  | If (ty, texp, fexp) ->
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
@@ -117,9 +117,9 @@ and compile' ctx = function
    ctx, [JUMPI else_label; DROP; DROP; JUMP end_label; LABEL else_label; DUP 1; SWAP 2; DROP; DROP; DROP; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
-   {ctx with ptr=ctx.ptr+1}, [DUP (Int32.to_int v.it+ctx.ptr)]
+   {ctx with ptr=ctx.ptr+1}, [DUP (ctx.ptr - Int32.to_int v.it)]
  | SetLocal v ->
-   {ctx with ptr=ctx.ptr-1}, [SWAP (Int32.to_int v.it+ctx.ptr); DROP]
+   {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP]
  | TeeLocal v ->
    ctx, [SWAP (Int32.to_int v.it+ctx.ptr)]
  | Load op -> ctx, [LOAD (Int32.to_int op.offset)]
@@ -144,6 +144,7 @@ let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types func.it.ftype.it in
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block ([], func.it.body)) in
+  prerr_endline ("func end " ^ string_of_int ctx.ptr);
   ctx,
   make (PUSH {it=I32 Int32.zero; at=no_region}) (List.length func.it.locals) @
   body @
@@ -154,7 +155,9 @@ let compile_func ctx func =
 (* This resolves only one function, think more *)
 let resolve_inst tab = function
  | LABEL _ -> NOP
- | JUMP l -> JUMP (Hashtbl.find tab l)
+ | JUMP l ->
+   prerr_endline ("jump " ^ string_of_int l);
+   JUMP (Hashtbl.find tab l)
  | JUMPI l -> JUMPI (Hashtbl.find tab l)
 (* | CALL l -> CALL (Hashtbl.find tab l) *)
  | PUSHBRK l -> PUSHBRK (Hashtbl.find tab l)
@@ -162,7 +165,7 @@ let resolve_inst tab = function
 
 let resolve_to n lst =
   let tab = Hashtbl.create 10 in
-  List.iteri (fun i inst -> match inst with LABEL l -> Hashtbl.add tab l (i+n)| _ -> ()) lst;
+  List.iteri (fun i inst -> match inst with LABEL l -> prerr_endline ("label " ^ string_of_int l); Hashtbl.add tab l (i+n)| _ -> ()) lst;
   List.map (resolve_inst tab) lst
 
 let resolve_inst2 tab = function

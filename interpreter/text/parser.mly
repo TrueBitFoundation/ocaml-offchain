@@ -154,7 +154,7 @@ let inline_type_explicit (c : context) x ft at =
 %token UNREACHABLE CURRENT_MEMORY GROW_MEMORY
 %token FUNC START TYPE PARAM RESULT LOCAL GLOBAL
 %token TABLE ELEM MEMORY DATA OFFSET IMPORT EXPORT TABLE
-%token MODULE BIN QUOTE
+%token MODULE BIN QUOTE MERKLE
 %token SCRIPT REGISTER INVOKE GET
 %token ASSERT_MALFORMED ASSERT_INVALID ASSERT_SOFT_INVALID ASSERT_UNLINKABLE
 %token ASSERT_RETURN ASSERT_RETURN_CANONICAL_NAN ASSERT_RETURN_ARITHMETIC_NAN ASSERT_TRAP ASSERT_EXHAUSTION
@@ -674,6 +674,10 @@ module_ :
   | LPAR MODULE module_var_opt module_fields RPAR
     { $3, Textual ($4 (empty_context ()) () @@ at ()) @@ at () }
 
+merkle :
+  | LPAR MERKLE module_fields RPAR
+    { Textual ($3 (empty_context ()) () @@ at ()) @@ at () }
+
 inline_module :  /* Sugar */
   | module_fields { Textual ($1 (empty_context ()) () @@ at ()) @@ at () }
 
@@ -718,6 +722,7 @@ assertion :
 cmd :
   | action { Action $1 @@ at () }
   | assertion { Assertion $1 @@ at () }
+  | merkle { Merkle $1 @@ at () }
   | script_module { Module (fst $1, snd $1) @@ at () }
   | LPAR REGISTER name module_var_opt RPAR { Register ($3, $4) @@ at () }
   | meta { Meta $1 @@ at () }

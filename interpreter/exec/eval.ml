@@ -128,7 +128,6 @@ let counter = ref 0
 
 let rec step (inst : instance) (c : config) : config =
   incr counter;
-  prerr_endline (string_of_int !counter);
   let e = List.hd c.instrs in
   let vs', es' =
     match e.it, c.values with
