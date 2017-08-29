@@ -39,7 +39,8 @@ type inst =
  | STOREGLOBAL of int
  | CURMEM
  | GROW
- | POPI of int
+ | POPI1 of int
+ | POPI2 of int
  | BREAKTABLE
  | CALLI of int (* indirect call, check from table *)
  | PUSH of literal                  (* constant *)
@@ -95,7 +96,7 @@ and compile' ctx = function
  | BrTable (tab, def) ->
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> PUSH {at=no_region; it=Values.I32 x.it}) (def::tab) in
-   ctx, lst @ [DUP (List.length lst); POPI (List.length lst); BREAKTABLE]
+   ctx, lst @ [DUP (List.length lst); POPI1 (List.length lst); POPI2 (List.length lst); BREAKTABLE]
  | Return ->  compile_break ctx ctx.bptr
  | Drop -> {ctx with ptr=ctx.ptr-1}, [DROP]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
