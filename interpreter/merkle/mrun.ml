@@ -14,9 +14,9 @@ type vm = {
   calltable : int array;
   mutable pc : int;
   mutable stack_ptr : int;
-  mutable memsize : int;
   mutable break_ptr : int;
   mutable call_ptr : int;
+  mutable memsize : int;
 }
 
 
@@ -248,7 +248,6 @@ let micro_step vm =
   write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
   write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
   (* update pointers *)
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch ;
   vm.pc <- handle_ptr regs vm.pc op.pc_ch;
   vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;

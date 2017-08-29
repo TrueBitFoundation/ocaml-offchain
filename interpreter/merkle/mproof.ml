@@ -2,7 +2,38 @@
 open Mrun
 open Mbinary
 
-let micro_step vm =
+(* so now we need the different proofs *)
+
+type location_proof =
+ | NoinProof
+ | ImmedProof
+ | GlobalProof of int * w256 list
+ | StackProof of int * w256 list
+ | BreakLocProof of int * w256 list
+ | BreakStackProof of int * w256 list
+ | CallProof of int * w256 list
+ | TableProof of int * w256 list
+ | PcProof
+ | StackPtrProof
+ | MemsizeInProof
+
+type pointer =
+ | PcPtr
+ | StackPtr
+ | CallPtr
+ | BreakPtr
+
+type proof =
+ | FetchCodeProof
+ | InitRegsProof
+ | ReadRegisterProof of register * location_proof
+ | AluProof of alu_code
+ | WriteRegisterProof of register * location_proof
+ | UpdatePtrProof of pointer * stack_ch
+ | MemsizeProof
+ | FinalizeProof
+
+let micro_step_proof vm =
   (* fetch code *)
   let op = get_code vm.code.(vm.pc) in
   (* init registers *)
@@ -24,27 +55,3 @@ let micro_step vm =
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
 
-(* so now we need the different proofs *)
-
-type location_proof =
- | NoinProof
- | ImmedProof
- | GlobalProof of int * w256 list
- | StackProof of int * w256 list
- | BreakLocProof of int * w256 list
- | BreakStackProof of int * w256 list
- | CallProof of int * w256 list
- | TableProof of int * w256 list
- | PcProof
- | StackPtrProof
- | MemsizeInProof
-
-type proof =
- | FetchCodeProof
- | InitRegsProof
- | ReadRegisterProof of register * read_proof
- | AluProof of alu_code
- | WriteRegisterProof of register * location_proof
- | UpdatePtrProof of pointer * stack_ch
- | MemsizeProof
- | FinalizeProof
