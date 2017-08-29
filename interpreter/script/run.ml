@@ -1,7 +1,7 @@
 open Script
 open Source
 
-
+open Mbinary
 (* Errors & Tracing *)
 
 module Abort = Error.Make ()

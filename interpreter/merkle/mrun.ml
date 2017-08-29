@@ -85,11 +85,11 @@ type out_code =
  | GlobalOut
 
 type alu_code =
- | UnaOp of Ast.unop
- | ConvOp of Ast.cvtop
- | BinOp of Ast.binop
- | RelOp of Ast.relop
- | TestOp of Ast.testop
+ | Unary of Ast.unop
+ | Convert of Ast.cvtop
+ | Binary of Ast.binop
+ | Compare of Ast.relop
+ | Testof Ast.testop
  | Trap
  | Min
  | CheckJump
