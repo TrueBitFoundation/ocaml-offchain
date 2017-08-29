@@ -336,13 +336,33 @@ let hash_vm vm =
   let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
   let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
   let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
+  let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
+  let hash_break1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack) in
+  let hash_break2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack) in
   let hash = Hash.keccak 256 in
   hash#add_string hash_code;
   hash#add_string hash_mem;
   hash#add_string hash_stack;
   hash#add_string hash_global;
   hash#add_string hash_call;
+  hash#add_string hash_break1;
+  hash#add_string hash_break2;
+  hash#add_string hash_table;
+  hash#add_string (u256 vm.pc);
+  hash#add_string (u256 vm.stack_ptr);
+  hash#add_string (u256 vm.call_ptr);
+  hash#add_string (u256 vm.break_ptr);
+  hash#add_string (u256 vm.memsize);
   hash#result
+
+let hash_machine vm op regs =
+  let hash = Hash.keccak 256 in
+  hash#add_string (hash_vm vm);
+  hash#add_string (microp_word op);
+  hash#add_string (get_value regs.reg1);
+  hash#add_string (get_value regs.reg2);
+  hash#add_string (get_value regs.reg3);
+  hash#add_string (get_value regs.ireg)
 
 let test () =
   let w = Bytes.create 32 in
