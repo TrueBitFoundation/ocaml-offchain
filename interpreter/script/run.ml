@@ -3,7 +3,7 @@ open Source
 
 (* Errors & Tracing *)
 
-let _ = Mbinary.test ()
+let _ = Mproof.test ()
 
 module Abort = Error.Make ()
 module Assert = Error.Make ()

@@ -26,9 +26,9 @@ type pointer =
 type proof =
  | FetchCodeProof
  | InitRegsProof
- | ReadRegisterProof of register * location_proof
+ | ReadRegisterProof of reg * location_proof
  | AluProof of alu_code
- | WriteRegisterProof of register * location_proof
+ | WriteRegisterProof of reg * location_proof
  | UpdatePtrProof of pointer * stack_ch
  | MemsizeProof
  | FinalizeProof
@@ -54,4 +54,6 @@ let micro_step_proof vm =
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+
+let test () = ()
 
