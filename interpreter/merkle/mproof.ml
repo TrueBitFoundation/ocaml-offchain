@@ -128,6 +128,8 @@ let micro_step_proof vm =
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
 
+(* Doing checks *)
+
 let check_fetch state1 state2 (vm_bin, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
   state1 = hash_vm_bin vm_bin &&
@@ -196,6 +198,17 @@ let read_root_bin vm = function
  | TableIn -> vm.bin_calltable
  | _ -> assert false
 
+let write_root_bin vm = function
+ | GlobalOut -> vm.bin_globals
+ | CallOut -> vm.bin_call_stack
+ | MemoryOut -> vm.bin_memory
+ | StackOut0 -> vm.bin_stack
+ | StackOut1 -> vm.bin_stack
+ | StackOutReg1 -> vm.bin_stack
+ | BreakLocOut -> vm.bin_break_stack1
+ | BreakStackOut -> vm.bin_break_stack2
+ | _ -> assert false
+
 let check_read_proof regs vm proof = function
  | NoIn -> true
  | Immed -> true
@@ -209,12 +222,68 @@ let check_read_proof regs vm proof = function
        read_root_bin vm a = get_root loc lst
     | _ -> false ) 
 
+let check_write_proof regs vm proof = function
+ | NoOut -> true
+ | a ->
+    ( match proof with
+    | LocationProof (loc, lst) ->
+       write_position_bin vm regs a = loc &&
+       write_root_bin vm a = get_root loc lst
+    | _ -> false ) 
+
 let check_read1_proof state1 state2 (m, vm, proof) =
   let regs = {(regs_to_bin m.bin_regs) with b_reg1 = read_from_proof m.bin_regs vm proof m.bin_microp.read_reg1} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
   check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
   state2 = hash_machine_regs m regs
+
+let check_alu_proof state1 state2 m =
+  let regs = {(m.bin_regs) with reg1 = handle_alu m.bin_regs.reg1 m.bin_regs.reg2 m.bin_regs.reg3 m.bin_microp.alu_code} in
+  state1 = hash_machine_bin m &&
+  state2 = hash_machine_bin {m with bin_regs=regs}
+
+let check_finalize state1 state2 m =
+  state1 = hash_machine_bin m &&
+  state2 = m.bin_vm
+
+let check_update_stack_ptr state1 state2 m vm =
+  let vm2 = {vm with bin_stack_ptr=handle_ptr m.bin_regs vm.bin_stack_ptr m.bin_microp.stack_ch} in
+  let m2 = {m with bin_vm=hash_vm_bin vm2} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  state2 = hash_machine_bin m2
+
+let check_update_memsize state1 state2 m vm =
+  let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
+  let m2 = {m with bin_vm=hash_vm_bin vm2} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  state2 = hash_machine_bin m2
+
+let merkle_change nv = function
+ | LocationProof (loc, lst) ->
+   let lst = set_leaf loc nv lst in
+   get_root loc lst
+ | _ -> assert false
+
+let write_register_bin proof vm regs v = function
+ | NoOut -> vm
+ | GlobalOut -> {vm with bin_globals=merkle_change v proof}
+ | CallOut -> {vm with bin_call_stack=merkle_change v proof}
+ | BreakLocOut -> {vm with bin_break_stack1=merkle_change v proof}
+ | BreakStackOut -> {vm with bin_break_stack2=merkle_change v proof}
+ | StackOutReg1 -> {vm with bin_stack=merkle_change v proof}
+ | StackOut0 -> {vm with bin_stack=merkle_change v proof}
+ | StackOut1 -> {vm with bin_stack=merkle_change v proof}
+ | MemoryOut -> {vm with bin_memory=merkle_change v proof}
+
+let check_write1_proof state1 state2 (m, vm, proof) =
+  let vm2 = write_register_bin proof vm m.bin_regs (get_value (get_register m.bin_regs (fst m.bin_microp.write1))) (snd m.bin_microp.write1) in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  check_write_proof m.bin_regs vm proof (snd m.bin_microp.write1) &&
+  state2 = hash_machine_bin {m with bin_vm=hash_vm_bin vm2}
 
 let test () = ()
 

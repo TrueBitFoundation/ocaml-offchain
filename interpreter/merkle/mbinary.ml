@@ -362,6 +362,10 @@ let get_leaf loc = function
   | a::b::_ -> if loc mod 2 = 0 then a else b
   | _ -> raise EmptyArray
 
+let set_leaf loc v = function
+  | a::b::tl -> if loc mod 2 = 0 then v::b::tl else a::v::tl
+  | _ -> raise EmptyArray
+
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 
 let u256 i = get_value (I32 (Int32.of_int i))
