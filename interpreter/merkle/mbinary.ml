@@ -317,7 +317,7 @@ let ccb2 w =
 
 let keccak w1 w2 =
   let hash = Hash.keccak 256 in
-  let w1 = ccb w1 and w2 = ccb w2 in
+(*  let w1 = ccb w1 and w2 = ccb w2 in *)
   hash#add_string w1;
   hash#add_string w2;
   hash#result
@@ -341,7 +341,7 @@ exception EmptyArray
 let rec get_levels loc = function
  | [] -> raise EmptyArray
  | [a] -> []
- | a::tl -> (if loc mod 2 = 0 then ccb1 a.(loc+1) else ccb2 a.(loc-1)) :: get_levels (loc/2) tl
+ | a::tl -> (if loc mod 2 = 0 then a.(loc+1) else a.(loc-1)) :: get_levels (loc/2) tl
 
 let location_proof arr loc =
   match make_levels arr with
@@ -349,6 +349,18 @@ let location_proof arr loc =
   (* base level *)
   | base :: tl ->
     base.(2*(loc/2)) :: base.(2*(loc/2)+1) :: get_levels (loc/2) tl
+
+let rec construct_root loc acc = function
+ | [] -> acc
+ | a :: tl -> construct_root (loc/2) (if loc mod 2 = 0 then keccak a acc else keccak acc a) tl
+
+let get_root loc = function
+  | a::b::tl -> construct_root (loc/2) (keccak a b) tl
+  | _ -> raise EmptyArray
+
+let get_leaf loc = function
+  | a::b::_ -> if loc mod 2 = 0 then a else b
+  | _ -> raise EmptyArray
 
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 
@@ -396,6 +408,23 @@ type vm_bin = {
   bin_memsize : int;
 }
 
+let hash_vm_bin vm =
+  let hash = Hash.keccak 256 in
+  hash#add_string vm.bin_code;
+  hash#add_string vm.bin_memory;
+  hash#add_string vm.bin_stack;
+  hash#add_string vm.bin_globals;
+  hash#add_string vm.bin_call_stack;
+  hash#add_string vm.bin_break_stack1;
+  hash#add_string vm.bin_break_stack2;
+  hash#add_string vm.bin_calltable;
+  hash#add_string (u256 vm.bin_pc);
+  hash#add_string (u256 vm.bin_stack_ptr);
+  hash#add_string (u256 vm.bin_call_ptr);
+  hash#add_string (u256 vm.bin_break_ptr);
+  hash#add_string (u256 vm.bin_memsize);
+  hash#result
+
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
   bin_memory = get_hash (Array.map (fun v -> get_value v) vm.memory);
@@ -413,7 +442,7 @@ let vm_to_bin vm = {
 }
 
 type machine_bin = {
-  bin_vm : vm_bin;
+  bin_vm : w256;
   bin_microp : microp;
   bin_regs : registers;
 }
@@ -425,9 +454,23 @@ type machine = {
 }
 
 let machine_to_bin m = {
-  bin_vm = vm_to_bin m.m_vm;
+  bin_vm = hash_vm_bin (vm_to_bin m.m_vm);
   bin_microp = m.m_microp;
   bin_regs = {(m.m_regs) with ireg = m.m_regs.ireg};
+}
+
+type bin_regs = {
+  b_reg1 : w256;
+  b_reg2 : w256;
+  b_reg3 : w256;
+  b_ireg : w256;
+}
+
+let regs_to_bin r = {
+  b_reg1 = get_value r.reg1;
+  b_reg2 = get_value r.reg2;
+  b_reg3 = get_value r.reg3;
+  b_ireg = get_value r.ireg;
 }
 
 let hash_machine m =
@@ -439,9 +482,39 @@ let hash_machine m =
   hash#add_string (get_value m.m_regs.reg3);
   hash#add_string (get_value m.m_regs.ireg)
 
+let hash_machine_bin m =
+  let hash = Hash.keccak 256 in
+  hash#add_string m.bin_vm;
+  hash#add_string (microp_word m.bin_microp);
+  hash#add_string (get_value m.bin_regs.reg1);
+  hash#add_string (get_value m.bin_regs.reg2);
+  hash#add_string (get_value m.bin_regs.reg3);
+  hash#add_string (get_value m.bin_regs.ireg)
+
+let hash_machine_regs m regs =
+  let hash = Hash.keccak 256 in
+  hash#add_string m.bin_vm;
+  hash#add_string (microp_word m.bin_microp);
+  hash#add_string (regs.b_reg1);
+  hash#add_string (regs.b_reg2);
+  hash#add_string (regs.b_reg3);
+  hash#add_string (regs.b_ireg)
+
 let test () =
   let w = Bytes.create 32 in
   let arr = Array.make (1000000) w in
   let lst = make_levels arr in
   prerr_endline (string_of_int (List.length lst))
+
+let w256_to_int w =
+  let res = ref 0 in
+  for i = 0 to 8 do
+    res := !res*256;
+    res := !res + Char.code w.[i];
+  done;
+  !res
+
+let w256_to_value w =
+  (* should have a tag for value *)
+  I32 (Int32.of_int (w256_to_int w))
 
