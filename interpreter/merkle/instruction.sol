@@ -244,6 +244,7 @@ contract Instruction {
     }
     
     function handleALU(uint hint, uint r1, uint r2, uint r3) returns (uint) {
+        
         return 0;
     }
     
@@ -299,6 +300,16 @@ contract Instruction {
         winner = prover;
     }
     
+    function handlePointer(uint hint, uint ptr) returns (uint) {
+        if (hint == 0) return ptr - m.reg1;
+        if (hint == 1) return m.reg1;
+        if (hint == 2) return m.reg2;
+        if (hint == 3) return m.reg3;
+        if (hint == 4) return ptr+1;
+        if (hint == 5) return ptr-1;
+        if (hint == 6) return ptr;
+    }
+    
     function proveUpdateStackPtr() {
         require(init == 8 && msg.sender == prover);
         bytes32 state1 = phases[8];
@@ -307,7 +318,7 @@ contract Instruction {
         require(state1 == hashMachine());
         uint hint = (uint(m.op)/2**(8*14))&0xff;
         vm.stack_ptr = handlePointer(hint, vm.stack_ptr);
-        m.mv = hashVM();
+        m.vm = hashVM();
         require(state2 == hashVM());
         winner = prover;
     }
