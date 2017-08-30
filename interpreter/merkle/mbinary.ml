@@ -305,6 +305,16 @@ let ccb w =
   Bytes.set res 31 (Char.chr 0);
   res
 
+let ccb1 w =
+  let res = Bytes.copy w in
+  Bytes.set res 31 (Char.chr 0);
+  res
+
+let ccb2 w =
+  let res = Bytes.copy w in
+  Bytes.set res 31 (Char.chr 1);
+  res
+
 let keccak w1 w2 =
   let hash = Hash.keccak 256 in
   let w1 = ccb w1 and w2 = ccb w2 in
@@ -325,6 +335,20 @@ let rec make_levels arr =
   if Array.length arr = 1 then [arr] else
   let res = make_level arr (Array.length arr) in
   arr :: make_levels res
+
+exception EmptyArray
+
+let rec get_levels loc = function
+ | [] -> raise EmptyArray
+ | [a] -> []
+ | a::tl -> (if loc mod 2 = 0 then ccb1 a.(loc+1) else ccb2 a.(loc-1)) :: get_levels (loc/2) tl
+
+let location_proof arr loc =
+  match make_levels arr with
+  | [] -> raise EmptyArray
+  (* base level *)
+  | base :: tl ->
+    base.(2*(loc/2)) :: base.(2*(loc/2)+1) :: get_levels (loc/2) tl
 
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 
@@ -355,14 +379,65 @@ let hash_vm vm =
   hash#add_string (u256 vm.memsize);
   hash#result
 
-let hash_machine vm op regs =
+type vm_bin = {
+  bin_code : w256;
+  bin_stack : w256;
+  bin_memory : w256;
+  bin_break_stack1 : w256;
+  bin_break_stack2 : w256;
+  bin_call_stack : w256;
+  bin_globals : w256;
+  bin_calltable : w256;
+
+  bin_pc : int;
+  bin_stack_ptr : int;
+  bin_break_ptr : int;
+  bin_call_ptr : int;
+  bin_memsize : int;
+}
+
+let vm_to_bin vm = {
+  bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
+  bin_memory = get_hash (Array.map (fun v -> get_value v) vm.memory);
+  bin_stack = get_hash (Array.map (fun v -> get_value v) vm.stack);
+  bin_globals = get_hash (Array.map (fun v -> get_value v) vm.globals);
+  bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);
+  bin_calltable = get_hash (Array.map (fun v -> u256 v) vm.calltable);
+  bin_break_stack1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack);
+  bin_break_stack2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack);
+  bin_pc = vm.pc;
+  bin_stack_ptr = vm.stack_ptr;
+  bin_break_ptr = vm.break_ptr;
+  bin_call_ptr = vm.call_ptr;
+  bin_memsize = vm.memsize;
+}
+
+type machine_bin = {
+  bin_vm : vm_bin;
+  bin_microp : microp;
+  bin_regs : registers;
+}
+
+type machine = {
+  m_vm : vm;
+  m_microp : microp;
+  m_regs : registers;
+}
+
+let machine_to_bin m = {
+  bin_vm = vm_to_bin m.m_vm;
+  bin_microp = m.m_microp;
+  bin_regs = {(m.m_regs) with ireg = m.m_regs.ireg};
+}
+
+let hash_machine m =
   let hash = Hash.keccak 256 in
-  hash#add_string (hash_vm vm);
-  hash#add_string (microp_word op);
-  hash#add_string (get_value regs.reg1);
-  hash#add_string (get_value regs.reg2);
-  hash#add_string (get_value regs.reg3);
-  hash#add_string (get_value regs.ireg)
+  hash#add_string (hash_vm m.m_vm);
+  hash#add_string (microp_word m.m_microp);
+  hash#add_string (get_value m.m_regs.reg1);
+  hash#add_string (get_value m.m_regs.reg2);
+  hash#add_string (get_value m.m_regs.reg3);
+  hash#add_string (get_value m.m_regs.ireg)
 
 let test () =
   let w = Bytes.create 32 in
