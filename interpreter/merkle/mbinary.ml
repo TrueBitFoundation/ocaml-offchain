@@ -223,20 +223,20 @@ let alu_byte = function
 let in_code_byte = function
  | NoIn -> 0x00
  | Immed -> 0x01
- | GlobalIn -> 0x02
- | StackIn0 -> 0x03
- | StackIn1 -> 0x04
- | StackInReg -> 0x05
- | StackInReg2 -> 0x06
- | ReadPc -> 0x07
- | ReadStackPtr -> 0x08
- | BreakLocIn -> 0x09
- | BreakStackIn -> 0x0a
- | BreakLocInReg -> 0x0b
- | BreakStackInReg -> 0x0c
- | CallIn -> 0x0d
- | MemoryIn -> 0x0e
- | MemsizeIn -> 0x0f
+ | ReadPc -> 0x02
+ | ReadStackPtr -> 0x03
+ | MemsizeIn -> 0x04
+ | GlobalIn -> 0x05
+ | StackIn0 -> 0x06
+ | StackIn1 -> 0x07
+ | StackInReg -> 0x08
+ | StackInReg2 -> 0x09
+ | BreakLocIn -> 0x0a
+ | BreakStackIn -> 0x0b
+ | BreakLocInReg -> 0x0c
+ | BreakStackInReg -> 0x0d
+ | CallIn -> 0x0e
+ | MemoryIn -> 0x0f
  | TableIn -> 0x10
 
 let reg_byte = function
@@ -245,14 +245,14 @@ let reg_byte = function
  | Reg3 -> 0x03
 
 let out_code_byte = function
- | BreakLocOut -> 0x00
+ | NoOut -> 0x07
  | BreakStackOut -> 0x01
  | StackOutReg1 -> 0x02
  | StackOut0 -> 0x03
  | StackOut1 -> 0x04
  | MemoryOut -> 0x05
  | CallOut -> 0x06
- | NoOut -> 0x07
+ | BreakLocOut -> 0x07
  | GlobalOut -> 0x08
 
 let stack_ch_byte = function

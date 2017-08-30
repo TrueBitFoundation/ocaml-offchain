@@ -1,7 +1,7 @@
 pragma solidity ^0.4.16;
 
 // "12", "13", "121212", "23232323", 123, 12, 100
-
+// Create: 681803 gas
 contract Interactive2 {
     struct Record {
         address prover;
@@ -90,7 +90,8 @@ contract Interactive2 {
 
     function microStep(uint id, bytes32[16] arr) {
         Record storage r = records[id];
-        require(r.size == 0 && msg.sender == r.prover);
+        require(r.size == 0 && msg.sender == r.prover &&
+                r.proof[r.idx1] == arr[0] && r.proof[r.idx1+1] == arr[15]);
         r.result = arr;
     }
     
