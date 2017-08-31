@@ -1,4 +1,4 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.15;
 
 contract ALU {
     function handleALU(uint hint, uint r1, uint r2, uint r3) returns (uint) {
@@ -123,7 +123,6 @@ contract ALU {
         else if (hint == 0x6e || hint == 0x80) {
             res = r1/r2;
         }
-        /*
         else if (hint == 0x6f || hint == 0x81) {
             res = r1%r2;
         }
@@ -140,13 +139,13 @@ contract ALU {
             res = r1^r2;
         }
         else if (hint == 0x74 || hint == 0x86) {
-            res = r1-2**r2; // shift 
+            res = r1*2**r2; // shift 
         }
         else if (hint == 0x75 || hint == 0x87) {
-            res = r1-r2;
+            res = r1/2**r2;
         }
         else if (hint == 0x76 || hint == 0x88) {
-            res = r1-r2;
+            res = r1/2**r2;
         }
         else if (hint == 0x77 || hint == 0x89) {
             res = r1-r2;
@@ -154,7 +153,6 @@ contract ALU {
         else if (hint == 0x78 || hint == 0x8a) {
             res = r1-r2;
         }
-        */
         if (hint >= 0x62 && hint <= 0x78) {
             res = res % (2**32);
         }
