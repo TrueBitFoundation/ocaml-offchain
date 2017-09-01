@@ -1,7 +1,6 @@
 
 open Merkle
 open Values
-open Source
 
 type vm = {
   code : inst array;
@@ -150,7 +149,7 @@ let read_register vm reg = function
  | StackIn1 -> vm.stack.(vm.stack_ptr-2)
  | StackInReg -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg1)
  | StackInReg2 -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg2)
- | ReadPc -> i vm.pc
+ | ReadPc -> i (vm.pc+1)
  | ReadStackPtr -> i vm.stack_ptr
  | BreakLocIn -> i (fst (vm.break_stack.(vm.break_ptr-1)))
  | BreakStackIn -> i (snd (vm.break_stack.(vm.break_ptr-1)))
@@ -222,7 +221,7 @@ let get_code = function
  | STOREGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, GlobalOut)}
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
  | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
- | PUSH lit -> {noop with immed=lit.it; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
+ | PUSH lit -> {noop with immed=lit; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
  | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Convert op}
  | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Unary op}
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
@@ -337,7 +336,7 @@ let vm_step vm = match vm.code.(vm.pc) with
  | PUSH lit ->
    prerr_endline "push";
    inc_pc vm;
-   vm.stack.(vm.stack_ptr) <- lit.it;
+   vm.stack.(vm.stack_ptr) <- lit;
    vm.stack_ptr <- vm.stack_ptr + 1
  | CONV op ->
    inc_pc vm;

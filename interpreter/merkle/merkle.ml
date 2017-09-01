@@ -43,7 +43,7 @@ type inst =
  | POPI2 of int
  | BREAKTABLE
  | CALLI of int (* indirect call, check from table *)
- | PUSH of literal                  (* constant *)
+ | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
  | CMP of relop                  (* numeric comparison *)
  | UNA of unop                     (* unary numeric operator *)
@@ -68,7 +68,7 @@ and compile' ctx = function
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1} in
    let ctx, body = compile_block ctx lst in
    {ctx with bptr=ctx.bptr-1}, [PUSHBRK end_label] @ body @ [LABEL end_label; POPBRK]
- | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit]
+ | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit.it]
  | Test t -> {ctx with ptr = ctx.ptr-1}, [TEST t]
  | Compare i -> {ctx with ptr = ctx.ptr-1}, [CMP i]
  | Unary i -> ctx, [UNA i]
@@ -95,7 +95,7 @@ and compile' ctx = function
    ctx, [JUMPI continue_label] @ rest @ [LABEL continue_label]
  | BrTable (tab, def) ->
    (* push the list there, then use a special instruction *)
-   let lst = List.map (fun x -> PUSH {at=no_region; it=Values.I32 x.it}) (def::tab) in
+   let lst = List.map (fun x -> PUSH (Values.I32 x.it)) (def::tab) in
    ctx, lst @ [DUP (List.length lst); POPI1 (List.length lst); POPI2 (List.length lst); BREAKTABLE]
  | Return ->  compile_break ctx ctx.bptr
  | Drop -> {ctx with ptr=ctx.ptr-1}, [DROP]
@@ -146,7 +146,7 @@ let compile_func ctx func =
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block ([], func.it.body)) in
   prerr_endline ("func end " ^ string_of_int ctx.ptr);
   ctx,
-  make (PUSH {it=I32 Int32.zero; at=no_region}) (List.length func.it.locals) @
+  make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @
   body @
   List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i); DROP]) ret) @
   make DROP (List.length par + List.length func.it.locals) @
@@ -188,6 +188,27 @@ let compile_module m =
      Hashtbl.add f_resolve n sz;
      build (n+1) (acc@resolve_to sz md) tl in
   let flat_code = build 0 [] module_codes in
+  List.map (resolve_inst2 f_resolve) flat_code
+
+let compile_test m func vs =
+  let ftab = Hashtbl.create 10 in
+  let ttab = Hashtbl.create 10 in
+  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  let entry = ref 0 in
+  List.iteri (fun i f ->
+    if f = func then ( prerr_endline "found it" ; entry := i );
+    let ty = Hashtbl.find ttab f.it.ftype.it in
+    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ftab; bptr=0}) m.funcs in
+  let f_resolve = Hashtbl.create 10 in
+  let rec build n acc = function
+   | [] -> acc
+   | (_,md)::tl ->
+     let sz = List.length acc in
+     Hashtbl.add f_resolve n sz;
+     build (n+1) (acc@resolve_to sz md) tl in
+  let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; UNREACHABLE] in
+  let flat_code = build 0 test_code module_codes in
   List.map (resolve_inst2 f_resolve) flat_code
 
 (* perhaps for now just make a mega module *)

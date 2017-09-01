@@ -293,18 +293,51 @@ let rec run_definition def =
     let def' = Parse.string_to_module s in
     run_definition def'
 
+let values_from_arr arr start len =
+  let res = ref [] in
+  for i = 0 to len-1 do
+    res := arr.(start+i) :: !res
+  done;
+  List.rev !res
+
+let run_test mdle func vs =
+  let code = Merkle.compile_test mdle func vs in
+  let vm = Mrun.create_vm code in
+  prerr_endline "here";
+  try begin
+    for i = 0 to 10000 do
+      ignore i;
+      prerr_endline "here";
+      Mrun.vm_step vm
+    done;
+    raise (Failure "boohoo")
+  end
+  with _ -> (* check stack pointer, get values *)
+    let open Mrun in
+    values_from_arr vm.stack 0 vm.stack_ptr
+
 let run_action act =
   match act.it with
   | Invoke (x_opt, name, vs) ->
-    trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
-    let inst = lookup_instance x_opt act.at in
-    (match Instance.export inst name with
-    | Some (Instance.ExternalFunc f) ->
-      Eval.invoke f (List.map (fun v -> v.it) vs)
-    | Some _ -> Assert.error act.at "export is not a function"
-    | None -> Assert.error act.at "undefined export"
-    )
-
+    if !Flags.merkle then begin
+      let inst = lookup_instance x_opt act.at in
+      (match Instance.export inst name with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
+        run_test inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
+      | Some _ -> Assert.error act.at "export is not a function"
+      | None -> Assert.error act.at "undefined export"
+      )
+    end else
+    begin
+      trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
+      let inst = lookup_instance x_opt act.at in
+      (match Instance.export inst name with
+      | Some (Instance.ExternalFunc f) ->
+        Eval.invoke f (List.map (fun v -> v.it) vs)
+      | Some _ -> Assert.error act.at "export is not a function"
+      | None -> Assert.error act.at "undefined export"
+      )
+    end
  | Get (x_opt, name) ->
     trace ("Getting global \"" ^ Ast.string_of_name name ^ "\"...");
     let inst = lookup_instance x_opt act.at in
@@ -330,6 +363,7 @@ let assert_message at name msg re =
     print_endline ("Expect: \"" ^ re ^ "\"");
     Assert.error at ("wrong " ^ name ^ " error")
   end
+
 
 let run_assertion ass =
   match ass.it with
@@ -444,18 +478,7 @@ let rec run_command cmd =
       let inst = Eval.init m imports in
       bind instances x_opt inst
     end
-  | Merkle def ->
-    ( match def.it with
-    | Textual def ->
-      let code = Merkle.compile_module def.it in
-      let vm = Mrun.create_vm code in
-      prerr_endline "here";
-      for i = 0 to 10000 do
-        ignore i;
-        prerr_endline "here";
-        Mrun.vm_step vm
-      done
-    | _ -> prerr_endline "Not implemented" )
+  | Merkle _ -> () (* remove this *)
 
   | Register (name, x_opt) ->
     quote := cmd :: !quote;

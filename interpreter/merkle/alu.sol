@@ -117,14 +117,20 @@ contract ALU {
         else if (hint == 0x6c || hint == 0x7e) {
             res = r1*r2;
         }
-        else if (hint == 0x6d || hint == 0x7f) {
-            res = r1/r2; /* Split signed division */
+        else if (hint == 0x6d) {
+            res = uint(int32(r1)/int32(r2));
+        }
+        else if (hint == 0x7f) {
+            res = uint(int64(r1)/int64(r2));
         }
         else if (hint == 0x6e || hint == 0x80) {
             res = r1/r2;
         }
-        else if (hint == 0x6f || hint == 0x81) {
-            res = r1%r2;
+        else if (hint == 0x6f) {
+            res = uint(int32(r1)%int32(r2));
+        }
+        else if (hint == 0x81) {
+            res = uint(int64(r1)%int64(r2));
         }
         else if (hint == 0x70 || hint == 0x82) {
             res = r1%r2;
@@ -147,12 +153,20 @@ contract ALU {
         else if (hint == 0x76 || hint == 0x88) {
             res = r1/2**r2;
         }
-        else if (hint == 0x77 || hint == 0x89) {
-            res = r1-r2;
+        // rol, ror
+        else if (hint == 0x77) {
+            res = (r1*2**r2) | (r1/2**32);
         }
-        else if (hint == 0x78 || hint == 0x8a) {
-            res = r1-r2;
+        else if (hint == 0x78) {
+            res = (r1/2**r2) | (r1*2**32);
         }
+        else if (hint == 0x89) {
+            res = (r1*2**r2) | (r1/2**64);
+        }
+        else if (hint == 0x8a) {
+            res = (r1/2**r2) | (r1*2**64);
+        }
+        
         if (hint >= 0x62 && hint <= 0x78) {
             res = res % (2**32);
         }

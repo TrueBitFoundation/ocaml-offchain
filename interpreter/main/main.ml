@@ -31,6 +31,7 @@ let argspec = Arg.align
   "-h", Arg.Clear Flags.harness, " exclude harness for JS convesion";
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
+  "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-v", Arg.Unit banner, " show version"
 ]
 
