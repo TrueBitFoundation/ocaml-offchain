@@ -301,24 +301,26 @@ let values_from_arr arr start len =
   List.rev !res
 
 let run_test mdle func vs =
+    let open Mrun in
   let code = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
-  prerr_endline "here";
   try begin
     for i = 0 to 10000 do
       ignore i;
-      prerr_endline "here";
+      prerr_endline (string_of_int vm.break_ptr);
       Mrun.vm_step vm
     done;
-    raise (Failure "boohoo")
+    raise (Failure "takes too long")
   end
-  with _ -> (* check stack pointer, get values *)
-    let open Mrun in
+  with a -> (* check stack pointer, get values *)
+    prerr_endline (Printexc.to_string a);
+    Printexc.print_backtrace stderr;
     values_from_arr vm.stack 0 vm.stack_ptr
 
 let run_action act =
   match act.it with
   | Invoke (x_opt, name, vs) ->
+    trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
     if !Flags.merkle then begin
       let inst = lookup_instance x_opt act.at in
       (match Instance.export inst name with
@@ -329,7 +331,6 @@ let run_action act =
       )
     end else
     begin
-      trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
       let inst = lookup_instance x_opt act.at in
       (match Instance.export inst name with
       | Some (Instance.ExternalFunc f) ->

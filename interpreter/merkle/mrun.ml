@@ -256,13 +256,17 @@ let micro_step vm =
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
  | UNREACHABLE -> raise VmError
- | JUMP x -> vm.pc <- x
+ | JUMP x ->
+   prerr_endline "jump";
+   vm.pc <- x
  | JUMPI x ->
+   prerr_endline ("JUMPI " ^ if value_bool (vm.stack.(vm.stack_ptr-1)) then " jump" else " no jump");
    vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
+   prerr_endline "call";
    (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
-   vm.call_stack.(vm.call_ptr) <- vm.pc;
+   vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
  | LABEL _ -> raise VmError (* these should have been processed away *)
@@ -291,11 +295,11 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.memory.(value_to_int vm.stack.(vm.stack_ptr-1) + x) <- vm.stack.(vm.stack_ptr-2);
    vm.stack_ptr <- vm.stack_ptr - 1
  | DROP ->
-   prerr_endline "DROP";
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - 1
  | DUP x ->
-   prerr_endline "DUP";
+(*   prerr_endline ("DUP" ^ string_of_int x); *)
+   prerr_endline ("DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x));
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
@@ -322,7 +326,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- i (min x (value_to_int vm.stack.(vm.stack_ptr-1)))
  | POPI2 x ->
-   (* this might be a bit too complex instruction *)
    inc_pc vm;
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack.(vm.stack_ptr-x-1) <- vm.stack.(vm.stack_ptr-idx-1);
@@ -348,11 +351,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | BIN op ->
+(*   prerr_endline ("bin "); *)
    inc_pc vm;
+   prerr_endline ("bin " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1));
    vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | CMP op ->
    inc_pc vm;
+   prerr_endline ("cmp " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1));
    vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALLI x ->

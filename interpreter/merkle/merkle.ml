@@ -61,48 +61,82 @@ type context = {
 
 let rec compile ctx expr = compile' ctx expr.it
 and compile' ctx = function
- | Unreachable -> ctx, [UNREACHABLE]
- | Nop -> ctx, [NOP]
+ | Unreachable ->
+   ctx, [UNREACHABLE]
+ | Nop ->
+   ctx, [NOP]
  | Block (ty, lst) ->
+   prerr_endline ("block start " ^ string_of_int ctx.ptr);
    let end_label = ctx.label in
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1} in
    let ctx, body = compile_block ctx lst in
+   prerr_endline ("block end " ^ string_of_int ctx.ptr);
    {ctx with bptr=ctx.bptr-1}, [PUSHBRK end_label] @ body @ [LABEL end_label; POPBRK]
  | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit.it]
- | Test t -> {ctx with ptr = ctx.ptr-1}, [TEST t]
- | Compare i -> {ctx with ptr = ctx.ptr-1}, [CMP i]
+ | Test t -> ctx, [TEST t]
+ | Compare i ->
+   prerr_endline "cmp";
+   {ctx with ptr = ctx.ptr-1}, [CMP i]
  | Unary i -> ctx, [UNA i]
- | Binary i -> {ctx with ptr = ctx.ptr-1}, [BIN i]
+ | Binary i -> 
+   prerr_endline "bin";
+   {ctx with ptr = ctx.ptr-1}, [BIN i]
  | Convert i -> ctx, [CONV i]
+(*
  | Loop (_, lst) ->
    let start_label = ctx.label in
    let end_label = ctx.label+1 in
+   let sptr = ctx.ptr in
+   prerr_endline ("loop start " ^ string_of_int sptr);
    let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+2} in
    let ctx, body = compile_block ctx lst in
-   {ctx with ptr=ctx.bptr-2}, [LABEL start_label; PUSHBRK end_label;  PUSHBRK start_label] @ body @ [JUMP start_label; LABEL end_label; POPBRK; POPBRK]
- | If (ty, texp, fexp) ->
-   let else_label = ctx.label in
+   prerr_endline ("loop end " ^ string_of_int ctx.ptr);
+   {ctx with bptr=ctx.bptr-1}, [PUSHBRK end_label; LABEL start_label; PUSHBRK start_label] @ body @ [POPBRK; JUMP start_label; LABEL end_label]
+*)
+ | Loop (_, lst) ->
+   let start_label = ctx.label in
    let end_label = ctx.label+1 in
-   let ctx = {ctx with ptr=ctx.ptr-1; label=ctx.label+2} in
+   let sptr = ctx.ptr in
+   prerr_endline ("loop start " ^ string_of_int sptr);
+   let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+1} in
+   let ctx, body = compile_block ctx lst in
+   prerr_endline ("loop end " ^ string_of_int ctx.ptr);
+   {ctx with bptr=ctx.bptr-1}, [LABEL start_label; PUSHBRK start_label] @ body @ [POPBRK; LABEL end_label]
+ | If (ty, texp, fexp) ->
+   prerr_endline ("if " ^ string_of_int ctx.ptr);
+   let if_label = ctx.label in
+   let end_label = ctx.label+1 in
+   let a_ptr = ctx.ptr-1 in
+   let ctx = {ctx with ptr=a_ptr; label=ctx.label+2} in
+   (*
+   let ctx, tbody = compile_block ctx texp in
+   let ctx, fbody = compile_block {ctx with ptr=a_ptr} fexp in
+   *)
    let ctx, tbody = compile' ctx (Block (ty, texp)) in
-   let ctx, fbody = compile' ctx (Block (ty, fexp)) in
-   ctx, [JUMPI else_label] @ tbody @ [JUMP end_label; LABEL else_label] @ fbody @ [LABEL end_label]
+   let ctx, fbody = compile' {ctx with ptr=a_ptr} (Block (ty, fexp)) in
+   ctx, [JUMPI if_label] @ fbody @ [JUMP end_label; LABEL if_label] @ tbody @ [LABEL end_label]
  | Br x -> compile_break ctx (Int32.to_int x.it)
  | BrIf x ->
+   prerr_endline ("brif " ^ Int32.to_string x.it);
    let continue_label = ctx.label in
-   let ctx = {ctx with label=ctx.label+1; ptr = ctx.ptr-1} in
+   let end_label = ctx.label+1 in
+   let ctx = {ctx with label=ctx.label+2; ptr = ctx.ptr-1} in
    let ctx, rest = compile_break ctx (Int32.to_int x.it) in
-   ctx, [JUMPI continue_label] @ rest @ [LABEL continue_label]
+   ctx, [JUMPI continue_label; JUMP end_label; LABEL continue_label] @ rest @ [LABEL end_label]
  | BrTable (tab, def) ->
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> PUSH (Values.I32 x.it)) (def::tab) in
    ctx, lst @ [DUP (List.length lst); POPI1 (List.length lst); POPI2 (List.length lst); BREAKTABLE]
  | Return ->  compile_break ctx ctx.bptr
- | Drop -> {ctx with ptr=ctx.ptr-1}, [DROP]
+ | Drop ->
+    prerr_endline "dropping";
+    {ctx with ptr=ctx.ptr-1}, [DROP]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
  | CurrentMemory -> {ctx with ptr=ctx.ptr+1}, [CURMEM]
  | GetGlobal x -> {ctx with ptr=ctx.ptr+1}, [LOADGLOBAL (Int32.to_int x.it)]
- | SetGlobal x -> {ctx with ptr=ctx.ptr-1}, [STOREGLOBAL (Int32.to_int x.it)]
+ | SetGlobal x ->
+   prerr_endline "set global";
+   {ctx with ptr=ctx.ptr-1}, [STOREGLOBAL (Int32.to_int x.it)]
  | Call v ->
    (* Will just push the pc *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
@@ -111,19 +145,24 @@ and compile' ctx = function
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALLI 0]
  | Select ->
+   prerr_endline "select";
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let ctx = {ctx with ptr=ctx.ptr-2; label=ctx.label+2} in
    ctx, [JUMPI else_label; DROP; DROP; JUMP end_label; LABEL else_label; DUP 1; SWAP 2; DROP; DROP; DROP; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
+   prerr_endline ("get local " ^ string_of_int (Int32.to_int v.it) ^ " from " ^  string_of_int (ctx.ptr - Int32.to_int v.it));
    {ctx with ptr=ctx.ptr+1}, [DUP (ctx.ptr - Int32.to_int v.it)]
  | SetLocal v ->
+   prerr_endline "set local";
    {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP]
  | TeeLocal v ->
    ctx, [SWAP (Int32.to_int v.it+ctx.ptr)]
  | Load op -> ctx, [LOAD (Int32.to_int op.offset)]
- | Store op -> {ctx with ptr=ctx.ptr-1}, [STORE (Int32.to_int op.offset)]
+ | Store op ->
+   prerr_endline "store";
+   {ctx with ptr=ctx.ptr-1}, [STORE (Int32.to_int op.offset)]
 
 and compile_break ctx = function
  | 0 -> ctx, [BREAK]
@@ -144,11 +183,11 @@ let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types func.it.ftype.it in
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block ([], func.it.body)) in
-  prerr_endline ("func end " ^ string_of_int ctx.ptr);
+  prerr_endline ("***** func end " ^ string_of_int ctx.ptr);
   ctx,
   make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @
   body @
-  List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i); DROP]) ret) @
+  List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP]) ret) @
   make DROP (List.length par + List.length func.it.locals) @
   [RETURN]
 
@@ -156,9 +195,13 @@ let compile_func ctx func =
 let resolve_inst tab = function
  | LABEL _ -> NOP
  | JUMP l ->
-   prerr_endline ("jump " ^ string_of_int l);
-   JUMP (Hashtbl.find tab l)
- | JUMPI l -> JUMPI (Hashtbl.find tab l)
+   let loc = Hashtbl.find tab l in
+   prerr_endline ("jump " ^ string_of_int l ^ " -> " ^ string_of_int loc);
+   JUMP loc
+ | JUMPI l ->
+   let loc = Hashtbl.find tab l in
+   prerr_endline ("jumpi " ^ string_of_int l ^ " -> " ^ string_of_int loc);
+   JUMPI loc
 (* | CALL l -> CALL (Hashtbl.find tab l) *)
  | PUSHBRK l -> PUSHBRK (Hashtbl.find tab l)
  | a -> a
