@@ -3,8 +3,6 @@ open Source
 
 (* Errors & Tracing *)
 
-let _ = Mproof.test ()
-
 module Abort = Error.Make ()
 module Assert = Error.Make ()
 module IO = Error.Make ()
@@ -308,7 +306,8 @@ let run_test mdle func vs =
     for i = 0 to 10000 do
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.checkstep then begin
-         ignore (Mproof.micro_step_proofs vm)
+         let proof = Mproof.micro_step_proofs vm in
+         Mproof.check_proof proof
       end
       else Mrun.vm_step vm
     done;

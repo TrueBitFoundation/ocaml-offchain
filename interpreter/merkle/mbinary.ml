@@ -1,6 +1,7 @@
 
-open Merkle
 open Values
+
+let trace = Merkle.trace
 
 type stream = {
   buf : Buffer.t;
@@ -57,7 +58,8 @@ let extend bs n =
   nbs
 
 let value = function
-  | I32 i -> u32 i
+(*  | I32 i -> u32 i *)
+  | I32 i -> u64 (Int64.of_int32 i)
   | I64 i -> u64 i
   | F32 i -> f32 i
   | F64 i -> f64 i
@@ -368,7 +370,7 @@ let location_proof arr loc =
 
 let rec construct_root loc acc = function
  | [] -> acc
- | a :: tl -> construct_root (loc/2) (if loc mod 2 = 0 then keccak a acc else keccak acc a) tl
+ | a :: tl -> construct_root (loc/2) (if loc mod 2 = 0 then keccak acc a else keccak a acc) tl
 
 let get_root loc = function
   | a::b::tl -> construct_root (loc/2) (keccak a b) tl
@@ -429,7 +431,6 @@ type vm_bin = {
 }
 
 let hash_vm_bin vm =
-  trace "hash vm bin";
   let hash = Hash.keccak 256 in
   hash#add_string vm.bin_code;
   hash#add_string vm.bin_memory;
@@ -501,7 +502,8 @@ let hash_machine m =
   hash#add_string (get_value m.m_regs.reg1);
   hash#add_string (get_value m.m_regs.reg2);
   hash#add_string (get_value m.m_regs.reg3);
-  hash#add_string (get_value m.m_regs.ireg)
+  hash#add_string (get_value m.m_regs.ireg);
+  hash#result
 
 let hash_machine_bin m =
   let hash = Hash.keccak 256 in
@@ -510,7 +512,8 @@ let hash_machine_bin m =
   hash#add_string (get_value m.bin_regs.reg1);
   hash#add_string (get_value m.bin_regs.reg2);
   hash#add_string (get_value m.bin_regs.reg3);
-  hash#add_string (get_value m.bin_regs.ireg)
+  hash#add_string (get_value m.bin_regs.ireg);
+  hash#result
 
 let hash_machine_regs m regs =
   let hash = Hash.keccak 256 in
@@ -519,15 +522,14 @@ let hash_machine_regs m regs =
   hash#add_string (regs.b_reg1);
   hash#add_string (regs.b_reg2);
   hash#add_string (regs.b_reg3);
-  hash#add_string (regs.b_ireg)
+  hash#add_string (regs.b_ireg);
+  hash#result
 
-let test () =
+let test n =
   let w = Bytes.create 32 in
-  let arr = Array.make (1000000) w in
+  let arr = Array.make n w in
   let lst = make_levels arr in
   prerr_endline (string_of_int (List.length lst))
-
-let _ = test ()
 
 let w256_to_int w =
   let res = ref 0 in

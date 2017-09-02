@@ -1,7 +1,8 @@
 
-open Merkle
 open Mrun
 open Mbinary
+
+let trace = Merkle.trace
 
 (* so now we need the different proofs *)
 
@@ -166,12 +167,20 @@ let micro_step_proofs vm =
 
 let check_fetch state1 state2 (vm_bin, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
-  state1 = hash_vm_bin vm_bin &&
+  let c1 = (state1 = hash_vm_bin vm_bin) in
+  let c2 = (vm_bin.bin_code = get_root vm_bin.bin_pc proof) in
+  let c3 = (state2 = keccak (hash_vm_bin vm_bin) microp) in
+  if not c1 then trace "Bad initial state";
+  if not c2 then trace "Bad code";
+  if not c3 then trace "Bad final state";
+  c1 && c2 && c3
+(*  state1 = hash_vm_bin vm_bin &&
   vm_bin.bin_code = get_root vm_bin.bin_pc proof &&
-  state2 = keccak (hash_vm_bin vm_bin) microp
+  state2 = keccak (hash_vm_bin vm_bin) microp *)
 
 let check_init_registers state1 state2 (vm_bin, microp) =
   let regs = {reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=microp.immed} in
+  let vm_bin = hash_vm_bin vm_bin in
   state1 = keccak vm_bin (microp_word microp) &&
   state2 = hash_machine_bin {bin_vm=vm_bin; bin_microp=microp; bin_regs=regs}
 
@@ -274,6 +283,20 @@ let check_read1_proof state1 state2 (m, vm, proof) =
   check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
   state2 = hash_machine_regs m regs
 
+let check_read2_proof state1 state2 (m, vm, proof) =
+  let regs = {(regs_to_bin m.bin_regs) with b_reg2 = read_from_proof m.bin_regs vm proof m.bin_microp.read_reg2} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
+  state2 = hash_machine_regs m regs
+
+let check_read3_proof state1 state2 (m, vm, proof) =
+  let regs = {(regs_to_bin m.bin_regs) with b_reg3 = read_from_proof m.bin_regs vm proof m.bin_microp.read_reg3} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
+  state2 = hash_machine_regs m regs
+
 let check_alu_proof state1 state2 m =
   let regs = {(m.bin_regs) with reg1 = handle_alu m.bin_regs.reg1 m.bin_regs.reg2 m.bin_regs.reg3 m.bin_microp.alu_code} in
   state1 = hash_machine_bin m &&
@@ -283,19 +306,39 @@ let check_finalize state1 state2 m =
   state1 = hash_machine_bin m &&
   state2 = m.bin_vm
 
-let check_update_stack_ptr state1 state2 m vm =
+let check_update_stack_ptr state1 state2 (m,vm) =
   let vm2 = {vm with bin_stack_ptr=handle_ptr m.bin_regs vm.bin_stack_ptr m.bin_microp.stack_ch} in
   let m2 = {m with bin_vm=hash_vm_bin vm2} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
   state2 = hash_machine_bin m2
 
-let check_update_memsize state1 state2 m vm =
-  let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
+let check_update_pc state1 state2 (m,vm) =
+  let vm2 = {vm with bin_pc=handle_ptr m.bin_regs vm.bin_pc m.bin_microp.pc_ch} in
   let m2 = {m with bin_vm=hash_vm_bin vm2} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
   state2 = hash_machine_bin m2
+
+let check_update_break_ptr state1 state2 (m,vm) =
+  let vm2 = {vm with bin_break_ptr=handle_ptr m.bin_regs vm.bin_break_ptr m.bin_microp.break_ch} in
+  let m2 = {m with bin_vm=hash_vm_bin vm2} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  state2 = hash_machine_bin m2
+
+let check_update_call_ptr state1 state2 (m,vm) =
+  let vm2 = {vm with bin_call_ptr=handle_ptr m.bin_regs vm.bin_call_ptr m.bin_microp.call_ch} in
+  let m2 = {m with bin_vm=hash_vm_bin vm2} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  state2 = hash_machine_bin m2
+
+let check_update_memsize (state1:bytes) (state2:bytes) (m,vm) =
+  let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  state2 = hash_vm_bin vm2
 
 let merkle_change nv = function
  | LocationProof (loc, lst) ->
@@ -322,5 +365,56 @@ let check_write1_proof state1 state2 (m, vm, proof) =
   check_write_proof m.bin_regs vm proof (snd m.bin_microp.write1) &&
   state2 = hash_machine_bin {m with bin_vm=hash_vm_bin vm2}
 
-let test () = ()
+let check_write2_proof state1 state2 (m, vm, proof) =
+  let vm2 = write_register_bin proof vm m.bin_regs (get_value (get_register m.bin_regs (fst m.bin_microp.write2))) (snd m.bin_microp.write2) in
+  state1 = hash_machine_bin m &&
+  m.bin_vm = hash_vm_bin vm &&
+  check_write_proof m.bin_regs vm proof (snd m.bin_microp.write2) &&
+  state2 = hash_machine_bin {m with bin_vm=hash_vm_bin vm2}
+
+let t1 (a,_,_) = a
+
+let check_proof proof =
+  let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
+  let state2 = keccak (hash_vm_bin (fst proof.init_regs_proof)) (microp_word (snd proof.init_regs_proof)) in
+  if check_fetch state1 state2 proof.fetch_code_proof then trace "Fetch Success"
+  else trace "Fetch Failure";
+  let state3 = hash_machine_bin (t1 proof.read_register_proof1) in
+  if check_init_registers state2 state3 proof.init_regs_proof then trace "Init Success"
+  else trace "Init Failure";
+  let state4 = hash_machine_bin (t1 proof.read_register_proof2) in
+  if check_read1_proof state3 state4 proof.read_register_proof1 then trace "Read R1 Success"
+  else trace "Read R1 Failure";
+  let state5 = hash_machine_bin (t1 proof.read_register_proof3) in
+  if check_read2_proof state4 state5 proof.read_register_proof2 then trace "Read R2 Success"
+  else trace "Read R2 Failure";
+  let state6 = hash_machine_bin proof.alu_proof in
+  if check_read3_proof state5 state6 proof.read_register_proof3 then trace "Read R3 Success"
+  else trace "Read R3 Failure";
+  let state7 = hash_machine_bin (t1 proof.write_proof1) in
+  if check_alu_proof state6 state7 proof.alu_proof then trace "ALU Success"
+  else trace "ALU Failure";
+  let state8 = hash_machine_bin (t1 proof.write_proof2) in
+  if check_write1_proof state7 state8 proof.write_proof1 then trace "Write 1 Success"
+  else trace "Write 1 Failure";
+  let state9 = hash_machine_bin (fst proof.update_ptr_proof1) in
+  if check_write2_proof state8 state9 proof.write_proof2 then trace "Write 2 Success"
+  else trace "Write 2 Failure";
+  let state10 = hash_machine_bin (fst proof.update_ptr_proof2) in
+  if check_update_pc state9 state10 proof.update_ptr_proof1 then trace "PC Success"
+  else trace "PC Failure";
+  let state11 = hash_machine_bin (fst proof.update_ptr_proof3) in
+  if check_update_break_ptr state10 state11 proof.update_ptr_proof2 then trace "Break Ptr Success"
+  else trace "Break Ptr Failure";
+  let state12 = hash_machine_bin (fst proof.update_ptr_proof4) in
+  if check_update_stack_ptr state11 state12 proof.update_ptr_proof3 then trace "Stack Ptr Success"
+  else trace "Stack Ptr Failure";
+  let state13 = hash_machine_bin (fst proof.memsize_proof) in
+  if check_update_call_ptr state12 state13 proof.update_ptr_proof4 then trace "Call Ptr Success"
+  else trace "Call Ptr Failure";
+  let state14 = hash_vm_bin proof.finalize_proof in
+  ( if check_update_memsize state13 state14 proof.memsize_proof then trace "Memsize Success"
+    else trace "Memsize Failure" );
+  ()
+
 
