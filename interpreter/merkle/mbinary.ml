@@ -505,6 +505,13 @@ let hash_machine m =
   hash#add_string (get_value m.m_regs.ireg);
   hash#result
 
+let w256_to_string bs =
+  let res = ref "" in
+  for i = 0 to Bytes.length bs - 1 do
+    res := !res ^ Printf.sprintf "%x" (Char.code bs.[i])
+  done;
+  !res
+
 let hash_machine_bin m =
   let hash = Hash.keccak 256 in
   hash#add_string m.bin_vm;
@@ -513,7 +520,9 @@ let hash_machine_bin m =
   hash#add_string (get_value m.bin_regs.reg2);
   hash#add_string (get_value m.bin_regs.reg3);
   hash#add_string (get_value m.bin_regs.ireg);
-  hash#result
+  let res = hash#result in
+  trace ("hash " ^ w256_to_string res);
+  res
 
 let hash_machine_regs m regs =
   let hash = Hash.keccak 256 in
@@ -523,12 +532,14 @@ let hash_machine_regs m regs =
   hash#add_string (regs.b_reg2);
   hash#add_string (regs.b_reg3);
   hash#add_string (regs.b_ireg);
-  hash#result
+  let res = hash#result in
+  trace ("hash " ^ w256_to_string res);
+  res
 
 let test n =
   let w = Bytes.create 32 in
   let arr = Array.make n w in
-  let lst = make_levels arr in
+  let lst = make_levels_aux arr in
   prerr_endline (string_of_int (List.length lst))
 
 let w256_to_int w =
