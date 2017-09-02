@@ -1,4 +1,5 @@
 
+open Merkle
 open Values
 
 type stream = {
@@ -15,6 +16,8 @@ let patch s pos b = s.patches := (pos, b) :: !(s.patches)
 let to_bytes s =
   let bs = Buffer.to_bytes s.buf in
   List.iter (fun (pos, b) -> Bytes.set bs pos b) !(s.patches);
+  s.patches := [];
+  Buffer.clear s.buf;
   bs
 
 
@@ -332,10 +335,22 @@ let make_level arr n =
   done;
   res
 
-let rec make_levels arr =
+let rec make_levels_aux arr =
   if Array.length arr = 1 then [arr] else
   let res = make_level arr (Array.length arr) in
-  arr :: make_levels res
+  arr :: make_levels_aux res
+
+let rec next_pow2 n =
+  if n <= 2 then 2 else
+  2 * next_pow2 ((n+1)/2)
+
+let make_levels arr =
+  let len = Array.length arr in
+  let fixed = Array.make (next_pow2 len) zeroword in
+  for i = 0 to Array.length arr - 1 do
+    fixed.(i) <- arr.(i)
+  done;
+  make_levels_aux fixed
 
 exception EmptyArray
 
@@ -414,6 +429,7 @@ type vm_bin = {
 }
 
 let hash_vm_bin vm =
+  trace "hash vm bin";
   let hash = Hash.keccak 256 in
   hash#add_string vm.bin_code;
   hash#add_string vm.bin_memory;
@@ -510,6 +526,8 @@ let test () =
   let arr = Array.make (1000000) w in
   let lst = make_levels arr in
   prerr_endline (string_of_int (List.length lst))
+
+let _ = test ()
 
 let w256_to_int w =
   let res = ref 0 in

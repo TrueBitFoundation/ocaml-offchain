@@ -10,3 +10,5 @@ let harness = ref true
 let merkle = ref false
 let microstep = ref false
 
+let checkstep = ref (-1)
+

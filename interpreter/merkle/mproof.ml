@@ -1,4 +1,5 @@
 
+open Merkle
 open Mrun
 open Mbinary
 
@@ -14,26 +15,13 @@ type pointer =
  | CallPtr
  | BreakPtr
 
-type micro_proof = {
-  fetch_code_proof : vm_bin * w256 list;
-  init_regs_proof : vm_bin * microp;
-  read_register_proof1 : machine_bin * vm_bin * location_proof;
-  read_register_proof2 : machine_bin * vm_bin * location_proof;
-  read_register_proof3 : machine_bin * vm_bin * location_proof;
-  alu_proof : machine_bin;
-  write_register_proof1 : machine_bin * vm_bin * location_proof;
-  write_register_proof2 : machine_bin * vm_bin * location_proof;
-  update_ptr_proof1 : machine_bin * vm_bin;
-  update_ptr_proof2 : machine_bin * vm_bin;
-  update_ptr_proof3 : machine_bin * vm_bin;
-  update_ptr_proof4 : machine_bin * vm_bin;
-  update_ptr_proof5 : machine_bin * vm_bin;
-  memsize_proof : machine_bin * vm_bin;
-  finalize_proof : machine_bin;
-}
-
 let make_fetch_code vm =
-  (vm_to_bin vm, location_proof (Array.map (fun v -> microp_word (get_code v)) vm.code) vm.pc)
+  trace "microp word";
+  let code = Array.map (fun v -> microp_word (get_code v)) vm.code in
+  trace "fetch code";
+  let loc_proof = location_proof code vm.pc in
+  trace "fetched code";
+  (vm_to_bin vm, loc_proof)
 
 let read_position vm reg = function
  | NoIn -> 0
@@ -108,27 +96,71 @@ let get_write_location m loc =
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
 
-let micro_step_proof vm =
+let make_register_proof2 m =
+  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
+
+let make_register_proof3 m =
+  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
+
+let make_write_proof m wr =
+  (machine_to_bin m, vm_to_bin m.m_vm, get_write_location m (snd wr))
+
+type micro_proof = {
+  fetch_code_proof : vm_bin * w256 list;
+  init_regs_proof : vm_bin * microp;
+  read_register_proof1 : machine_bin * vm_bin * location_proof;
+  read_register_proof2 : machine_bin * vm_bin * location_proof;
+  read_register_proof3 : machine_bin * vm_bin * location_proof;
+  alu_proof : machine_bin;
+  write_proof1 : machine_bin * vm_bin * location_proof;
+  write_proof2 : machine_bin * vm_bin * location_proof;
+  update_ptr_proof1 : machine_bin * vm_bin;
+  update_ptr_proof2 : machine_bin * vm_bin;
+  update_ptr_proof3 : machine_bin * vm_bin;
+  update_ptr_proof4 : machine_bin * vm_bin;
+  memsize_proof : machine_bin * vm_bin;
+  finalize_proof : vm_bin;
+}
+
+let micro_step_proofs vm =
   (* fetch code *)
   let op = get_code vm.code.(vm.pc) in
+  let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  let init_regs_proof = (vm_to_bin vm, op) in
   (* read registers *)
+  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  let read_register_proof1 = make_register_proof1 m in
   regs.reg1 <- read_register vm regs op.read_reg1;
+  let read_register_proof2 = make_register_proof2 m in
   regs.reg2 <- read_register vm regs op.read_reg2;
+  let read_register_proof3 = make_register_proof3 m in
   regs.reg3 <- read_register vm regs op.read_reg3;
   (* ALU *)
+  let alu_proof = machine_to_bin m in
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 op.alu_code;
   (* Write registers *)
+  let write_proof1 = make_write_proof m op.write1 in
   write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+  let write_proof2 = make_write_proof m op.write2 in
   write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
   (* update pointers *)
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch ;
+  let update_ptr_proof1 = (machine_to_bin m, vm_to_bin vm) in
   vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  let update_ptr_proof2 = (machine_to_bin m, vm_to_bin vm) in
   vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  let update_ptr_proof4 = (machine_to_bin m, vm_to_bin vm) in
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+  let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  let finalize_proof = vm_to_bin vm in
+  {fetch_code_proof; init_regs_proof; 
+   read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
+   update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; update_ptr_proof4;
+   memsize_proof; finalize_proof}
 
 (* Doing checks *)
 

@@ -31,9 +31,12 @@ let argspec = Arg.align
   "-h", Arg.Clear Flags.harness, " exclude harness for JS convesion";
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
+  "-v", Arg.Unit banner, " show version";
+  
+  
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
-  "-v", Arg.Unit banner, " show version"
+  "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
 ]
 
 let _ = Mrun.vm_step

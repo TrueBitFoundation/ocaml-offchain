@@ -306,9 +306,11 @@ let run_test mdle func vs =
   let vm = Mrun.create_vm code in
   try begin
     for i = 0 to 10000 do
-      ignore i;
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
-      Mrun.vm_step vm
+      if i = !Flags.checkstep then begin
+         ignore (Mproof.micro_step_proofs vm)
+      end
+      else Mrun.vm_step vm
     done;
     raise (Failure "takes too long")
   end
