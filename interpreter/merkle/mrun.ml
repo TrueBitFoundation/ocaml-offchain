@@ -2,6 +2,8 @@
 open Merkle
 open Values
 
+
+
 type vm = {
   code : inst array;
   stack : value array;
@@ -17,7 +19,6 @@ type vm = {
   mutable call_ptr : int;
   mutable memsize : int;
 }
-
 
 exception VmError
 
@@ -257,14 +258,11 @@ let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
  | UNREACHABLE -> raise VmError
  | JUMP x ->
-   prerr_endline "jump";
    vm.pc <- x
  | JUMPI x ->
-   prerr_endline ("JUMPI " ^ if value_bool (vm.stack.(vm.stack_ptr-1)) then " jump" else " no jump");
    vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
-   prerr_endline "call";
    (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
@@ -278,13 +276,11 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.break_ptr <- vm.break_ptr - 1
  | BREAK ->
-   prerr_endline "break";
    let loc, sptr = vm.break_stack.(vm.break_ptr-1) in
    vm.break_ptr <- vm.break_ptr - 1;
    vm.stack_ptr <- sptr;
    vm.pc <- loc
  | RETURN ->
-   prerr_endline "return";
    vm.pc <- vm.call_stack.(vm.call_ptr-1);
    vm.call_ptr <- vm.call_ptr - 1
  | LOAD x ->
@@ -298,13 +294,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - 1
  | DUP x ->
-(*   prerr_endline ("DUP" ^ string_of_int x); *)
-   prerr_endline ("DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x));
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
  | SWAP x ->
-   prerr_endline ("SWAP " ^ string_of_int x);
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x ->
@@ -337,7 +330,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- sptr;
    vm.pc <- loc
  | PUSH lit ->
-   prerr_endline "push";
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- lit;
    vm.stack_ptr <- vm.stack_ptr + 1
@@ -353,17 +345,46 @@ let vm_step vm = match vm.code.(vm.pc) with
  | BIN op ->
 (*   prerr_endline ("bin "); *)
    inc_pc vm;
-   prerr_endline ("bin " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1));
    vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | CMP op ->
    inc_pc vm;
-   prerr_endline ("cmp " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1));
    vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.pc <- vm.calltable.(addr+x)
+
+let trace_step vm = match vm.code.(vm.pc) with
+ | NOP -> "NOP"
+ | UNREACHABLE -> "UNREACHABLE"
+ | JUMP x -> "JUMP"
+ | JUMPI x -> "JUMPI " ^ if value_bool (vm.stack.(vm.stack_ptr-1)) then " jump" else " no jump"
+ | CALL x -> "CALL " ^ string_of_int x
+ | LABEL _ -> "LABEL ???"
+ | PUSHBRK x -> "PUSHBRK"
+ | POPBRK -> "POPBRK"
+ | BREAK -> "BREAK"
+ | RETURN -> "RETURN"
+ | LOAD x -> "LOAD (broken)"
+ | STORE x -> "STORE (broken)"
+ | DROP -> "DROP"
+ | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
+ | SWAP x -> "SWAP " ^ string_of_int x
+ | LOADGLOBAL x -> "LOADGLOBAL"
+ | STOREGLOBAL x -> "STOREGLOBAL"
+ | CURMEM -> "CURMEM"
+ | GROW -> "GROW"
+ | POPI1 x -> "POPI1"
+ | POPI2 x -> "POPI2"
+ | BREAKTABLE -> "BREAKTABLE"
+ | PUSH lit -> "PUSH " ^ string_of_value lit
+ | CONV op -> "CONV"
+ | UNA op -> "UNA"
+ | TEST op -> "TEST"
+ | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | CALLI x -> "CALLI"
 
 

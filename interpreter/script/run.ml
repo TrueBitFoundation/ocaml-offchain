@@ -307,13 +307,13 @@ let run_test mdle func vs =
   try begin
     for i = 0 to 10000 do
       ignore i;
-      prerr_endline (string_of_int vm.break_ptr);
+      trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       Mrun.vm_step vm
     done;
     raise (Failure "takes too long")
   end
   with a -> (* check stack pointer, get values *)
-    prerr_endline (Printexc.to_string a);
+    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr;
     values_from_arr vm.stack 0 vm.stack_ptr
 
