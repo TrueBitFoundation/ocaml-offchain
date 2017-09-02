@@ -32,6 +32,7 @@ let argspec = Arg.align
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
+  "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-v", Arg.Unit banner, " show version"
 ]
 

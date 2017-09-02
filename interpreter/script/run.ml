@@ -301,7 +301,7 @@ let values_from_arr arr start len =
   List.rev !res
 
 let run_test mdle func vs =
-    let open Mrun in
+  let open Mrun in
   let code = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   try begin
@@ -317,10 +317,36 @@ let run_test mdle func vs =
     Printexc.print_backtrace stderr;
     values_from_arr vm.stack 0 vm.stack_ptr
 
+let run_test_micro mdle func vs =
+  let open Mrun in
+  let code = Merkle.compile_test mdle func vs in
+  let vm = Mrun.create_vm code in
+  try begin
+    for i = 0 to 10000 do
+      ignore i;
+      trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      Mrun.micro_step vm
+    done;
+    raise (Failure "takes too long")
+  end
+  with a -> (* check stack pointer, get values *)
+    trace (Printexc.to_string a);
+    Printexc.print_backtrace stderr;
+    values_from_arr vm.stack 0 vm.stack_ptr
+
 let run_action act =
   match act.it with
   | Invoke (x_opt, name, vs) ->
     trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
+    if !Flags.microstep then begin
+      let inst = lookup_instance x_opt act.at in
+      (match Instance.export inst name with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
+        run_test_micro inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
+      | Some _ -> Assert.error act.at "export is not a function"
+      | None -> Assert.error act.at "undefined export"
+      )
+    end else
     if !Flags.merkle then begin
       let inst = lookup_instance x_opt act.at in
       (match Instance.export inst name with

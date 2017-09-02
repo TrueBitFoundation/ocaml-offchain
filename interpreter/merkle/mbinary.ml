@@ -254,6 +254,7 @@ let out_code_byte = function
  | CallOut -> 0x06
  | BreakLocOut -> 0x07
  | GlobalOut -> 0x08
+ | StackOut2 -> 0x09
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00

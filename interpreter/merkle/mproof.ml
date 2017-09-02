@@ -64,6 +64,7 @@ let write_position vm regs = function
  | StackOutReg1 -> vm.stack_ptr-value_to_int regs.reg1
  | BreakLocOut -> vm.break_ptr
  | BreakStackOut -> vm.break_ptr
+ | StackOut2 -> vm.stack_ptr-2
 
 let loc_proof loc arr = (loc, location_proof arr loc)
 
@@ -99,6 +100,7 @@ let get_write_location m loc =
  | StackOutReg1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackOut0 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackOut1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
+ | StackOut2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | MemoryOut -> LocationProof (loc_proof pos (Array.map get_value vm.memory))
  | CallOut -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
  | GlobalOut -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
@@ -182,6 +184,7 @@ let write_position_bin vm regs = function
  | StackOutReg1 -> vm.bin_stack_ptr-value_to_int regs.reg1
  | BreakLocOut -> vm.bin_break_ptr
  | BreakStackOut -> vm.bin_break_ptr
+ | StackOut2 -> vm.bin_stack_ptr-2
 
 let read_root_bin vm = function
  | GlobalIn -> vm.bin_globals
@@ -207,6 +210,7 @@ let write_root_bin vm = function
  | StackOutReg1 -> vm.bin_stack
  | BreakLocOut -> vm.bin_break_stack1
  | BreakStackOut -> vm.bin_break_stack2
+ | StackOut2 -> vm.bin_stack
  | _ -> assert false
 
 let check_read_proof regs vm proof = function
@@ -276,6 +280,7 @@ let write_register_bin proof vm regs v = function
  | StackOutReg1 -> {vm with bin_stack=merkle_change v proof}
  | StackOut0 -> {vm with bin_stack=merkle_change v proof}
  | StackOut1 -> {vm with bin_stack=merkle_change v proof}
+ | StackOut2 -> {vm with bin_stack=merkle_change v proof}
  | MemoryOut -> {vm with bin_memory=merkle_change v proof}
 
 let check_write1_proof state1 state2 (m, vm, proof) =

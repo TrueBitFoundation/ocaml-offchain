@@ -79,6 +79,7 @@ type out_code =
  | StackOutReg1
  | StackOut0
  | StackOut1
+ | StackOut2
  | MemoryOut
  | CallOut
  | NoOut
@@ -148,8 +149,8 @@ let read_register vm reg = function
  | GlobalIn -> vm.globals.(value_to_int reg.reg1)
  | StackIn0 -> vm.stack.(vm.stack_ptr-1)
  | StackIn1 -> vm.stack.(vm.stack_ptr-2)
- | StackInReg -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg1)
- | StackInReg2 -> vm.stack.(vm.stack_ptr-1-value_to_int reg.reg2)
+ | StackInReg -> vm.stack.(vm.stack_ptr-value_to_int reg.reg1)
+ | StackInReg2 -> vm.stack.(vm.stack_ptr-value_to_int reg.reg2)
  | ReadPc -> i (vm.pc+1)
  | ReadStackPtr -> i vm.stack_ptr
  | BreakLocIn -> i (fst (vm.break_stack.(vm.break_ptr-1)))
@@ -171,8 +172,15 @@ let write_register vm regs v = function
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
  | CallOut -> vm.call_stack.(vm.call_ptr) <- value_to_int v
  | MemoryOut -> vm.memory.(value_to_int regs.reg1+value_to_int regs.reg2) <- v
- | StackOut0 -> vm.stack.(vm.stack_ptr) <- v
- | StackOut1 -> vm.stack.(vm.stack_ptr-1) <- v
+ | StackOut0 ->
+    trace ("push to stack: " ^ string_of_value v);
+    vm.stack.(vm.stack_ptr) <- v
+ | StackOut1 ->
+    trace ("replace top of stack: " ^ string_of_value v);
+    vm.stack.(vm.stack_ptr-1) <- v
+ | StackOut2 ->
+    trace ("pop to stack: " ^ string_of_value v);
+    vm.stack.(vm.stack_ptr-2) <- v
  | StackOutReg1 -> vm.stack.(vm.stack_ptr-value_to_int regs.reg1) <- v
  | BreakLocOut ->
    let (a,b) = vm.break_stack.(vm.break_ptr) in
@@ -199,13 +207,15 @@ let handle_alu r1 r2 r3 = function
  | Compare op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
  | Trap -> raise VmError
  | Nop -> r1
- | CheckJump -> if value_bool r2 then r1 else i (value_to_int r3 + 1)
+ | CheckJump ->
+   trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
+   if value_bool r2 then r1 else i (value_to_int r3)
 
 let get_code = function
  | NOP -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
- | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
+ | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | CALL x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
@@ -216,7 +226,7 @@ let get_code = function
  | LOAD x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=MemoryIn; write1=(Reg3, StackOut1)}
  | STORE x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackIn1; write1=(Reg3, MemoryOut); stack_ch=StackDec}
  | DROP -> {noop with stack_ch=StackDec}
- | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut1); stack_ch=StackInc}
+ | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}
  | LOADGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=GlobalIn; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | STOREGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, GlobalOut)}
@@ -226,8 +236,8 @@ let get_code = function
  | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Convert op}
  | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Unary op}
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
- | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=Binary op; stack_ch=StackDec}
- | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut1); alu_code=Compare op; stack_ch=StackDec}
+ | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Binary op; stack_ch=StackDec}
+ | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Compare op; stack_ch=StackDec}
  | CALLI x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3}
  | POPI1 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; alu_code=Min; write1=(Reg1, StackOut1)}
  | POPI2 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackInReg2; write1=(Reg3, StackOutReg1); stack_ch=StackRegSub}
@@ -239,15 +249,23 @@ let micro_step vm =
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   (* read registers *)
+  trace "read R1";
   regs.reg1 <- read_register vm regs op.read_reg1;
+  trace "read R2";
   regs.reg2 <- read_register vm regs op.read_reg2;
+  trace "read R3";
   regs.reg3 <- read_register vm regs op.read_reg3;
   (* ALU *)
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 op.alu_code;
   (* Write registers *)
-  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
-  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  let w1 = get_register regs (fst op.write1) in
+  trace ("write 1: " ^ string_of_value w1);
+  write_register vm regs w1 (snd op.write1);
+  let w2 = get_register regs (fst op.write2) in
+  trace ("write 2: " ^ string_of_value w2);
+  write_register vm regs w2 (snd op.write2);
   (* update pointers *)
+  trace "update pointers";
   vm.pc <- handle_ptr regs vm.pc op.pc_ch;
   vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
@@ -359,7 +377,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | UNREACHABLE -> "UNREACHABLE"
  | JUMP x -> "JUMP"
- | JUMPI x -> "JUMPI " ^ if value_bool (vm.stack.(vm.stack_ptr-1)) then " jump" else " no jump"
+ | JUMPI x ->
+   let x = vm.stack.(vm.stack_ptr-1) in
+   "JUMPI " ^ (if value_bool x then " jump" else " no jump") ^ " " ^ string_of_value x
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | PUSHBRK x -> "PUSHBRK"
