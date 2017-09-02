@@ -343,7 +343,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | BIN op ->
-(*   prerr_endline ("bin "); *)
    inc_pc vm;
    vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
