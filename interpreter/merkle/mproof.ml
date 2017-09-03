@@ -374,6 +374,46 @@ let check_write2_proof state1 state2 (m, vm, proof) =
 
 let t1 (a,_,_) = a
 
+let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
+
+let vm_to_string vm =
+  "{" ^
+  " \"code\": " ^ to_hex vm.bin_code ^ "," ^
+  " \"stack\": " ^ to_hex vm.bin_stack ^ "," ^
+  " \"memory\": " ^ to_hex vm.bin_memory ^ "," ^
+  " \"break_stack1\": " ^ to_hex vm.bin_break_stack1 ^ "," ^
+  " \"break_stack2\": " ^ to_hex vm.bin_break_stack2 ^ "," ^
+  " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^
+  " \"globals\": " ^ to_hex vm.bin_globals ^ "," ^
+  " \"calltable\": " ^ to_hex vm.bin_calltable ^ "," ^
+  " \"pc\": " ^ string_of_int vm.bin_pc ^ "," ^
+  " \"stack_ptr\": " ^ string_of_int vm.bin_stack_ptr ^ "," ^
+  " \"break_ptr\": " ^ string_of_int vm.bin_break_ptr ^ "," ^
+  " \"call_ptr\": " ^ string_of_int vm.bin_call_ptr ^ "," ^
+  " \"memsize\": " ^ string_of_int vm.bin_memsize ^ " " ^
+  "}"
+
+let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
+
+let machine_to_string m =
+  "{" ^
+  " \"vm\": " ^ to_hex m.bin_vm ^ "," ^
+  " \"reg1\": " ^ Values.string_of_value m.bin_regs.reg1 ^ "," ^
+  " \"reg2\": " ^ Values.string_of_value m.bin_regs.reg2 ^ "," ^
+  " \"reg3\": " ^ Values.string_of_value m.bin_regs.reg3 ^ "," ^
+  " \"ireg\": " ^ Values.string_of_value m.bin_regs.ireg ^ " " ^
+  "}"
+
+let loc_to_string = function
+ | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
+ | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+
+let proof3_to_string (m, vm, loc) =
+  "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " \"merkle\": " ^ loc_to_string loc ^ " }"
+
+let proof2_to_string (m, vm) =
+  "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
+
 let check_proof proof =
   let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
   let state2 = keccak (hash_vm_bin (fst proof.init_regs_proof)) (microp_word (snd proof.init_regs_proof)) in
@@ -413,8 +453,28 @@ let check_proof proof =
   if check_update_call_ptr state12 state13 proof.update_ptr_proof4 then trace "Call Ptr Success"
   else trace "Call Ptr Failure";
   let state14 = hash_vm_bin proof.finalize_proof in
-  ( if check_update_memsize state13 state14 proof.memsize_proof then trace "Memsize Success"
-    else trace "Memsize Failure" );
+  if check_update_memsize state13 state14 proof.memsize_proof then trace "Memsize Success"
+  else trace "Memsize Failure";
+  let states = [state1;state2;state3;state4;state5;state6;state7;state8;state9;state10;state11;state12;state13;state14] in
+  Printf.printf "{\n";
+  Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));
+  Printf.printf "  \"fetch\": { \"vm\": %s, \"location\": %s },\n"
+    (vm_to_string (fst proof.fetch_code_proof)) (list_to_string (snd proof.fetch_code_proof));
+  Printf.printf "  \"init\": { \"vm\": %s, \"op\": %s },\n"
+    (vm_to_string (fst proof.init_regs_proof)) (to_hex (microp_word (snd proof.init_regs_proof)));
+  Printf.printf "  \"reg1\": %s,\n" (proof3_to_string proof.read_register_proof1);
+  Printf.printf "  \"reg2\": %s,\n" (proof3_to_string proof.read_register_proof2);
+  Printf.printf "  \"reg3\": %s,\n" (proof3_to_string proof.read_register_proof3);
+  Printf.printf "  \"alu\": %s,\n" (machine_to_string proof.alu_proof);
+  Printf.printf "  \"write1\": %s,\n" (proof3_to_string proof.write_proof1);
+  Printf.printf "  \"write2\": %s,\n" (proof3_to_string proof.write_proof2);
+  Printf.printf "  \"pc\": %s,\n" (proof2_to_string proof.update_ptr_proof1);
+  Printf.printf "  \"break_ptr\": %s,\n" (proof2_to_string proof.update_ptr_proof2);
+  Printf.printf "  \"stack_ptr\": %s,\n" (proof2_to_string proof.update_ptr_proof3);
+  Printf.printf "  \"call_ptr\": %s,\n" (proof2_to_string proof.update_ptr_proof4);
+  Printf.printf "  \"memsize\": %s,\n" (proof2_to_string proof.memsize_proof);
+  Printf.printf "  \"final\": %s\n" (vm_to_string proof.finalize_proof);
+  Printf.printf "}\n";
   ()
 
 
