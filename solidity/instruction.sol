@@ -117,13 +117,12 @@ contract Instruction {
     function getRoot(bytes32[] proof, uint loc) returns (bytes32) {
         require(proof.length >= 2);
         bytes32 res = sha3(proof[0], proof[1]);
-        loc = loc/2;
         for (uint i = 2; i < proof.length; i++) {
-            if (loc%2 == 0) res = sha3(proof[i], res);
-            else res = sha3(res, proof[i]);
+            loc = loc/2;
+            if (loc%2 == 0) res = sha3(res, proof[i]);
+            else res = sha3(proof[i], res);
         }
-        if (loc%2 == 0) return proof[0];
-        else return proof[1];
+        return res;
     }
 
     function proveFetch(bytes32[] proof) returns (bool) {
@@ -132,10 +131,8 @@ contract Instruction {
         bytes32 state2 = phases[1];
         bytes32 op = getLeaf(proof, vm.pc);
         require(state1 == hashVM());
-        /*
         require(state2 == sha3(state1, op));
         require(vm.code == getRoot(proof, vm.pc));
-        */
         winner = prover;
         return true;
     }

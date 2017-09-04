@@ -22,8 +22,8 @@ function checkFetch(c) {
     c.methods.select(0).send(send_opt).on("error", console.error)
     c.methods.setVM(vm.code, vm.stack, vm.memory, vm.break_stack1, vm.break_stack2, vm.globals, vm.call_stack, vm.calltable,
             vm.pc, vm.stack_ptr, vm.break_ptr, vm.call_ptr, vm.memsize).send(send_opt).on("error", console.error)
-    c.methods.hashVM().call().then(b => console.log(b.toString(16)))
-    // c.methods.proveFetch(test.fetch.location).call().then(b => console.log(b))
+    // c.methods.hashVM().call().then(b => console.log(b.toString(16)))
+    c.methods.proveFetch(test.fetch.location).call().then(b => console.log(b))
 }
 
 var sol_testContract = new web3.eth.Contract(abi)
