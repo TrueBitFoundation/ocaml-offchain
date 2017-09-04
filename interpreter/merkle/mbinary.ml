@@ -49,8 +49,10 @@ let s = stream ()
     let vu32 i = vu64 Int64.(logand (of_int32 i) 0xffffffffL)
     let vs7 i = vs64 (Int64.of_int i)
     let vs32 i = vs64 (Int64.of_int32 i)
-    let f32 x = u32 (F32.to_bits x)
     let f64 x = u64 (F64.to_bits x)
+
+let f32 x = u64 (Int64.of_int32 (F32.to_bits x))
+
 
 let extend bs n =
   let nbs = Bytes.make n (Char.chr 0) in
@@ -71,6 +73,10 @@ let value = function
 let get_value v =
   value v;
   extend (to_bytes s) 32
+
+let get_value8 v =
+  value v;
+  extend (to_bytes s) 8
 
 open Ast
 open Mrun
@@ -254,7 +260,7 @@ let reg_byte = function
  | Reg3 -> 0x03
 
 let out_code_byte = function
- | NoOut -> 0x07
+ | NoOut -> 0x00
  | BreakStackOut -> 0x01
  | StackOutReg1 -> 0x02
  | StackOut0 -> 0x03
@@ -291,11 +297,11 @@ let microp_word op =
   u8 (in_code_byte op.read_reg1);
   u8 (in_code_byte op.read_reg2);
   u8 (in_code_byte op.read_reg3);
+  put s (alu_byte op.alu_code);
   u8 (reg_byte (fst op.write1));
   u8 (out_code_byte (snd op.write1));
   u8 (reg_byte (fst op.write2));
   u8 (out_code_byte (snd op.write2));
-  put s (alu_byte op.alu_code);
   u8 (stack_ch_byte op.call_ch);
   u8 (stack_ch_byte op.stack_ch);
   u8 (stack_ch_byte op.break_ch);
@@ -558,7 +564,8 @@ let test2 () =
   hash#add_string (from_hex "0000000000000000000000000000000000000000000000000000000000000001");
   *)
   hash#add_string (u256 1);
-  prerr_endline (w256_to_string hash#result)
+  prerr_endline (w256_to_string hash#result);
+  prerr_endline (w256_to_string (microp_word {noop with immed=I32 0xfffffl}))
 
 (*
 let _ = test2()

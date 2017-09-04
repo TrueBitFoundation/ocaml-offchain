@@ -191,7 +191,7 @@ let value_from_proof = function
 let read_from_proof reg vm proof = function
  | NoIn -> get_value (i 0)
  | Immed -> get_value reg.ireg
- | ReadPc -> get_value (i vm.bin_pc)
+ | ReadPc -> get_value (i (vm.bin_pc+1))
  | MemsizeIn -> get_value (i vm.bin_memsize)
  | ReadStackPtr -> get_value (i vm.bin_stack_ptr)
  | _ -> value_from_proof proof
@@ -398,6 +398,7 @@ let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 let machine_to_string m =
   "{" ^
   " \"vm\": " ^ to_hex m.bin_vm ^ "," ^
+  " \"op\": " ^ to_hex (microp_word m.bin_microp) ^ "," ^
   " \"reg1\": " ^ Values.string_of_value m.bin_regs.reg1 ^ "," ^
   " \"reg2\": " ^ Values.string_of_value m.bin_regs.reg2 ^ "," ^
   " \"reg3\": " ^ Values.string_of_value m.bin_regs.reg3 ^ "," ^

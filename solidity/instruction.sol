@@ -139,10 +139,10 @@ contract Instruction {
 
     function getImmed(bytes32 op) internal returns (uint256) {
         // it is the first 8 bytes
-        return uint(op)/(2**(24*8));
+        return uint(op)/(2**(13*8));
     }
 
-    function proveInit(bytes32 op) {
+    function proveInit(bytes32 op) returns (bool) {
         require(init == 1 && msg.sender == prover);
         bytes32 state1 = phases[1];
         bytes32 state2 = phases[2];
@@ -155,6 +155,7 @@ contract Instruction {
         require(state1 == sha3(m.vm, op));
         require(state2 == hashMachine());
         winner = prover;
+        return true;
     }
     
     function readPosition(uint hint) returns (uint) {
@@ -175,14 +176,15 @@ contract Instruction {
 
     function writePosition(uint hint) returns (uint) {
         assert(hint > 1);
-        if (hint == 1) return m.reg1;
-        if (hint == 2) return vm.call_ptr;
-        if (hint == 3) return m.reg1+m.reg2;
-        if (hint == 4) return vm.stack_ptr;
-        if (hint == 5) return vm.stack_ptr-1;
-        if (hint == 6) return vm.stack_ptr-m.reg1;
+        if (hint == 1) return vm.break_ptr;
+        if (hint == 2) return vm.stack_ptr-m.reg1;
+        if (hint == 3) return vm.stack_ptr;
+        if (hint == 4) return vm.stack_ptr-1;
+        if (hint == 5) return m.reg1+m.reg2;
+        if (hint == 6) return vm.call_ptr;
         if (hint == 7) return vm.break_ptr;
-        if (hint == 8) return vm.break_ptr;
+        if (hint == 8) return m.reg1;
+        if (hint == 9) return vm.stack_ptr-2;
     }
 
     function readRoot(uint hint) returns (bytes32) {
@@ -203,14 +205,15 @@ contract Instruction {
     
     function writeRoot(uint hint) returns (bytes32) {
         assert(hint > 1);
-        if (hint == 1) return vm.globals;
-        if (hint == 2) return vm.call_stack;
-        if (hint == 3) return vm.mem;
+        if (hint == 1) return vm.break_stack1;
+        if (hint == 2) return vm.stack;
+        if (hint == 3) return vm.stack;
         if (hint == 4) return vm.stack;
-        if (hint == 5) return vm.stack;
-        if (hint == 6) return vm.stack;
-        if (hint == 7) return vm.break_stack1;
-        if (hint == 8) return vm.break_stack2;
+        if (hint == 5) return vm.mem;
+        if (hint == 6) return vm.call_stack;
+        if (hint == 7) return vm.break_stack2;
+        if (hint == 8) return vm.globals;
+        if (hint == 9) return vm.stack;
     }
     
     function checkReadProof(bytes32[] proof, uint loc, uint hint) returns (bool) {
@@ -226,27 +229,54 @@ contract Instruction {
     function readFromProof(bytes32[] proof, uint loc, uint hint) returns (uint) {
         if (hint == 0) return 0;
         if (hint == 1) return m.ireg;
-        if (hint == 2) return vm.pc;
+        if (hint == 2) return vm.pc+1;
         if (hint == 3) return vm.memsize;
         if (hint == 4) return vm.stack_ptr;
         return uint(getLeaf(proof, loc));
     }
     
-    function proveRead1(bytes32[] proof, uint loc) {
+    function proveRead1(bytes32[] proof, uint loc) returns (bool) {
         require(init == 2 && msg.sender == prover);
         bytes32 state1 = phases[2];
         bytes32 state2 = phases[3];
         require(m.vm == hashVM());
         require(state1 == hashMachine());
-        uint hint = (uint(m.op)/2**(8*22))&0xff;
+        uint hint = (uint(m.op)/2**(8*0))&0xff;
         require(checkReadProof(proof, loc, hint));
         m.reg1 = readFromProof(proof, loc, hint);
-        require(state2 == hashVM());
+        require(state2 == hashMachine());
         winner = prover;
+        return true;
+    }
+    function proveRead2(bytes32[] proof, uint loc) returns (bool) {
+        require(init == 3 && msg.sender == prover);
+        bytes32 state1 = phases[3];
+        bytes32 state2 = phases[4];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*1))&0xff;
+        require(checkReadProof(proof, loc, hint));
+        m.reg2 = readFromProof(proof, loc, hint);
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
+    }
+    function proveRead3(bytes32[] proof, uint loc) returns (bool) {
+        require(init == 4 && msg.sender == prover);
+        bytes32 state1 = phases[4];
+        bytes32 state2 = phases[5];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*2))&0xff;
+        require(checkReadProof(proof, loc, hint));
+        m.reg3 = readFromProof(proof, loc, hint);
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
     }
     function handleALU(uint hint, uint r1, uint r2, uint r3) returns (uint) {
         uint res;
-        if (hint == 0) return 0;
+        if (hint == 0) return r1;
         else if (hint == 1) revert(); // Trap
         else if (hint == 2) {
             if (r1 < r2) res = r1;
@@ -420,17 +450,17 @@ contract Instruction {
         return res;
     }
     
-    function proveALU() {
+    function proveALU() returns (bool) {
         require(init == 5 && msg.sender == prover);
         bytes32 state1 = phases[5];
         bytes32 state2 = phases[6];
-        require(m.vm == hashVM());
         require(state1 == hashMachine());
-        uint hint = (uint(m.op)/2**(8*19))&0xff;
+        uint hint = (uint(m.op)/2**(8*3))&0xff;
         // m.reg1 = ALU.handleALU(hint, m.reg1, m.reg2, m.reg3);
         m.reg1 = handleALU(hint, m.reg1, m.reg2, m.reg3);
-        require(state2 == hashVM());
+        require(state2 == hashMachine());
         winner = prover;
+        return true;
     }
     
     function makeChange(bytes32[] proof, uint loc, uint v) returns (bytes32) {
@@ -443,34 +473,58 @@ contract Instruction {
     function writeStuff(uint hint, bytes32[] proof, uint loc, uint v) {
         if (hint == 0) return;
         bytes32 root = makeChange(proof, loc, v);
-        if (hint == 1) vm.globals = root;
-        if (hint == 2) vm.call_stack = root;
-        if (hint == 3) vm.mem = root;
+        if (hint == 1) vm.break_stack1 = root;
+        if (hint == 2) vm.stack = root;
+        if (hint == 3) vm.stack = root;
         if (hint == 4) vm.stack = root;
-        if (hint == 5) vm.stack = root;
-        if (hint == 6) vm.stack = root;
-        if (hint == 7) vm.break_stack1 = root;
-        if (hint == 8) vm.break_stack2 = root;
+        if (hint == 5) vm.mem = root;
+        if (hint == 6) vm.call_stack = root;
+        if (hint == 7) vm.break_stack2 = root;
+        if (hint == 8) vm.globals = root;
+        if (hint == 9) vm.stack = root;
     }
     
-    function proveWrite1(bytes32[] proof, uint loc) {
+    function proveWrite1(bytes32[] proof, uint loc) returns (uint) {
         require(init == 6 && msg.sender == prover);
         bytes32 state1 = phases[6];
         bytes32 state2 = phases[7];
         require(m.vm == hashVM());
         require(state1 == hashMachine());
-        uint target = (uint(m.op)/2**(8*18))&0xff;
-        uint hint = (uint(m.op)/2**(8*17))&0xff;
+        uint target = (uint(m.op)/2**(8*4))&0xff;
+        uint hint = (uint(m.op)/2**(8*5))&0xff;
         require(checkWriteProof(proof, loc, hint));
         
         uint v;
-        if (target == 0) v = m.reg1;
-        if (target == 1) v = m.reg2;
-        if (target == 2) v = m.reg3;
+        if (target == 1) v = m.reg1;
+        if (target == 2) v = m.reg2;
+        if (target == 3) v = m.reg3;
         writeStuff(hint, proof, loc, v);
         
-        require(state2 == hashVM());
+        m.vm = hashVM();
+        require(state2 == hashMachine());
         winner = prover;
+        return hint;
+    }
+    function proveWrite2(bytes32[] proof, uint loc) returns (bool) {
+        require(init == 7 && msg.sender == prover);
+        bytes32 state1 = phases[7];
+        bytes32 state2 = phases[8];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint target = (uint(m.op)/2**(8*6))&0xff;
+        uint hint = (uint(m.op)/2**(8*7))&0xff;
+        require(checkWriteProof(proof, loc, hint));
+        
+        uint v;
+        if (target == 1) v = m.reg1;
+        if (target == 2) v = m.reg2;
+        if (target == 3) v = m.reg3;
+        writeStuff(hint, proof, loc, v);
+        
+        m.vm = hashVM();
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
     }
     
     function handlePointer(uint hint, uint ptr) returns (uint) {
@@ -482,18 +536,71 @@ contract Instruction {
         if (hint == 5) return ptr-1;
         if (hint == 6) return ptr;
     }
-    
-    function proveUpdateStackPtr() {
+
+    function proveUpdatePC() returns (bool) {
         require(init == 8 && msg.sender == prover);
         bytes32 state1 = phases[8];
         bytes32 state2 = phases[9];
         require(m.vm == hashVM());
         require(state1 == hashMachine());
-        uint hint = (uint(m.op)/2**(8*14))&0xff;
+        uint hint = (uint(m.op)/2**(8*11))&0xff;
+        vm.pc = handlePointer(hint, vm.pc);
+        m.vm = hashVM();
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
+    }
+    function proveUpdateBreakPtr() returns (bool) {
+        require(init == 9 && msg.sender == prover);
+        bytes32 state1 = phases[9];
+        bytes32 state2 = phases[10];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*10))&0xff;
+        vm.break_ptr = handlePointer(hint, vm.break_ptr);
+        m.vm = hashVM();
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
+    }
+    function proveUpdateStackPtr() returns (bool) {
+        require(init == 10 && msg.sender == prover);
+        bytes32 state1 = phases[10];
+        bytes32 state2 = phases[11];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*9))&0xff;
         vm.stack_ptr = handlePointer(hint, vm.stack_ptr);
+        m.vm = hashVM();
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
+    }
+    function proveUpdateCallPtr() returns (bool) {
+        require(init == 11 && msg.sender == prover);
+        bytes32 state1 = phases[11];
+        bytes32 state2 = phases[12];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*8))&0xff;
+        vm.call_ptr = handlePointer(hint, vm.call_ptr);
+        m.vm = hashVM();
+        require(state2 == hashMachine());
+        winner = prover;
+        return true;
+    }
+    function proveUpdateMemsize() returns (bool) {
+        require(init == 12 && msg.sender == prover);
+        bytes32 state1 = phases[12];
+        bytes32 state2 = phases[13];
+        require(m.vm == hashVM());
+        require(state1 == hashMachine());
+        uint hint = (uint(m.op)/2**(8*12))&0xff;
+        if (hint == 1) vm.memsize = vm.memsize+m.reg1;
         m.vm = hashVM();
         require(state2 == hashVM());
         winner = prover;
+        return true;
     }
     
 }
