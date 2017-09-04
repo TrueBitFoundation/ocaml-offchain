@@ -3,5 +3,5 @@
 **/*.pyc
 **/_build
 **/_output
-interpreter/merkle/contracts
-interpreter/merkle/node_modules
+solidity/contracts
+solidity/node_modules

@@ -54,7 +54,11 @@ let s = stream ()
 
 let extend bs n =
   let nbs = Bytes.make n (Char.chr 0) in
-  Bytes.blit bs 0 nbs 0 (Bytes.length bs);
+  let len = Bytes.length bs in
+  for i = 0 to len-1 do
+    Bytes.set nbs (n-1-i) (Bytes.get bs i)
+  done;
+(*  Bytes.blit bs 0 nbs (n-len) len; *)
   nbs
 
 let value = function
@@ -508,7 +512,8 @@ let hash_machine m =
 let w256_to_string bs =
   let res = ref "" in
   for i = 0 to Bytes.length bs - 1 do
-    res := !res ^ Printf.sprintf "%x" (Char.code bs.[i])
+    let code = Char.code bs.[i] in
+    res := !res ^ (if code < 16 then "0" else "") ^ Printf.sprintf "%x" code
   done;
   !res
 
@@ -535,6 +540,29 @@ let hash_machine_regs m regs =
   let res = hash#result in
   trace ("hash " ^ w256_to_string res);
   res
+
+let from_hex str =
+  let res = ref "" in
+  for i = 0 to 31 do
+    res := !res ^ String.make 1 (Char.chr (int_of_string ("0x" ^ String.sub str (i*2) 2)))
+  done;
+  !res
+
+let test2 () =
+  let hash = Hash.keccak 256 in
+  (*
+  hash#add_string (from_hex "7e8a5fd3482d94aefa965cbd5705c30e6b57dd9bded9c9a327eb70f738c20b6c");
+  hash#add_string (from_hex "dfe10c92f3c8a8cfaa561c6217518398699e72dd6045576a0bd81c79439503b1");
+  
+  prerr_endline (w256_to_string (u256 1));
+  hash#add_string (from_hex "0000000000000000000000000000000000000000000000000000000000000001");
+  *)
+  hash#add_string (u256 1);
+  prerr_endline (w256_to_string hash#result)
+
+(*
+let _ = test2()
+*)
 
 let test n =
   let w = Bytes.create 32 in

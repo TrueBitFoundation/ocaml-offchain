@@ -82,9 +82,9 @@ contract Instruction {
     }
     
     function hashVM() returns (bytes32) {
-        return sha3(vm.code, vm.stack, vm.mem, vm.call_stack, vm.break_stack1,
-                    vm.break_stack2, vm.globals, vm.calltable,
-                    vm.pc, vm.stack_ptr, vm.break_ptr, vm.call_ptr, vm.memsize);
+        return sha3(vm.code, vm.mem, vm.stack, vm.globals, vm.call_stack, vm.break_stack1,
+                    vm.break_stack2, vm.calltable,
+                    vm.pc, vm.stack_ptr, vm.call_ptr, vm.break_ptr, vm.memsize);
     }
     
     Machine m;
@@ -125,23 +125,26 @@ contract Instruction {
         if (loc%2 == 0) return proof[0];
         else return proof[1];
     }
-    
-    function proveFetch(bytes32[] proof) {
+
+    function proveFetch(bytes32[] proof) returns (bool) {
         require(init == 0 && msg.sender == prover);
         bytes32 state1 = phases[0];
         bytes32 state2 = phases[1];
         bytes32 op = getLeaf(proof, vm.pc);
         require(state1 == hashVM());
+        /*
         require(state2 == sha3(state1, op));
         require(vm.code == getRoot(proof, vm.pc));
+        */
         winner = prover;
+        return true;
     }
-    
+
     function getImmed(bytes32 op) internal returns (uint256) {
         // it is the first 8 bytes
         return uint(op)/(2**(24*8));
     }
-    
+
     function proveInit(bytes32 op) {
         require(init == 1 && msg.sender == prover);
         bytes32 state1 = phases[1];
