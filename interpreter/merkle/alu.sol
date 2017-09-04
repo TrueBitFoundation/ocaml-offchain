@@ -1,6 +1,6 @@
 pragma solidity ^0.4.15;
 
-contract ALU {
+library ALU {
     function handleALU(uint hint, uint r1, uint r2, uint r3) returns (uint) {
         uint res;
         if (hint == 0) return 0;
