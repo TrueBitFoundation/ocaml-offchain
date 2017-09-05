@@ -32,8 +32,8 @@ type inst =
  | POPBRK
  | BREAK
  | RETURN
- | LOAD of int
- | STORE of int
+ | LOAD of loadop
+ | STORE of storeop
  | DROP
  | DUP of int
  | SWAP of int
@@ -150,10 +150,10 @@ and compile' ctx = function
    {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP]
  | TeeLocal v ->
    ctx, [SWAP (Int32.to_int v.it+ctx.ptr)]
- | Load op -> ctx, [LOAD (Int32.to_int op.offset)]
+ | Load op -> ctx, [LOAD op]
  | Store op ->
    trace "store";
-   {ctx with ptr=ctx.ptr-1}, [STORE (Int32.to_int op.offset)]
+   {ctx with ptr=ctx.ptr-1}, [STORE op]
 
 and compile_break ctx = function
  | 0 -> ctx, [BREAK]

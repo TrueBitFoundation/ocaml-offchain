@@ -36,3 +36,7 @@ val load_packed :
 val store_packed : mem_size -> memory -> address -> offset -> value -> unit
  (* raise Type, Bounds *)
 val blit : memory -> address -> string -> unit (* raise Bouunds *)
+
+val of_bytes : bytes -> memory
+val to_bytes : memory -> bytes
+
