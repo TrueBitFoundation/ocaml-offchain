@@ -47,22 +47,6 @@ let create_vm code =
     break_ptr = 0;
     call_ptr = 0; }
 
-
-let setup_memory vm m =
-  let open Ast in
-  let open Types in
-  let open Source in
-  List.iter (function MemoryType {min; _} ->
-    trace ("Memory size " ^ Int32.to_string min);
-    vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
-  trace ("Segments: " ^ string_of_int (List.length m.data));
-(*  let mem = Bytes.create 10000 in *)
-  let init dta = ()
-    
-    in 
-  List.iter init m.data;
-  ()
-
 (* microcode *)
 
 type in_code =
@@ -224,6 +208,31 @@ let write_register vm regs v = function
  | BreakStackOut ->
    let (a,b) = vm.break_stack.(vm.break_ptr) in
    vm.break_stack.(vm.break_ptr) <- (a, value_to_int v)
+
+let setup_memory vm m instance =
+  let open Ast in
+  let open Types in
+  let open Source in
+  List.iter (function MemoryType {min; _} ->
+    trace ("Memory size " ^ Int32.to_string min);
+    vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
+  trace ("Segments: " ^ string_of_int (List.length m.data));
+  let set_byte loc v =
+    let mem = get_memory vm.memory loc in
+    memop mem v (Int64.of_int (loc-(loc/8)*8)) (Some Memory.Mem8);
+    let a, b = Byteutil.Decode.mini_memory mem in
+    vm.memory.(loc/8) <- a;
+    vm.memory.(loc/8+1) <- b in
+  let init (dta:bytes Ast.segment) =
+    let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
+    let sz = Bytes.length dta.it.init in
+    for i = 0 to sz-1 do
+      set_byte (offset+i) (I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))))
+    done in 
+  List.iter init m.data;
+  ()
+
+
 
 let handle_ptr regs ptr = function
  | StackRegSub -> ptr - value_to_int regs.reg1
