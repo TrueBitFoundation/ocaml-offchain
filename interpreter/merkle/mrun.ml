@@ -232,8 +232,6 @@ let setup_memory vm m instance =
   List.iter init m.data;
   ()
 
-
-
 let handle_ptr regs ptr = function
  | StackRegSub -> ptr - value_to_int regs.reg1
  | StackReg -> value_to_int regs.reg1
@@ -283,7 +281,7 @@ let get_code = function
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
- | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=StackIn1; write1=(Reg2, MemoryOut1 x.sz); write2=(Reg2, MemoryOut2 x.sz); stack_ch=StackDec}
+ | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg2, MemoryOut1 x.sz); write2=(Reg2, MemoryOut2 x.sz); stack_ch=StackDec2}
  | DROP -> {noop with stack_ch=StackDec}
  | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}

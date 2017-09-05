@@ -319,10 +319,11 @@ let run_test inst mdle func vs =
     Printexc.print_backtrace stderr;
     values_from_arr vm.stack 0 vm.stack_ptr
 
-let run_test_micro mdle func vs =
+let run_test_micro inst mdle func vs =
   let open Mrun in
   let code = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
+  Mrun.setup_memory vm mdle inst;
   try begin
     for i = 0 to 10000 do
       ignore i;
@@ -344,7 +345,7 @@ let run_action act =
       let inst = lookup_instance x_opt act.at in
       (match Instance.export inst name with
       | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
-        run_test_micro inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
+        run_test_micro inst inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
       | Some _ -> Assert.error act.at "export is not a function"
       | None -> Assert.error act.at "undefined export"
       )
