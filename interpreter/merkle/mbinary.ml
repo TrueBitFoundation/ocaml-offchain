@@ -233,6 +233,7 @@ let stack_ch_byte = function
  | StackInc -> 0x04
  | StackDec -> 0x05
  | StackNop -> 0x06
+ | StackDec2 -> 0x07
 
 (*
 we have 31 bytes
@@ -468,14 +469,6 @@ let hash_machine m =
   hash#add_string (get_value m.m_regs.reg3);
   hash#add_string (get_value m.m_regs.ireg);
   hash#result
-
-let w256_to_string bs =
-  let res = ref "" in
-  for i = 0 to Bytes.length bs - 1 do
-    let code = Char.code bs.[i] in
-    res := !res ^ (if code < 16 then "0" else "") ^ Printf.sprintf "%x" code
-  done;
-  !res
 
 let hash_machine_bin m =
   let hash = Hash.keccak 256 in

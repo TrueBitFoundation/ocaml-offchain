@@ -146,10 +146,17 @@ let blit mem addr data =
     done
   with Invalid_argument _ -> raise Bounds
 
-let of_bytes s = create {max=None; min=Int32.of_int (Bytes.length s)}
+let of_bytes s =
+  let m = create {max=None; min=1l} in
+  let sz = Bytes.length s in
+  for i = 0 to sz-1 do
+    Array1_64.set m.content (Int64.of_int i) (Char.code (Bytes.get s i))
+  done;
+  m
 
 let to_bytes m =
-  let sz = Int64.to_int (Array1_64.dim m.content) in
+(*  let sz = Int64.to_int (Array1_64.dim m.content) in *)
+  let sz = 16 in
   let res = Bytes.create sz in
   for i = 0 to sz-1 do
     Bytes.set res i (Char.chr (Array1_64.get m.content (Int64.of_int i)))

@@ -3,6 +3,13 @@ open Values
 
 let trace = Merkle.trace
 
+let w256_to_string bs =
+  let res = ref "" in
+  for i = 0 to Bytes.length bs - 1 do
+    let code = Char.code bs.[i] in
+    res := !res ^ (if code < 16 then "0" else "") ^ Printf.sprintf "%x" code
+  done;
+  !res
 
 module Decode = struct
 
@@ -25,9 +32,14 @@ let eos s = (pos s = len s)
 let check n s = if pos s + n > len s then raise EOS
 let skip n s = check n s; s.pos := !(s.pos) + n
 
-let read s = Char.code (s.bytes.[!(s.pos)])
+let read s = if !(s.pos) < len s then Char.code (s.bytes.[!(s.pos)]) else 0
 let peek s = if eos s then None else Some (read s)
-let get s = check 1 s; let b = read s in skip 1 s; b
+
+(* let get s = check 1 s; let b = read s in skip 1 s; b *)
+let get s =
+  let b = read s in
+  skip 1 s; b
+
 let get_string n s = let i = pos s in skip n s; String.sub s.bytes i n
 
 let u8 s = get s
@@ -49,12 +61,24 @@ let u64 s =
 
 let mini_memory bytes =
   let s = stream (Memory.to_bytes bytes) in
-  (u64 s, u64 s)
+  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes bytes));
+(*  trace ("Get memory: " ^ string_of_int (Bytes.length (Memory.to_bytes bytes))); *)
+  let a = u64 s and b = u64 s in
+  trace ("A: " ^ Int64.to_string a);
+  (a, b)
 
 let word bytes =
   let s = stream bytes in
   skip 24 s;
   u64 s
+
+let bytes_to_array bytes =
+  let s = stream bytes in
+  let res = Array.make (Bytes.length bytes) 0L in
+  for i = 0 to Bytes.length bytes / 8 do
+    res.(i) <- u64 s
+  done;
+  res
 
 end
 
@@ -137,10 +161,13 @@ let get_value8 v =
 let mini_memory_v a b =
   value a;
   value b;
-  Memory.of_bytes (to_bytes s)
+  let bs = to_bytes s in
+(*  trace ("Making mem: " ^ w256_to_string bs); *)
+  Memory.of_bytes bs
 
 let mini_memory a b =
   u64 a;
   u64 b;
-  Memory.of_bytes (to_bytes s)
+  let bs = to_bytes s in
+  Memory.of_bytes bs
 

@@ -302,6 +302,7 @@ let run_test mdle func vs =
   let open Mrun in
   let code = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
+  Mrun.setup_memory vm mdle;
   try begin
     for i = 0 to 10000 do
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
