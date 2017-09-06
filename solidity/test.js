@@ -11,7 +11,7 @@ web3.eth.getBalance(base).then(balance => console.log(balance));
 
 var code = fs.readFileSync("contracts/Instruction.bin")
 var abi = JSON.parse(fs.readFileSync("contracts/Instruction.abi"))
-var test = JSON.parse(fs.readFileSync("test4.json"))
+var test = JSON.parse(fs.readFileSync("store.json"))
 
 // console.log(test.states)
 
@@ -70,8 +70,9 @@ function checkRead3(c) {
 function checkALU(c) {
     var m = test.alu
     c.methods.select(5).send(send_opt).on("error", console.error)
-    c.methods.setMachine(m.vm, m.op, m.reg1, m.reg2, m.reg3, m.ireg).send(send_opt).on("error", console.error)
-    c.methods.proveALU().call().then(b => console.log("ALU: " + b))
+    c.methods.setMachine(m.vm, m.op, m.reg1, m.reg2, m.reg3, m.ireg).send(send_opt).on("error", console.error).then(function () {
+        c.methods.proveALU().call().then(b => console.log("ALU: " + b))
+    })
 }
 
 function checkWrite1(c) {
@@ -168,10 +169,10 @@ function doTest(tst) {
 
 // doTest(checkFetch)
 // doTest(checkInit)
-// doTest(checkRead1)
+doTest(checkRead3)
 // doTest(checkALU) 
 // doTest(checkWrite2)
 // doTest(checkCallPtr)
-doTest(checkMemsize)
+// doTest(checkMemsize)
 
 

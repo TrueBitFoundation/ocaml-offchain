@@ -442,10 +442,10 @@ let machine_to_string m =
   "{" ^
   " \"vm\": " ^ to_hex m.bin_vm ^ "," ^
   " \"op\": " ^ to_hex (microp_word m.bin_microp) ^ "," ^
-  " \"reg1\": " ^ Values.string_of_value m.bin_regs.reg1 ^ "," ^
-  " \"reg2\": " ^ Values.string_of_value m.bin_regs.reg2 ^ "," ^
-  " \"reg3\": " ^ Values.string_of_value m.bin_regs.reg3 ^ "," ^
-  " \"ireg\": " ^ Values.string_of_value m.bin_regs.ireg ^ " " ^
+  " \"reg1\": " ^ to_hex (get_value m.bin_regs.reg1) ^ "," ^
+  " \"reg2\": " ^ to_hex (get_value m.bin_regs.reg2) ^ "," ^
+  " \"reg3\": " ^ to_hex (get_value m.bin_regs.reg3) ^ "," ^
+  " \"ireg\": " ^ to_hex (get_value m.bin_regs.ireg) ^ " " ^
   "}"
 
 let loc_to_string = function
