@@ -150,8 +150,8 @@ let extend bs n =
   nbs
 
 let value = function
-(*  | I32 i -> u32 i *)
-  | I32 i -> u64 (Int64.of_int32 i)
+  | I32 i -> u32 i
+(*  | I32 i -> u64 (Int64.of_int32 i) *)
   | I64 i -> u64 i
   | F32 i -> f32 i
   | F64 i -> f64 i

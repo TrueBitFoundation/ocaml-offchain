@@ -11,7 +11,7 @@ web3.eth.getBalance(base).then(balance => console.log(balance));
 
 var code = fs.readFileSync("contracts/Instruction.bin")
 var abi = JSON.parse(fs.readFileSync("contracts/Instruction.abi"))
-var test = JSON.parse(fs.readFileSync("store.json"))
+var test = JSON.parse(fs.readFileSync("load.json"))
 
 // console.log(test.states)
 
@@ -170,8 +170,8 @@ function doTest(tst) {
 // doTest(checkFetch)
 // doTest(checkInit)
 // doTest(checkRead3)
-// doTest(checkALU) 
-doTest(checkWrite2)
+doTest(checkALU) 
+// doTest(checkWrite2)
 // doTest(checkCallPtr)
 // doTest(checkMemsize)
 

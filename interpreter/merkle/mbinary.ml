@@ -20,8 +20,8 @@ let sz_code = function
  | Memory.Mem32 -> 4
 
 let ext_code = function
- | Memory.SX -> 0
  | Memory.ZX -> 0
+ | Memory.SX -> 1
 
 let size_code = function
  | None -> 0

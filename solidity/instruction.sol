@@ -460,7 +460,7 @@ contract Instruction {
         return res;
     }
     
-    function proveALU() returns (bool) {
+    function proveALU() returns (uint) {
         require(init == 5 && msg.sender == prover);
         bytes32 state1 = phases[5];
         bytes32 state2 = phases[6];
@@ -470,7 +470,7 @@ contract Instruction {
         m.reg1 = handleALU(hint, m.reg1, m.reg2, m.reg3, m.ireg);
         require(state2 == hashMachine());
         winner = prover;
-        return true;
+        return debug;
     }
     
     function makeChange(bytes32[] proof, uint loc, uint v) returns (bytes32) {
@@ -702,9 +702,11 @@ contract Instruction {
             require(ty < 2 && !(ty == 0 && packing == 4));
             uint res = loadN(mem, addr, packing);
             if (sign_extend) {
-                res = res | uint(-1)*2**packing*(res/2**(packing-1));
+                res = res | uint(-1)*2**(8*packing)*(res/2**(8*packing-1));
             }
             if (ty == 0) res = res % (2**32);
+            else res = res % (2**64);
+            debug = res;
             return res;
         }
     }
