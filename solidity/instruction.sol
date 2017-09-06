@@ -479,14 +479,18 @@ contract Instruction {
         else proof[1] = bytes32(v);
         return getRoot(proof, loc);
     }
-    
+
+    uint debug;
+
     function makeMemChange1(bytes32[] proof, uint loc, uint v, uint hint) returns (bytes32) {
         assert(proof.length >= 2);
         
-        uint8[] memory mem = toMemory(v, 0);
+        uint old = uint(getLeaf(proof, loc));
+        uint8[] memory mem = toMemory(old, 0);
         storeX(mem, (m.reg1+m.ireg)%8, v, hint);
-        uint res; uint res2;
-        (res, res2) = fromMemory(mem);
+        uint res; uint extra;
+        (res, extra) = fromMemory(mem);
+        debug = res;
         
         if (loc%2 == 0) proof[0] = bytes32(res);
         else proof[1] = bytes32(res);
@@ -496,7 +500,8 @@ contract Instruction {
     function makeMemChange2(bytes32[] proof, uint loc, uint v, uint hint) returns (bytes32) {
         assert(proof.length >= 2);
         
-        uint8[] memory mem = toMemory(0, v);
+        uint old = uint(getLeaf(proof, loc));
+        uint8[] memory mem = toMemory(0, old);
         storeX(mem, (m.reg1+m.ireg)%8, v, hint);
         uint res; uint extra;
         (extra, res) = fromMemory(mem);
@@ -511,7 +516,9 @@ contract Instruction {
         bytes32 root;
         if (hint & 0xc0 == 0x80) root = makeMemChange1(proof, loc, v, hint);
         else if (hint & 0xc0 == 0xc0) root = makeMemChange2(proof, loc, v, hint);
-        else if (hint == 1) vm.break_stack1 = root;
+        else root = makeChange(proof, loc, v);
+        
+        if (hint == 1) vm.break_stack1 = root;
         else if (hint == 2) vm.stack = root;
         else if (hint == 3) vm.stack = root;
         else if (hint == 4) vm.stack = root;
@@ -532,7 +539,6 @@ contract Instruction {
         uint target = (uint(m.op)/2**(8*4))&0xff;
         uint hint = (uint(m.op)/2**(8*5))&0xff;
         require(checkWriteProof(proof, loc, hint));
-        
         uint v;
         if (target == 1) v = m.reg1;
         if (target == 2) v = m.reg2;
@@ -542,7 +548,7 @@ contract Instruction {
         m.vm = hashVM();
         require(state2 == hashMachine());
         winner = prover;
-        return hint;
+        return debug;
     }
     function proveWrite2(bytes32[] proof, uint loc) returns (bool) {
         require(init == 7 && msg.sender == prover);

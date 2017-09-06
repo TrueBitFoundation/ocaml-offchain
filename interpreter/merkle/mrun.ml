@@ -186,7 +186,8 @@ let write_register vm regs v = function
     let loc = value_to_int regs.reg1+value_to_int regs.ireg in
     let mem = get_memory vm.memory loc in
     memop mem v (Int64.of_int (loc-(loc/8)*8)) sz;
-    vm.memory.(loc/8) <- fst (Byteutil.Decode.mini_memory mem)
+    vm.memory.(loc/8) <- fst (Byteutil.Decode.mini_memory mem);
+    trace ("Stored " ^ Int64.to_string vm.memory.(loc/8))
  | MemoryOut2 (_,sz) ->
     let loc = value_to_int regs.reg1+value_to_int regs.ireg in
     let mem = get_memory vm.memory loc in

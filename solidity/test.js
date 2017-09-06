@@ -83,7 +83,7 @@ function checkWrite1(c) {
             vm.pc, vm.stack_ptr, vm.break_ptr, vm.call_ptr, vm.memsize).send(send_opt).on("error", console.error)
       .then(() => {
          c.methods.setMachine(m.vm, m.op, m.reg1, m.reg2, m.reg3, m.ireg).send(send_opt).on("error", console.error).then(() =>
-            c.methods.proveWrite1(test.write1.merkle.list, test.write1.merkle.location).call().then(b => console.log("W1: " + b)))
+            c.methods.proveWrite1(test.write1.merkle.list, test.write1.merkle.location).call().then(b => console.log("W1: " + b.toString(16))))
                                                                                                                          })
 }
 
@@ -169,9 +169,9 @@ function doTest(tst) {
 
 // doTest(checkFetch)
 // doTest(checkInit)
-doTest(checkRead3)
+// doTest(checkRead3)
 // doTest(checkALU) 
-// doTest(checkWrite2)
+doTest(checkWrite2)
 // doTest(checkCallPtr)
 // doTest(checkMemsize)
 

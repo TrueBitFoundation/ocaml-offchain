@@ -366,10 +366,12 @@ let merkle_change nv = function
 let merkle_change_memory1 regs nv sz = function
  | LocationProof (loc, lst) ->
    let old = get_leaf loc lst in
+   trace ("Old memory 1: " ^ w256_to_string old);
    let addr = value_to_int regs.reg1+value_to_int regs.ireg in
    let mem = mini_memory (Byteutil.Decode.word old) 0L in
    memop mem (I64 (Byteutil.Decode.word nv)) (Int64.of_int (addr-(addr/8)*8)) sz;
    let res = fst (Byteutil.Decode.mini_memory mem) in
+   trace ("New memory 1: " ^ w256_to_string (get_value (I64 res)));
    let lst = set_leaf loc (get_value (I64 res)) lst in
    get_root loc lst
  | _ -> assert false
