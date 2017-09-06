@@ -49,8 +49,8 @@ let write_position vm regs = function
  | NoOut -> 0
  | GlobalOut -> value_to_int regs.reg1
  | CallOut -> vm.call_ptr
- | MemoryOut1 _ -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8
- | MemoryOut2 _ -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8  + 1
+ | MemoryOut1 (_,_) -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8
+ | MemoryOut2 (_,_) -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8  + 1
  | StackOut0 -> vm.stack_ptr
  | StackOut1 -> vm.stack_ptr-1
  | StackOutReg1 -> vm.stack_ptr-value_to_int regs.reg1
@@ -389,9 +389,9 @@ let write_register_bin proof vm regs v = function
  | StackOut0 -> {vm with bin_stack=merkle_change v proof}
  | StackOut1 -> {vm with bin_stack=merkle_change v proof}
  | StackOut2 -> {vm with bin_stack=merkle_change v proof}
- (* This needs work *)
- | MemoryOut1 sz -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
- | MemoryOut2 sz -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
+ (* Should we apply the type here? *)
+ | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
+ | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
 
 let check_write1_proof state1 state2 (m, vm, proof) =
   let vm2 = write_register_bin proof vm m.bin_regs (get_value (get_register m.bin_regs (fst m.bin_microp.write1))) (snd m.bin_microp.write1) in

@@ -96,8 +96,8 @@ type out_code =
  | CallOut
  | NoOut
  | GlobalOut
- | MemoryOut1 of Memory.mem_size option
- | MemoryOut2 of Memory.mem_size option
+ | MemoryOut1 of Types.value_type * Memory.mem_size option
+ | MemoryOut2 of Types.value_type * Memory.mem_size option
 
 type stack_ch =
  | StackRegSub
@@ -182,12 +182,12 @@ let write_register vm regs v = function
  | NoOut -> ()
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
  | CallOut -> vm.call_stack.(vm.call_ptr) <- value_to_int v
- | MemoryOut1 sz ->
+ | MemoryOut1 (_,sz) ->
     let loc = value_to_int regs.reg1+value_to_int regs.ireg in
     let mem = get_memory vm.memory loc in
     memop mem v (Int64.of_int (loc-(loc/8)*8)) sz;
     vm.memory.(loc/8) <- fst (Byteutil.Decode.mini_memory mem)
- | MemoryOut2 sz ->
+ | MemoryOut2 (_,sz) ->
     let loc = value_to_int regs.reg1+value_to_int regs.ireg in
     let mem = get_memory vm.memory loc in
     memop mem v (Int64.of_int (loc-(loc/8)*8)) sz;
@@ -281,7 +281,7 @@ let get_code = function
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
- | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg2, MemoryOut1 x.sz); write2=(Reg2, MemoryOut2 x.sz); stack_ch=StackDec2}
+ | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg2, MemoryOut1 (x.ty,x.sz)); write2=(Reg2, MemoryOut2 (x.ty,x.sz)); stack_ch=StackDec2}
  | DROP -> {noop with stack_ch=StackDec}
  | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}

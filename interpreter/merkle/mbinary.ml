@@ -17,7 +17,7 @@ let type_code = function
 let sz_code = function
  | Memory.Mem8 -> 1
  | Memory.Mem16 -> 2
- | Memory.Mem32 -> 3
+ | Memory.Mem32 -> 4
 
 let ext_code = function
  | Memory.SX -> 0
@@ -33,7 +33,7 @@ let alu_byte = function
  | Min -> op 0x02
  | CheckJump -> op 0x03
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
-    op (0xc0 lor (type_code ty lsl 6) lor size_code sz);
+    op (0xc0 lor (type_code ty lsl 4) lor size_code sz);
       | Test (I32 I32Op.Eqz) -> op 0x45
       | Test (I64 I64Op.Eqz) -> op 0x50
       | Test (F32 _) -> assert false
@@ -210,7 +210,7 @@ let out_sz_code = function
  | None -> 0
  | Some Memory.Mem8 -> 1
  | Some Memory.Mem16 -> 2
- | Some Memory.Mem32 -> 3
+ | Some Memory.Mem32 -> 4
 
 let out_code_byte = function
  | NoOut -> 0x00
@@ -218,12 +218,12 @@ let out_code_byte = function
  | StackOutReg1 -> 0x02
  | StackOut0 -> 0x03
  | StackOut1 -> 0x04
- | MemoryOut1 sz -> 0xa0 lor out_sz_code sz
+ | MemoryOut1 (ty, sz) -> 0x80 lor (type_code ty lsl 3) lor out_sz_code sz
  | CallOut -> 0x06
  | BreakLocOut -> 0x07
  | GlobalOut -> 0x08
  | StackOut2 -> 0x09
- | MemoryOut2 sz -> 0xc0 lor out_sz_code sz
+ | MemoryOut2 (ty, sz) -> 0xc0 lor (type_code ty lsl 3) lor out_sz_code sz
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00

@@ -5,7 +5,7 @@ var fs = require("fs")
 
 web3.setProvider(new web3.providers.HttpProvider('http://localhost:8545'))
 
-var base = "0x76fab5f3597241c73c2dd4daac85af7523395f87"
+var base = "0xd28e1d4b64f1842362888345942c783d8d4e3f69"
 
 web3.eth.getBalance(base).then(balance => console.log(balance));
 

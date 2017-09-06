@@ -1,6 +1,6 @@
 pragma solidity ^0.4.15;
 
-import "./alu.sol";
+// import "./alu.sol";
 
 contract Instruction {
     
@@ -161,59 +161,64 @@ contract Instruction {
     function readPosition(uint hint) returns (uint) {
         assert(hint > 4);
         if (hint == 5) return m.reg1;
-        if (hint == 6) return vm.stack_ptr-1;
-        if (hint == 7) return vm.stack_ptr-2;
-        if (hint == 8) return vm.stack_ptr-1-m.reg1;
-        if (hint == 9) return vm.stack_ptr-1-m.reg2;
-        if (hint == 10) return vm.break_ptr-1;
-        if (hint == 11) return vm.break_ptr-1;
-        if (hint == 12) return vm.break_ptr-1-m.reg1;
-        if (hint == 13) return vm.break_ptr-1-m.reg1;
-        if (hint == 14) return vm.call_ptr-1;
-        if (hint == 15) return m.reg1+m.reg2;
-        if (hint == 16) return m.reg1;
+        else if (hint == 6) return vm.stack_ptr-1;
+        else if (hint == 7) return vm.stack_ptr-2;
+        else if (hint == 8) return vm.stack_ptr-1-m.reg1;
+        else if (hint == 9) return vm.stack_ptr-1-m.reg2;
+        else if (hint == 10) return vm.break_ptr-1;
+        else if (hint == 11) return vm.break_ptr-1;
+        else if (hint == 12) return vm.break_ptr-1-m.reg1;
+        else if (hint == 13) return vm.break_ptr-1-m.reg1;
+        else if (hint == 14) return vm.call_ptr-1;
+        else if (hint == 15) return (m.reg1+m.ireg)/8;
+        else if (hint == 16) return m.reg1;
+        else if (hint == 17) return (m.reg1+m.ireg)/8 + 1;
     }
 
     function writePosition(uint hint) returns (uint) {
         assert(hint > 1);
         if (hint == 1) return vm.break_ptr;
-        if (hint == 2) return vm.stack_ptr-m.reg1;
-        if (hint == 3) return vm.stack_ptr;
-        if (hint == 4) return vm.stack_ptr-1;
-        if (hint == 5) return m.reg1+m.reg2;
-        if (hint == 6) return vm.call_ptr;
-        if (hint == 7) return vm.break_ptr;
-        if (hint == 8) return m.reg1;
-        if (hint == 9) return vm.stack_ptr-2;
+        else if (hint == 2) return vm.stack_ptr-m.reg1;
+        else if (hint == 3) return vm.stack_ptr;
+        else if (hint == 4) return vm.stack_ptr-1;
+        else if (hint == 5) return m.reg1+m.reg2;
+        else if (hint == 6) return vm.call_ptr;
+        else if (hint == 7) return vm.break_ptr;
+        else if (hint == 8) return m.reg1;
+        else if (hint == 9) return vm.stack_ptr-2;
+        else if (hint & 0xc0 == 0x80) return (m.reg1+m.ireg)/8;
+        else if (hint & 0xc0 == 0xc0) return (m.reg1+m.ireg)/8 + 1;
     }
 
     function readRoot(uint hint) returns (bytes32) {
         assert(hint > 4);
         if (hint == 5) return vm.globals;
-        if (hint == 6) return vm.stack;
-        if (hint == 7) return vm.stack;
-        if (hint == 8) return vm.stack;
-        if (hint == 9) return vm.stack;
-        if (hint == 10) return vm.break_stack1;
-        if (hint == 11) return vm.break_stack2;
-        if (hint == 12) return vm.break_stack1;
-        if (hint == 13) return vm.break_stack2;
-        if (hint == 14) return vm.call_stack;
-        if (hint == 15) return vm.mem;
-        if (hint == 16) return vm.calltable;
+        else if (hint == 6) return vm.stack;
+        else if (hint == 7) return vm.stack;
+        else if (hint == 8) return vm.stack;
+        else if (hint == 9) return vm.stack;
+        else if (hint == 10) return vm.break_stack1;
+        else if (hint == 11) return vm.break_stack2;
+        else if (hint == 12) return vm.break_stack1;
+        else if (hint == 13) return vm.break_stack2;
+        else if (hint == 14) return vm.call_stack;
+        else if (hint == 15) return vm.mem;
+        else if (hint == 16) return vm.calltable;
+        else if (hint == 17) return vm.mem;
     }
     
     function writeRoot(uint hint) returns (bytes32) {
         assert(hint > 1);
         if (hint == 1) return vm.break_stack1;
-        if (hint == 2) return vm.stack;
-        if (hint == 3) return vm.stack;
-        if (hint == 4) return vm.stack;
-        if (hint == 5) return vm.mem;
-        if (hint == 6) return vm.call_stack;
-        if (hint == 7) return vm.break_stack2;
-        if (hint == 8) return vm.globals;
-        if (hint == 9) return vm.stack;
+        else if (hint == 2) return vm.stack;
+        else if (hint == 3) return vm.stack;
+        else if (hint == 4) return vm.stack;
+        else if (hint == 5) return vm.mem;
+        else if (hint == 6) return vm.call_stack;
+        else if (hint == 7) return vm.break_stack2;
+        else if (hint == 8) return vm.globals;
+        else if (hint == 9) return vm.stack;
+        else return vm.mem;
     }
     
     function checkReadProof(bytes32[] proof, uint loc, uint hint) returns (bool) {
@@ -274,10 +279,15 @@ contract Instruction {
         winner = prover;
         return true;
     }
-    function handleALU(uint hint, uint r1, uint r2, uint r3) returns (uint) {
+    function handleALU(uint hint, uint r1, uint r2, uint r3, uint ireg) returns (uint) {
         uint res;
         if (hint == 0) return r1;
         else if (hint == 1) revert(); // Trap
+        // Loading from memory
+        else if (hint & 0xc0 == 0xc0) {
+            uint8[] memory arr = toMemory(r2, r3);
+            res = loadX(arr, (r1+ireg)%8, hint);
+        }
         else if (hint == 2) {
             if (r1 < r2) res = r1;
             else res = r2;
@@ -456,8 +466,8 @@ contract Instruction {
         bytes32 state2 = phases[6];
         require(state1 == hashMachine());
         uint hint = (uint(m.op)/2**(8*3))&0xff;
-        // m.reg1 = ALU.handleALU(hint, m.reg1, m.reg2, m.reg3);
-        m.reg1 = handleALU(hint, m.reg1, m.reg2, m.reg3);
+        // m.reg1 = ALU.handleALU(hint, m.reg1, m.reg2, m.reg3, m.ireg);
+        m.reg1 = handleALU(hint, m.reg1, m.reg2, m.reg3, m.ireg);
         require(state2 == hashMachine());
         winner = prover;
         return true;
@@ -469,19 +479,48 @@ contract Instruction {
         else proof[1] = bytes32(v);
         return getRoot(proof, loc);
     }
-
+    
+    function makeMemChange1(bytes32[] proof, uint loc, uint v, uint hint) returns (bytes32) {
+        assert(proof.length >= 2);
+        
+        uint8[] memory mem = toMemory(v, 0);
+        storeX(mem, (m.reg1+m.ireg)%8, v, hint);
+        uint res; uint res2;
+        (res, res2) = fromMemory(mem);
+        
+        if (loc%2 == 0) proof[0] = bytes32(res);
+        else proof[1] = bytes32(res);
+        return getRoot(proof, loc);
+    }
+    
+    function makeMemChange2(bytes32[] proof, uint loc, uint v, uint hint) returns (bytes32) {
+        assert(proof.length >= 2);
+        
+        uint8[] memory mem = toMemory(0, v);
+        storeX(mem, (m.reg1+m.ireg)%8, v, hint);
+        uint res; uint extra;
+        (extra, res) = fromMemory(mem);
+        
+        if (loc%2 == 0) proof[0] = bytes32(res);
+        else proof[1] = bytes32(res);
+        return getRoot(proof, loc);
+    }
+    
     function writeStuff(uint hint, bytes32[] proof, uint loc, uint v) {
         if (hint == 0) return;
-        bytes32 root = makeChange(proof, loc, v);
-        if (hint == 1) vm.break_stack1 = root;
-        if (hint == 2) vm.stack = root;
-        if (hint == 3) vm.stack = root;
-        if (hint == 4) vm.stack = root;
-        if (hint == 5) vm.mem = root;
-        if (hint == 6) vm.call_stack = root;
-        if (hint == 7) vm.break_stack2 = root;
-        if (hint == 8) vm.globals = root;
-        if (hint == 9) vm.stack = root;
+        bytes32 root;
+        if (hint & 0xc0 == 0x80) root = makeMemChange1(proof, loc, v, hint);
+        else if (hint & 0xc0 == 0xc0) root = makeMemChange2(proof, loc, v, hint);
+        else if (hint == 1) vm.break_stack1 = root;
+        else if (hint == 2) vm.stack = root;
+        else if (hint == 3) vm.stack = root;
+        else if (hint == 4) vm.stack = root;
+        else if (hint == 5) vm.mem = root;
+        else if (hint == 6) vm.call_stack = root;
+        else if (hint == 7) vm.break_stack2 = root;
+        else if (hint == 8) vm.globals = root;
+        else if (hint == 9) vm.stack = root;
+        else vm.mem = root;
     }
     
     function proveWrite1(bytes32[] proof, uint loc) returns (uint) {
@@ -529,12 +568,13 @@ contract Instruction {
     
     function handlePointer(uint hint, uint ptr) returns (uint) {
         if (hint == 0) return ptr - m.reg1;
-        if (hint == 1) return m.reg1;
-        if (hint == 2) return m.reg2;
-        if (hint == 3) return m.reg3;
-        if (hint == 4) return ptr+1;
-        if (hint == 5) return ptr-1;
-        if (hint == 6) return ptr;
+        else if (hint == 1) return m.reg1;
+        else if (hint == 2) return m.reg2;
+        else if (hint == 3) return m.reg3;
+        else if (hint == 4) return ptr+1;
+        else if (hint == 5) return ptr-1;
+        else if (hint == 6) return ptr;
+        else if (hint == 7) return ptr-2;
     }
 
     function proveUpdatePC() returns (bool) {
@@ -601,6 +641,74 @@ contract Instruction {
         require(state2 == hashVM());
         winner = prover;
         return true;
+    }
+    
+    // a and b are integer values that represent 8 bytes each
+    function toMemory(uint a, uint b) returns (uint8[]) {
+        uint8[] memory arr = new uint8[](16);
+        storeN(arr, 0, 8, a);
+        storeN(arr, 8, 8, b);
+        return arr;
+    }
+    function storeN(uint8[] mem, uint addr, uint n, uint v) {
+        for (uint i = 0; i < n; i++) {
+            mem[addr+i] = uint8(v);
+            v = v/256;
+        }
+    }
+    function loadN(uint8[] mem, uint addr, uint n) returns (uint) {
+        uint res = 0;
+        uint exp = 1;
+        for (uint i = 0; i < n; i++) {
+            res += mem[addr+i]*exp;
+            exp = exp*256;
+        }
+        return res;
+    }
+    function fromMemory(uint8[] mem) returns (uint a, uint b) {
+        a = loadN(mem, 0, 8);
+        b = loadN(mem, 8, 8);
+    }
+    
+    function typeSize(uint ty) internal returns (uint) {
+        if (ty == 0) return 4; // I32
+        else if (ty == 1) return 8; // I64
+        else if (ty == 2) return 4; // F32
+        else if (ty == 3) return 8; // F64
+    }
+    
+    function store(uint8[] mem, uint addr, uint v, uint ty, uint packing) {
+        if (packing == 0) storeN(mem, addr, typeSize(ty), v);
+        else {
+            // Only integers can be packed, also cannot pack I32 to 32-bit?
+            require(ty < 2 && !(ty == 0 && packing == 4));
+            storeN(mem, addr, packing, v);
+        }
+    }
+    
+    function storeX(uint8[] mem, uint addr, uint v, uint hint) {
+        store(mem, addr, v, (hint/2**3)&0x3, hint&0x7);
+    }
+    
+    function load(uint8[] mem, uint addr, uint ty, uint packing, bool sign_extend) returns (uint) {
+        if (packing == 0) return loadN(mem, addr, typeSize(ty));
+        else {
+            require(ty < 2 && !(ty == 0 && packing == 4));
+            uint res = loadN(mem, addr, packing);
+            if (sign_extend) {
+                res = res | uint(-1)*2**packing*(res/2**(packing-1));
+            }
+            if (ty == 0) res = res % (2**32);
+            return res;
+        }
+    }
+    
+    function loadX(uint8[] mem, uint addr, uint hint) returns (uint) {
+        return load(mem, addr, (hint/2**4)&0x3, (hint/2)&0x7, hint&0x1 == 1);
+    }
+    
+    function test(uint a, uint b) returns (uint, uint) {
+        return fromMemory(toMemory(a,b));
     }
     
 }
