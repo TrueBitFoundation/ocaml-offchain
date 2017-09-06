@@ -163,8 +163,8 @@ contract Instruction {
         if (hint == 5) return m.reg1;
         else if (hint == 6) return vm.stack_ptr-1;
         else if (hint == 7) return vm.stack_ptr-2;
-        else if (hint == 8) return vm.stack_ptr-1-m.reg1;
-        else if (hint == 9) return vm.stack_ptr-1-m.reg2;
+        else if (hint == 8) return vm.stack_ptr-m.reg1; // Stack in reg
+        else if (hint == 9) return vm.stack_ptr-m.reg2;
         else if (hint == 10) return vm.break_ptr-1;
         else if (hint == 11) return vm.break_ptr-1;
         else if (hint == 12) return vm.break_ptr-1-m.reg1;

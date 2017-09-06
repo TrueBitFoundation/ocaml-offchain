@@ -57,6 +57,7 @@ type context = {
   bptr : int;
   label : int;
   f_types : (Int32.t, func_type) Hashtbl.t;
+  f_types2 : (Int32.t, func_type) Hashtbl.t;
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
@@ -171,7 +172,7 @@ and compile_block ctx = function
 let rec make a n = if n = 0 then [] else a :: make a (n-1) 
 
 let compile_func ctx func =
-  let FuncType (par,ret) = Hashtbl.find ctx.f_types func.it.ftype.it in
+  let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block ([], func.it.body)) in
@@ -214,7 +215,7 @@ let compile_module m =
   List.iteri (fun i f ->
     let ty = Hashtbl.find ttab f.it.ftype.it in
     Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
-  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ftab; bptr=0}) m.funcs in
+  let module_codes = List.map (compile_func {ptr=0; label=0; f_types2=ttab; f_types=ftab; bptr=0}) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc = function
    | [] -> acc
@@ -236,7 +237,7 @@ let compile_test m func vs =
     if f = func then ( (* prerr_endline "found it" ; *) entry := i );
     let ty = Hashtbl.find ttab f.it.ftype.it in
     Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
-  let module_codes = List.map (compile_func {ptr=0; label=0; f_types=ttab; bptr=0}) m.funcs in
+  let module_codes = List.map (compile_func {ptr=0; label=0; f_types2=ttab; f_types=ftab; bptr=0}) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc = function
    | [] -> acc

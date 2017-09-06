@@ -70,7 +70,13 @@ let mini_memory bytes =
 let word bytes =
   let s = stream bytes in
   skip 24 s;
-  u64 s
+  (* so these words have different endian *)
+  let res = ref 0L in
+  for i = 0 to 7 do
+    ignore i;
+    res := Int64.(add (mul !res 256L) (of_int (u8 s)))
+  done;
+  !res
 
 let bytes_to_array bytes =
   let s = stream bytes in

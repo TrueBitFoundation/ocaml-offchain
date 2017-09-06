@@ -32,10 +32,12 @@ let read_position vm regs = function
  | ReadStackPtr -> 0
  | MemsizeIn -> 0
  | GlobalIn -> value_to_int regs.reg1
- | StackIn0 -> vm.stack_ptr-1
+ | StackIn0 ->
+   trace ("Read stack from " ^ string_of_int (vm.stack_ptr-1));
+   vm.stack_ptr-1
  | StackIn1 -> vm.stack_ptr-2
- | StackInReg -> vm.stack_ptr-1-value_to_int regs.reg1
- | StackInReg2 -> vm.stack_ptr-1-value_to_int regs.reg2
+ | StackInReg -> vm.stack_ptr-value_to_int regs.reg1
+ | StackInReg2 -> vm.stack_ptr-value_to_int regs.reg2
  | BreakLocIn -> vm.break_ptr-1
  | BreakStackIn -> vm.break_ptr-1
  | BreakLocInReg -> vm.break_ptr-1-value_to_int regs.reg1
@@ -105,10 +107,10 @@ let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
 
 let make_register_proof2 m =
-  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
+  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg2)
 
 let make_register_proof3 m =
-  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
+  (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg3)
 
 let make_write_proof m wr =
   (machine_to_bin m, vm_to_bin m.m_vm, get_write_location m (snd wr))
@@ -192,8 +194,12 @@ let check_init_registers state1 state2 (vm_bin, microp) =
   state2 = hash_machine_bin {bin_vm=vm_bin; bin_microp=microp; bin_regs=regs}
 
 let value_from_proof = function
- | SimpleProof -> raise EmptyArray
- | LocationProof (loc, lst) -> get_leaf loc lst
+ | SimpleProof ->
+    trace "Was empty";
+    raise EmptyArray
+ | LocationProof (loc, lst) ->
+    trace "Ok here";
+    get_leaf loc lst
 
 let read_from_proof regs vm proof = function
  | NoIn -> get_value (i 0)
@@ -212,8 +218,8 @@ let read_position_bin vm regs = function
  | GlobalIn -> value_to_int regs.reg1
  | StackIn0 -> vm.bin_stack_ptr-1
  | StackIn1 -> vm.bin_stack_ptr-2
- | StackInReg -> vm.bin_stack_ptr-1-value_to_int regs.reg1
- | StackInReg2 -> vm.bin_stack_ptr-1-value_to_int regs.reg2
+ | StackInReg -> vm.bin_stack_ptr-value_to_int regs.reg1
+ | StackInReg2 -> vm.bin_stack_ptr-value_to_int regs.reg2
  | BreakLocIn -> vm.bin_break_ptr-1
  | BreakStackIn -> vm.bin_break_ptr-1
  | BreakLocInReg -> vm.bin_break_ptr-1-value_to_int regs.reg1
@@ -298,14 +304,14 @@ let check_read2_proof state1 state2 (m, vm, proof) =
   let regs = {(regs_to_bin m.bin_regs) with b_reg2 = read_from_proof m.bin_regs vm proof m.bin_microp.read_reg2} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
-  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
+  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg2 &&
   state2 = hash_machine_regs m regs
 
 let check_read3_proof state1 state2 (m, vm, proof) =
   let regs = {(regs_to_bin m.bin_regs) with b_reg3 = read_from_proof m.bin_regs vm proof m.bin_microp.read_reg3} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
-  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg1 &&
+  check_read_proof m.bin_regs vm proof m.bin_microp.read_reg3 &&
   state2 = hash_machine_regs m regs
 
 let check_alu_proof state1 state2 m =
@@ -371,10 +377,12 @@ let merkle_change_memory1 regs nv sz = function
 let merkle_change_memory2 regs nv sz = function
  | LocationProof (loc, lst) ->
    let old = get_leaf loc lst in
+   trace ("Old memory 2: " ^ w256_to_string old);
    let addr = value_to_int regs.reg1+value_to_int regs.ireg in
    let mem = mini_memory 0L (Byteutil.Decode.word old) in
    memop mem (I64 (Byteutil.Decode.word nv)) (Int64.of_int (addr-(addr/8)*8)) sz;
    let res = snd (Byteutil.Decode.mini_memory mem) in
+   trace ("New memory 2: " ^ w256_to_string (get_value (I64 res)));
    let lst = set_leaf loc (get_value (I64 res)) lst in
    get_root loc lst
  | _ -> assert false
