@@ -2,7 +2,8 @@
 open Merkle
 open Values
 
-
+exception VmTrap
+exception VmError
 
 type vm = {
   code : inst array;
@@ -19,9 +20,6 @@ type vm = {
   mutable call_ptr : int;
   mutable memsize : int;
 }
-
-exception VmError
-
 
 let inc_pc vm = vm.pc <- vm.pc+1
 
@@ -257,13 +255,13 @@ let handle_alu r1 r2 r3 ireg = function
  | Test op -> value_of_bool (Eval_numeric.eval_testop op r1)
  | Binary op -> Eval_numeric.eval_binop op r1 r2
  | Compare op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
- | Trap -> raise VmError
+ | Trap -> raise VmTrap
  | Nop -> r1
  | CheckJump ->
    trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
    if value_bool r2 then r1 else i (value_to_int r3)
- | CheckJumpForward -> i (value_to_int r2 + value_to_int r1 + 1)
- | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1)
+ | CheckJumpForward -> i (value_to_int r2 + value_to_int r1)
+ | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1 - 1)
 
 open Ast
 
@@ -280,7 +278,7 @@ let get_code = function
    {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadStackPtr; read_reg3 = Immed; alu_code = HandleBrkReturn;
               write1 = (Reg3, BreakLocOut); write2 = (Reg1, BreakStackOut); break_ch=StackInc; stack_ch = StackDec}
  | POPBRK -> {noop with break_ch=StackDec}
- | BREAK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = BreakLocInReg; read_reg3 = BreakStackInReg; break_ch=StackDecImmed; stack_ch=StackReg2; pc_ch=StackReg}
+ | BREAK x -> {noop with immed=i x; read_reg1=Immed; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDecImmed; stack_ch=StackReg3; pc_ch=StackReg2}
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
@@ -304,17 +302,18 @@ let get_code = function
  | BREAKTABLE -> {noop with read_reg1=StackIn0; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDec; stack_ch=StackReg3; pc_ch=StackReg2}
 
 let micro_step vm =
+  let open Values in
   (* fetch code *)
   let op = get_code vm.code.(vm.pc) in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   (* read registers *)
-  trace "read R1";
   regs.reg1 <- read_register vm regs op.read_reg1;
-  trace "read R2";
+  trace ("read R1 " ^ string_of_value regs.reg1);
   regs.reg2 <- read_register vm regs op.read_reg2;
-  trace "read R3";
+  trace ("read R2 " ^ string_of_value regs.reg2);
   regs.reg3 <- read_register vm regs op.read_reg3;
+  trace ("read R3 " ^ string_of_value regs.reg3);
   (* ALU *)
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
   (* Write registers *)
@@ -331,8 +330,6 @@ let micro_step vm =
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
-
-exception VmTrap
 
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
@@ -501,7 +498,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | PUSHBRK x -> "PUSHBRK"
- | PUSHBRKRETURN x -> "PUSHBRKRETURN"
+ | PUSHBRKRETURN x -> "PUSHBRKRETURN stack: " ^ string_of_int (vm.stack_ptr + value_to_int vm.stack.(vm.stack_ptr-1) - 1)
  | POPBRK -> "POPBRK"
  | BREAK x -> "BREAK " ^ string_of_int x
  | RETURN -> "RETURN"

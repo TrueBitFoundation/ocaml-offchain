@@ -330,13 +330,14 @@ let run_test_micro inst mdle func vs =
     for i = 0 to 10000 do
       ignore i;
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
-      Mrun.micro_step vm
+      Mrun.micro_step vm;
+      test_errors vm
     done;
     raise (Failure "takes too long")
   end
-  with a -> (* check stack pointer, get values *)
-    trace (Printexc.to_string a);
-    Printexc.print_backtrace stderr;
+  with VmTrap -> (* check stack pointer, get values *)
+(*    trace (Printexc.to_string a);
+    Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
 
 let run_action act =
