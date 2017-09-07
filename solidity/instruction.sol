@@ -296,6 +296,12 @@ contract Instruction {
             if (r1 == 0) res = r2;
             else res = r3;
         }
+        else if (hint == 4) {
+            res = r1 + r2;
+        }
+        else if (hint == 5) {
+            res = r1 + r2 - 1;
+        }
         else if (hint == 0x45 || hint == 0x50) {
             if (r1 == 0) res = 1;
             else res = 0;
@@ -581,6 +587,7 @@ contract Instruction {
         else if (hint == 5) return ptr-1;
         else if (hint == 6) return ptr;
         else if (hint == 7) return ptr-2;
+        else if (hint == 8) return ptr-1-m.ireg;
     }
 
     function proveUpdatePC() returns (bool) {
