@@ -18,7 +18,7 @@ For testing, use `-m` option. `-t` will turn on tracing.
 
 For example:
 ```
-./wasm -t -m ../test/core.fac.wast
+./wasm -t -m ../test/core/fac.wast
 ```
 
 
