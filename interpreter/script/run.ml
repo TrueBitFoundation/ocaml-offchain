@@ -310,13 +310,14 @@ let run_test inst mdle func vs =
          let proof = Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end
-      else Mrun.vm_step vm
+      else Mrun.vm_step vm;
+      if vm.stack_ptr >= Array.length vm.stack then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
     done;
     raise (Failure "takes too long")
   end
-  with a -> (* check stack pointer, get values *)
-    trace (Printexc.to_string a);
-    Printexc.print_backtrace stderr;
+  with VmTrap -> (* check stack pointer, get values *)
+(*    trace (Printexc.to_string a);
+    Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
 
 let run_test_micro inst mdle func vs =

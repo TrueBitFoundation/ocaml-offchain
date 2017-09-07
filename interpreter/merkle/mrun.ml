@@ -330,9 +330,11 @@ let micro_step vm =
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
 
+exception VmTrap
+
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
- | UNREACHABLE -> raise VmError
+ | UNREACHABLE -> raise VmTrap
  | JUMP x ->
    vm.pc <- x
  | JUMPI x ->
