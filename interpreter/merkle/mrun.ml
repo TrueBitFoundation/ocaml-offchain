@@ -444,6 +444,43 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.pc <- vm.calltable.(addr+x)
 
+open Types
+
+let type_size = function
+ | I32Type -> 4
+ | F32Type -> 4
+ | I64Type -> 8
+ | F64Type -> 8
+
+let size_size = function
+ | Memory.Mem8 -> 1
+ | Memory.Mem16 -> 2
+ | Memory.Mem32 -> 4
+
+let load_memory_limit addr (op:'a memop) =
+  let x = value_to_int addr + Int32.to_int op.offset in
+  match op.sz with
+  | None -> x - 1 + type_size op.ty
+  | Some (sz,_) -> x - 1 + size_size sz
+
+let store_memory_limit addr (op:'a memop) =
+  let x = value_to_int addr + Int32.to_int op.offset in
+  match op.sz with
+  | None -> x - 1 + type_size op.ty
+  | Some sz -> x - 1 + size_size sz
+
+let test_errors vm = match vm.code.(vm.pc) with
+ | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | LOAD op ->
+    if load_memory_limit vm.stack.(vm.stack_ptr-1) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if value_to_int vm.stack.(vm.stack_ptr-1) >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if Int32.to_int op.offset < 0 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+ | STORE op ->
+    if store_memory_limit vm.stack.(vm.stack_ptr-2) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if value_to_int vm.stack.(vm.stack_ptr-2) >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if Int32.to_int op.offset < 0 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+ | _ -> ()
+
 let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | UNREACHABLE -> "UNREACHABLE"

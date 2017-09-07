@@ -311,7 +311,8 @@ let run_test inst mdle func vs =
          Mproof.check_proof proof
       end
       else Mrun.vm_step vm;
-      if vm.stack_ptr >= Array.length vm.stack then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+(*      if vm.stack_ptr >= Array.length vm.stack then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted")) *)
+      test_errors vm
     done;
     raise (Failure "takes too long")
   end
