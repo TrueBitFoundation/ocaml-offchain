@@ -32,6 +32,8 @@ let alu_byte = function
  | Trap -> op 0x01
  | Min -> op 0x02
  | CheckJump -> op 0x03
+ | CheckJumpForward -> op 0x04
+ | HandleBrkReturn -> op 0x05
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
     op (0xc0 lor (type_code ty lsl 4) lor size_code sz);
       | Test (I32 I32Op.Eqz) -> op 0x45
@@ -234,6 +236,7 @@ let stack_ch_byte = function
  | StackDec -> 0x05
  | StackNop -> 0x06
  | StackDec2 -> 0x07
+ | StackDecImmed -> 0x08
 
 (*
 we have 31 bytes

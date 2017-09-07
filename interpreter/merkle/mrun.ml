@@ -22,14 +22,6 @@ type vm = {
 
 exception VmError
 
-let value_bool v = not (v = I32 0l)
-
-let value_to_int = function
- | I32 i -> Int32.to_int i
- | I64 i -> Int64.to_int i
- | _ -> 0
-
-let i x = I32 (Int32.of_int x)
 
 let inc_pc vm = vm.pc <- vm.pc+1
 
@@ -80,6 +72,8 @@ type alu_code =
  | CheckJump
  | Nop
  | FixMemory of Types.value_type * (Memory.mem_size * Memory.extension) option
+ | CheckJumpForward
+ | HandleBrkReturn
 
 type reg =
  | Reg1
@@ -108,6 +102,7 @@ type stack_ch =
  | StackDec
  | StackNop
  | StackDec2
+ | StackDecImmed
 
 type microp = {
   read_reg1 : in_code;
@@ -242,6 +237,7 @@ let handle_ptr regs ptr = function
  | StackDec2 -> ptr - 2
  | StackDec -> ptr - 1
  | StackNop -> ptr
+ | StackDecImmed -> ptr - 1 - value_to_int regs.ireg
 
 let load r2 r3 ty sz loc =
   let open Byteutil in
@@ -266,6 +262,8 @@ let handle_alu r1 r2 r3 ireg = function
  | CheckJump ->
    trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
    if value_bool r2 then r1 else i (value_to_int r3)
+ | CheckJumpForward -> i (value_to_int r2 + value_to_int r1 + 1)
+ | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1)
 
 open Ast
 
@@ -274,11 +272,15 @@ let get_code = function
  | UNREACHABLE -> {noop with alu_code=Trap}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
+ | JUMPFORWARD -> {noop with read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
  | CALL x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
+ | PUSHBRKRETURN x ->
+   {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadStackPtr; read_reg3 = Immed; alu_code = HandleBrkReturn;
+              write1 = (Reg3, BreakLocOut); write2 = (Reg1, BreakStackOut); break_ch=StackInc; stack_ch = StackDec}
  | POPBRK -> {noop with break_ch=StackDec}
- | BREAK -> {noop with read_reg1 = BreakLocIn; read_reg2 = BreakStackIn; break_ch=StackDec; stack_ch=StackReg2; pc_ch=StackReg}
+ | BREAK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = BreakLocInReg; read_reg3 = BreakStackInReg; break_ch=StackDecImmed; stack_ch=StackReg2; pc_ch=StackReg}
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
@@ -340,6 +342,9 @@ let vm_step vm = match vm.code.(vm.pc) with
  | JUMPI x ->
    vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
    vm.stack_ptr <- vm.stack_ptr - 1
+ | JUMPFORWARD ->
+   vm.pc <- vm.pc + 1 + value_to_int vm.stack.(vm.stack_ptr-1);
+   vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
    (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
@@ -350,12 +355,17 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.break_stack.(vm.break_ptr) <- (x, vm.stack_ptr);
    vm.break_ptr <- vm.break_ptr + 1
+ | PUSHBRKRETURN x ->
+   inc_pc vm;
+   vm.break_stack.(vm.break_ptr) <- (x, vm.stack_ptr + value_to_int vm.stack.(vm.stack_ptr-1) - 1);
+   vm.break_ptr <- vm.break_ptr + 1;
+   vm.stack_ptr <- vm.stack_ptr - 1
  | POPBRK ->
    inc_pc vm;
    vm.break_ptr <- vm.break_ptr - 1
- | BREAK ->
-   let loc, sptr = vm.break_stack.(vm.break_ptr-1) in
-   vm.break_ptr <- vm.break_ptr - 1;
+ | BREAK x ->
+   let loc, sptr = vm.break_stack.(vm.break_ptr-1-x) in
+   vm.break_ptr <- vm.break_ptr - 1 - x;
    vm.stack_ptr <- sptr;
    vm.pc <- loc
  | RETURN ->
@@ -491,8 +501,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | PUSHBRK x -> "PUSHBRK"
+ | PUSHBRKRETURN x -> "PUSHBRKRETURN"
  | POPBRK -> "POPBRK"
- | BREAK -> "BREAK"
+ | BREAK x -> "BREAK " ^ string_of_int x
  | RETURN -> "RETURN"
  | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2)
@@ -513,5 +524,6 @@ let trace_step vm = match vm.code.(vm.pc) with
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALLI x -> "CALLI"
+ | JUMPFORWARD -> "JUMPFORWARD"
 
 

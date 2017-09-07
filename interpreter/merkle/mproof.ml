@@ -1,4 +1,5 @@
 
+open Merkle
 open Values
 open Mrun
 open Mbinary
