@@ -70,10 +70,21 @@ type context = {
   label : int;
   f_types : (Int32.t, func_type) Hashtbl.t;
   f_types2 : (Int32.t, func_type) Hashtbl.t;
-  block_return : int list;
+  block_return : (int * int) list;
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
+
+let rec make a n = if n = 0 then [] else a :: make a (n-1) 
+
+let rec adjust_stack diff num =
+  if num = 0 then [] else
+  if diff = 0 then [] else
+  if diff < 0 then ( trace "Cannot adjust" ; [] ) else
+  begin
+    trace "Adjusting stack";
+    [DUP num; SWAP (diff - num + 2); DROP] @ adjust_stack diff (num-1) @ [DROP]
+  end
 
 let rec compile ctx expr = compile' ctx expr.it
 and compile' ctx = function
@@ -87,7 +98,7 @@ and compile' ctx = function
    let end_label = ctx.label in
    let old_return = ctx.block_return in
    let old_ptr = ctx.ptr in
-   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return=rets::ctx.block_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return=(old_ptr, rets)::ctx.block_return} in
    let ctx, body = compile_block ctx lst in
    trace ("block end " ^ string_of_int ctx.ptr);
    let add_brk = if rets = 0 then [PUSHBRK end_label] else [PUSH (i rets); PUSHBRKRETURN end_label] in
@@ -108,7 +119,7 @@ and compile' ctx = function
    let sptr = ctx.ptr in
    let old_return = ctx.block_return in
    trace ("loop start " ^ string_of_int sptr);
-   let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+1; block_return=0::old_return} in
+   let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+1; block_return=(ctx.ptr, 0)::old_return} in
    let ctx, body = compile_block ctx lst in
    trace ("loop end " ^ string_of_int ctx.ptr);
    {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label; PUSHBRK start_label] @ body @ [POPBRK; LABEL end_label]
@@ -127,8 +138,9 @@ and compile' ctx = function
    ctx, [JUMPI if_label] @ fbody @ [JUMP end_label; LABEL if_label] @ tbody @ [LABEL end_label]
  | Br x ->
    let num = Int32.to_int x.it in
-   let rets = List.nth ctx.block_return num in
-   {ctx with ptr=ctx.ptr - rets}, [BREAK num]
+   let ptr, rets = List.nth ctx.block_return num in
+   let adjust = adjust_stack (ctx.ptr - ptr) rets in
+   {ctx with ptr=ctx.ptr - rets}, adjust @ [BREAK num]
  | BrIf x ->
    trace ("brif " ^ Int32.to_string x.it);
    let num = Int32.to_int x.it in
@@ -139,7 +151,7 @@ and compile' ctx = function
    [JUMPI continue_label; JUMP end_label; LABEL continue_label; BREAK num; LABEL end_label]
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
-   let rets = List.nth ctx.block_return num in
+   let ptr, rets = List.nth ctx.block_return num in
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> BREAK (Int32.to_int x.it)) (tab@[def]) in
    {ctx with ptr = ctx.ptr-1-rets}, [POPI1 (List.length lst); JUMPFORWARD] @ lst
@@ -186,8 +198,6 @@ and compile_block ctx = function
     let ctx, a = compile ctx a in
     let ctx, rest = compile_block ctx tl in
     ctx, a @ rest
-
-let rec make a n = if n = 0 then [] else a :: make a (n-1) 
 
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
