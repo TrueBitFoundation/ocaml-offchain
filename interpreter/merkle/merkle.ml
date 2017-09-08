@@ -144,18 +144,21 @@ and compile' ctx = function
  | BrIf x ->
    trace ("brif " ^ Int32.to_string x.it);
    let num = Int32.to_int x.it in
-   (* let rets = List.nth ctx.block_return num in *)
+   let ptr, rets = List.nth ctx.block_return num in
+   let adjust = adjust_stack (ctx.ptr - ptr - 1) rets in
    let continue_label = ctx.label in
    let end_label = ctx.label+1 in
    {ctx with label=ctx.label+2; ptr = ctx.ptr-1},
-   [JUMPI continue_label; JUMP end_label; LABEL continue_label; BREAK num; LABEL end_label]
+   [JUMPI continue_label; JUMP end_label; LABEL continue_label] @ adjust @ [BREAK num; LABEL end_label]
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
    let ptr, rets = List.nth ctx.block_return num in
    (* push the list there, then use a special instruction *)
    let lst = List.map (fun x -> BREAK (Int32.to_int x.it)) (tab@[def]) in
-   {ctx with ptr = ctx.ptr-1-rets}, [POPI1 (List.length lst); JUMPFORWARD] @ lst
- | Return -> ctx, [BREAK ctx.bptr]
+   let adjust = adjust_stack (ctx.ptr - ptr - 2) (rets+1) in
+   {ctx with ptr = ctx.ptr-1-rets}, adjust @ [POPI1 (List.length tab); JUMPFORWARD] @ lst
+ | Return ->
+   ctx, [BREAK (ctx.bptr-1)]
  | Drop ->
     trace "drop";
     {ctx with ptr=ctx.ptr-1}, [DROP]
