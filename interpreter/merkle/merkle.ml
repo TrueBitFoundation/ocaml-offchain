@@ -77,14 +77,17 @@ type context = {
 
 let rec make a n = if n = 0 then [] else a :: make a (n-1) 
 
-let rec adjust_stack diff num =
+let rec adjust_stack_aux diff num =
   if num = 0 then [] else
+  begin
+    [DUP num; SWAP (diff + num + 1); DROP] @ adjust_stack_aux diff (num-1)
+  end
+
+let adjust_stack diff num =
   if diff = 0 then [] else
   if diff < 0 then ( trace "Cannot adjust" ; [] ) else
-  begin
-    trace "Adjusting stack";
-    [DUP num; SWAP (diff - num + 2); DROP] @ adjust_stack diff (num-1) @ [DROP]
-  end
+  ( trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values");
+    adjust_stack_aux diff num @ make DROP diff )
 
 let rec compile ctx expr = compile' ctx expr.it
 and compile' ctx = function
@@ -98,7 +101,7 @@ and compile' ctx = function
    let end_label = ctx.label in
    let old_return = ctx.block_return in
    let old_ptr = ctx.ptr in
-   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return=(old_ptr, rets)::ctx.block_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return=(old_ptr+rets, rets)::ctx.block_return} in
    let ctx, body = compile_block ctx lst in
    trace ("block end " ^ string_of_int ctx.ptr);
    let add_brk = if rets = 0 then [PUSHBRK end_label] else [PUSH (i rets); PUSHBRKRETURN end_label] in
@@ -139,6 +142,7 @@ and compile' ctx = function
  | Br x ->
    let num = Int32.to_int x.it in
    let ptr, rets = List.nth ctx.block_return num in
+   trace ("br: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
    let adjust = adjust_stack (ctx.ptr - ptr) rets in
    {ctx with ptr=ctx.ptr - rets}, adjust @ [BREAK num]
  | BrIf x ->
@@ -152,11 +156,17 @@ and compile' ctx = function
    [JUMPI continue_label; JUMP end_label; LABEL continue_label] @ adjust @ [BREAK num; LABEL end_label]
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
-   let ptr, rets = List.nth ctx.block_return num in
-   (* push the list there, then use a special instruction *)
-   let lst = List.map (fun x -> BREAK (Int32.to_int x.it)) (tab@[def]) in
-   let adjust = adjust_stack (ctx.ptr - ptr - 2) (rets+1) in
-   {ctx with ptr = ctx.ptr-1-rets}, adjust @ [POPI1 (List.length tab); JUMPFORWARD] @ lst
+   let _, rets = List.nth ctx.block_return num in
+   (* Every level might need different adjustment, so generate the pieces here... at least the number returned values should be same *)
+   let make_piece i idx =
+     let num = Int32.to_int idx.it in
+     let ptr, _ = List.nth ctx.block_return num in
+     let adjust = adjust_stack (ctx.ptr - ptr - 1) rets in
+     [LABEL (ctx.label+i)] @ adjust @ [BREAK num] in
+   let jumps = List.mapi (fun i _ -> JUMP (ctx.label+i)) (tab@[def]) in
+   let pieces = List.mapi make_piece (tab@[def]) in
+   {ctx with ptr = ctx.ptr-1-rets; label=ctx.label + List.length tab + 2},
+   [POPI1 (List.length tab); JUMPFORWARD] @ jumps @ List.flatten pieces
  | Return ->
    ctx, [BREAK (ctx.bptr-1)]
  | Drop ->
@@ -271,7 +281,9 @@ let compile_test m func vs =
     if f = func then ( (* prerr_endline "found it" ; *) entry := i );
     let ty = Hashtbl.find ttab f.it.ftype.it in
     Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
-  let module_codes = List.map (compile_func {empty_ctx with f_types2=ttab; f_types=ftab}) m.funcs in
+  let module_codes = List.map (fun f ->
+     if f = func then trace "*************** CURRENT ";
+     compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc = function
    | [] -> acc

@@ -34,6 +34,7 @@ let argspec = Arg.align
   "-v", Arg.Unit banner, " show version";
   
   
+  "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";

@@ -249,7 +249,10 @@ let load r2 r3 ty sz loc =
 
 let handle_alu r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
- | Min -> i (min (value_to_int r1) (value_to_int r2))
+ | Min ->
+   let v = min (value_to_int r1) (value_to_int r2) in
+   trace ("min " ^ string_of_int v);
+   i v
  | Convert op -> Eval_numeric.eval_cvtop op r1
  | Unary op -> Eval_numeric.eval_unop op r1
  | Test op -> value_of_bool (Eval_numeric.eval_testop op r1)
@@ -342,6 +345,10 @@ let vm_step vm = match vm.code.(vm.pc) with
  | JUMPFORWARD ->
    vm.pc <- vm.pc + 1 + value_to_int vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
+ | POPI1 x ->
+   inc_pc vm;
+   let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
+   vm.stack.(vm.stack_ptr-1) <- i (if idx < 0 || idx >= x then x else idx)
  | CALL x ->
    (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
@@ -411,9 +418,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
- | POPI1 x ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- i (min x (value_to_int vm.stack.(vm.stack_ptr-1)))
  | POPI2 x ->
    inc_pc vm;
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
@@ -495,6 +499,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in
    "JUMPI " ^ (if value_bool x then " jump" else " no jump") ^ " " ^ string_of_value x
+ | JUMPFORWARD -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | PUSHBRK x -> "PUSHBRK"
@@ -521,6 +526,12 @@ let trace_step vm = match vm.code.(vm.pc) with
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALLI x -> "CALLI"
- | JUMPFORWARD -> "JUMPFORWARD"
+
+let stack_to_string vm = 
+  let res = ref "" in
+  for i = 0 to vm.stack_ptr - 1 do
+    res := !res ^ " ; " ^ string_of_value vm.stack.(i)
+  done;
+  !res
 
 

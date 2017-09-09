@@ -305,13 +305,13 @@ let run_test inst mdle func vs =
   Mrun.setup_memory vm mdle inst;
   try begin
     for i = 0 to 10000 do
+      if !Flags.trace_stack then trace (stack_to_string vm);
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.checkstep then begin
          let proof = Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end
       else Mrun.vm_step vm;
-(*      if vm.stack_ptr >= Array.length vm.stack then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted")) *)
       test_errors vm
     done;
     raise (Failure "takes too long")
