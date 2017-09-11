@@ -298,11 +298,15 @@ let values_from_arr arr start len =
   done;
   List.rev !res
 
+let task_number = ref 0
+
 let run_test inst mdle func vs =
   let open Mrun in
   let code = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
+  if !task_number = !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+  incr task_number;
   try begin
     for i = 0 to 10000 do
       if !Flags.trace_stack then trace (stack_to_string vm);
