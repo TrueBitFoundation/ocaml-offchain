@@ -22,7 +22,11 @@
 
 <button onclick="newTask();">New task</button>
 
+<div id="success"></div>
+
 <h1>Solver</h1>
+
+<div id="posted"></div>
 
 <h1>Verifier</h1>
 
@@ -32,6 +36,13 @@
     
     var socket = io("localhost:22448")
     socket.on("client", () => console.log("Got message!"))
+    socket.on("posted", function (obj) {
+        console.log(obj)
+        document.querySelector("#posted").innerHTML += "<br>" + JSON.stringify(obj)
+    })
+    socket.on("task_success", function (id) {
+        document.querySelector("#success").innerHTML += "<br>" + id
+    })
     
     function newTask() {
         socket.emit("new_task", document.querySelector("#module").value)

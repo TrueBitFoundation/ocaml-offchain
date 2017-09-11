@@ -2,6 +2,7 @@
 **/*.tmproj
 **/*.pyc
 **/_build
+**/Qm*
 **/_output
 solidity/contracts
 solidity/node_modules
