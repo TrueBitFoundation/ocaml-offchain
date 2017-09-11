@@ -199,7 +199,7 @@ and compile' ctx = function
    trace "set local";
    {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP]
  | TeeLocal v ->
-   ctx, [SWAP (Int32.to_int v.it+ctx.ptr)]
+   ctx, [SWAP (ctx.ptr - Int32.to_int v.it)]
  | Load op -> ctx, [LOAD op]
  | Store op ->
    trace "store";
@@ -212,6 +212,8 @@ and compile_block ctx = function
     let ctx, rest = compile_block ctx tl in
     ctx, a @ rest
 
+(* Initialize local variables with correct types *)
+
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
@@ -219,7 +221,8 @@ let compile_func ctx func =
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
   trace ("---- function end " ^ string_of_int ctx.ptr);
   ctx,
-  make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @
+(*  make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @ *)
+  List.map (fun x -> PUSH (default_value x)) func.it.locals @
   body @
   List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP]) ret) @
   make DROP (List.length par + List.length func.it.locals) @
