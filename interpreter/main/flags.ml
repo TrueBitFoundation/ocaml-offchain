@@ -16,3 +16,6 @@ let checkstep = ref (-1)
 let init = ref (-1)
 let result = ref (-1)
 
+let case = ref (-1)
+let location = ref (-1)
+

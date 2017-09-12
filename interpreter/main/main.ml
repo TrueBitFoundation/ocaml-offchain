@@ -36,10 +36,12 @@ let argspec = Arg.align
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
-  "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
   "-merkletest", Arg.Int (fun n -> Mbinary.test n; exit 0), " just run a merkle root computation test with a number of leafs";
   "-init", Arg.Int (fun n -> Flags.init := n), " output initial state hash of a test case";
   "-result", Arg.Int (fun n -> Flags.result := n), " output final state hash of a test case and the number of steps";
+  "-case", Arg.Int (fun n -> Flags.case := n), " for which test case the hash or proofs will be generated";
+  "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
+  "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
 ]
 
 let _ = Mrun.vm_step

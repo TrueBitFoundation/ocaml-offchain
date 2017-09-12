@@ -313,7 +313,8 @@ let run_test inst mdle func vs =
     for i = 0 to 100000000 do
       if !Flags.trace_stack then trace (stack_to_string vm);
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
-      if i = !Flags.checkstep then begin
+      if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+      if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
          let proof = Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end
