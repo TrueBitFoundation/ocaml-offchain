@@ -1,7 +1,7 @@
 
 open Values
 
-let trace = Merkle.trace
+let trace name = if !Flags.trace then print_endline ("-- " ^ name)
 
 let w256_to_string bs =
   let res = ref "" in
@@ -176,4 +176,22 @@ let mini_memory a b =
   u64 b;
   let bs = to_bytes s in
   Memory.of_bytes bs
+
+open Types
+
+let type_code = function
+ | I32Type -> 0
+ | I64Type -> 1
+ | F32Type -> 2
+ | F64Type -> 3
+
+(* generate hash for a type *)
+let ftype_hash (FuncType (par, ret)) =
+  let hash = Cryptokit.Hash.keccak 256 in
+  List.iter (fun i -> hash#add_byte (type_code i)) par;
+  hash#add_byte 0xff;
+  List.iter (fun i -> hash#add_byte (type_code i)) ret;
+  Decode.word hash#result
+
+
 

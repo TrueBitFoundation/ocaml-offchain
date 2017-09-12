@@ -3,15 +3,9 @@ open Values
 open Byteutil
 open Ast
 open Mrun
-open Types
+(* open Types *)
 
 let op x = Char.chr x
-
-let type_code = function
- | I32Type -> 0
- | I64Type -> 1
- | F32Type -> 2
- | F64Type -> 3
 
 (* cannot be zero because of size_code *)
 let sz_code = function

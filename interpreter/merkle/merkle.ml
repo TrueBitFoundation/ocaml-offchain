@@ -6,7 +6,7 @@ open Source
 open Types
 open Values
 
-let trace name = if !Flags.trace then print_endline ("-- " ^ name)
+let trace = Byteutil.trace
 
 (* perhaps we need to link the modules first *)
 
@@ -56,7 +56,7 @@ type inst =
  | POPI1 of int
  | POPI2 of int
  | BREAKTABLE
- | CALLI of int (* indirect call, check from table *)
+ | CALLI of Int64.t (* indirect call, check from table *)
  | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
  | CMP of relop                  (* numeric comparison *)
@@ -168,7 +168,11 @@ and compile' ctx = function
    {ctx with ptr = ctx.ptr-1-rets; label=ctx.label + List.length tab + 2},
    [POPI1 (List.length tab); JUMPFORWARD] @ jumps @ List.flatten pieces
  | Return ->
-   ctx, [BREAK (ctx.bptr-1)]
+   let num = ctx.bptr-1 in
+   let ptr, rets = List.nth ctx.block_return num in
+   trace ("return: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
+   let adjust = adjust_stack (ctx.ptr - ptr) rets in
+   {ctx with ptr=ctx.ptr - rets}, adjust @ [BREAK num]
  | Drop ->
     trace "drop";
     {ctx with ptr=ctx.ptr-1}, [DROP]
@@ -183,8 +187,9 @@ and compile' ctx = function
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
  | CallIndirect v ->
-   let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALLI 0]
+   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
+   trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CALLI (Byteutil.ftype_hash (FuncType (par,ret)))]
  | Select ->
    trace "select";
    let else_label = ctx.label in
@@ -217,6 +222,7 @@ and compile_block ctx = function
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
+  trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
   trace ("---- function end " ^ string_of_int ctx.ptr);
@@ -273,11 +279,23 @@ let compile_module m =
   let flat_code = build 0 [] module_codes in
   List.map (resolve_inst2 f_resolve) flat_code
 
-let compile_test m func vs =
+let make_tables m =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
+  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  List.iteri (fun i f ->
+    let ty = Hashtbl.find ttab f.it.ftype.it in
+    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+  ftab, ttab
+
+let compile_test m func vs =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
+  trace ("Tables: " ^ string_of_int (List.length m.tables));
+  trace ("Data: " ^ string_of_int (List.length m.data));
+  trace ("Elem: " ^ string_of_int (List.length m.elems));
+  let ftab = Hashtbl.create 10 in
+  let ttab = Hashtbl.create 10 in
   List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
   let entry = ref 0 in
   List.iteri (fun i f ->
@@ -296,7 +314,7 @@ let compile_test m func vs =
      build (n+1) (acc@resolve_to sz md) tl in
   let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; UNREACHABLE] in
   let flat_code = build 0 test_code module_codes in
-  List.map (resolve_inst2 f_resolve) flat_code
+  List.map (resolve_inst2 f_resolve) flat_code, f_resolve
 
 (* perhaps for now just make a mega module *)
 let compile_modules lst =

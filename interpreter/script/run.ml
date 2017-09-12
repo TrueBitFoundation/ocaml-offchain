@@ -302,13 +302,14 @@ let task_number = ref 0
 
 let run_test inst mdle func vs =
   let open Mrun in
-  let code = Merkle.compile_test mdle func vs in
+  let code, f_resolve = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
+  Mrun.setup_calltable vm mdle inst f_resolve;
   if !task_number = !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   incr task_number;
   try begin
-    for i = 0 to 10000 do
+    for i = 0 to 100000000 do
       if !Flags.trace_stack then trace (stack_to_string vm);
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.checkstep then begin
@@ -327,9 +328,10 @@ let run_test inst mdle func vs =
 
 let run_test_micro inst mdle func vs =
   let open Mrun in
-  let code = Merkle.compile_test mdle func vs in
+  let code, f_resolve = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
+  Mrun.setup_calltable vm mdle inst f_resolve;
   try begin
     for i = 0 to 10000 do
       ignore i;

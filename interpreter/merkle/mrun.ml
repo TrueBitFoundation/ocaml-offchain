@@ -14,6 +14,7 @@ type vm = {
   call_stack : int array;
   globals : value array;
   calltable : int array;
+  calltable_types : Int64.t array;
   mutable pc : int;
   mutable stack_ptr : int;
   mutable break_ptr : int;
@@ -23,19 +24,21 @@ type vm = {
 
 let inc_pc vm = vm.pc <- vm.pc+1
 
-let create_vm code =
-  { code = Array.of_list code;
-    stack = Array.make 1024 (i 0);
-    memory = Array.make (1024*32) 0L;
-    call_stack = Array.make 1024 0;
-    break_stack = Array.make 1024 (0,0);
-    globals = Array.make 64 (i 0);
-    calltable = Array.make 64 0;
-    pc = 0;
-    stack_ptr = 0;
-    memsize = 0;
-    break_ptr = 0;
-    call_ptr = 0; }
+let create_vm code = {
+  code = Array.of_list code;
+  stack = Array.make (16*1024) (i 0);
+  memory = Array.make (1024*32) 0L;
+  call_stack = Array.make 1024 0;
+  break_stack = Array.make 1024 (0,0);
+  globals = Array.make 64 (i 0);
+  calltable = Array.make 64 (-1);
+  calltable_types = Array.make 64 0L;
+  pc = 0;
+  stack_ptr = 0;
+  memsize = 0;
+  break_ptr = 0;
+  call_ptr = 0;
+}
 
 (* microcode *)
 
@@ -226,6 +229,21 @@ let setup_memory vm m instance =
   List.iter init m.data;
   ()
 
+let setup_calltable vm m instance f_resolve =
+  let open Ast in
+  let open Source in
+  let ftab, ttab = make_tables m in
+  let init (dta:var list Ast.segment) =
+    let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
+    List.iteri (fun i el ->
+      let f_num = Int32.to_int el.it in
+      vm.calltable.(offset+i) <- Hashtbl.find f_resolve f_num;
+      let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
+      trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
+      vm.calltable_types.(offset+i) <- func) dta.it.init in
+  List.iter init m.elems;
+  ()
+
 let handle_ptr regs ptr = function
  | StackRegSub -> ptr - value_to_int regs.reg1
  | StackReg -> value_to_int regs.reg1
@@ -274,7 +292,8 @@ let get_code = function
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD -> {noop with read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
- | CALL x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
+ | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
+ | CALLI x -> {noop with immed=I64 x; read_reg1=ReadPc; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
  | PUSHBRKRETURN x ->
@@ -299,7 +318,6 @@ let get_code = function
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
  | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Binary op; stack_ch=StackDec}
  | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Compare op; stack_ch=StackDec}
- | CALLI x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3}
  | POPI1 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; alu_code=Min; write1=(Reg1, StackOut1)}
  | POPI2 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackInReg2; write1=(Reg3, StackOutReg1); stack_ch=StackRegSub}
  | BREAKTABLE -> {noop with read_reg1=StackIn0; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDec; stack_ch=StackReg3; pc_ch=StackReg2}
@@ -354,6 +372,12 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
+ | CALLI x ->
+   let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
+   vm.stack_ptr <- vm.stack_ptr - 1;
+   vm.call_stack.(vm.call_ptr) <- vm.pc+1;
+   vm.call_ptr <- vm.call_ptr + 1;
+   vm.pc <- vm.calltable.(addr)
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x ->
    inc_pc vm;
@@ -450,10 +474,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
    vm.stack_ptr <- vm.stack_ptr - 1
- | CALLI x ->
-   let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
-   vm.stack_ptr <- vm.stack_ptr - 1;
-   vm.pc <- vm.calltable.(addr+x)
 
 open Types
 
@@ -482,6 +502,20 @@ let store_memory_limit addr (op:'a memop) =
 
 let test_errors vm = match vm.code.(vm.pc) with
  | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | CALLI x ->
+   let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let len = Array.length vm.calltable in
+   if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
+   if addr < 0 then raise (Eval.Trap (Source.no_region, "undefined element")) else
+   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "undefined element")) else
+   if vm.calltable_types.(addr) <> x then begin
+     trace ("At address " ^ string_of_int addr);
+     trace ("Expected " ^ Int64.to_string x);
+     trace ("Was " ^ Int64.to_string vm.calltable_types.(addr));
+     raise (Eval.Trap (Source.no_region, "indirect call signature mismatch"))
+   end else
+   if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | LOAD op ->
     if load_memory_limit vm.stack.(vm.stack_ptr-1) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
     else if value_to_int vm.stack.(vm.stack_ptr-1) >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
