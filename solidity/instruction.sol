@@ -3,25 +3,20 @@ pragma solidity ^0.4.15;
 // import "./alu.sol";
 
 contract Instruction {
-    
+
     bytes32[14] phases;
     address challenger;
     address prover;
     uint init;
     address winner;
-    
-    function Instruction(bytes32[14] arr, address c, address p) {
+
+    function Instruction(bytes32[14] arr, address c, address p, uint i) {
         phases = arr;
         challenger = c;
         prover = p;
-        init = 16;
+        init = i;
     }
-    
-    function select(uint q) {
-        require(init == 16 && msg.sender == challenger);
-        init = q;
-    }
-    
+
     struct VM {
         bytes32 code;
         bytes32 stack;
@@ -725,6 +720,5 @@ contract Instruction {
     function test(uint a, uint b) returns (uint, uint) {
         return fromMemory(toMemory(a,b));
     }
-    
-    
+
 }

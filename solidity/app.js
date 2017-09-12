@@ -32,8 +32,6 @@ io.on("connection", function(socket) {
         console.log(str)
     })
     socket.on("new_task", function (obj) {
-        console.log(obj)
-        var arr = {path:"task.wast", content:new Buffer(obj)}
         // store into IPFS, get ipfs address
         ipfs.files.add(new Buffer(obj), function (err, res) {
             if (err) {
