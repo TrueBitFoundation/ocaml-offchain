@@ -39,6 +39,7 @@ let argspec = Arg.align
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
   "-merkletest", Arg.Int (fun n -> Mbinary.test n; exit 0), " just run a merkle root computation test with a number of leafs";
   "-init", Arg.Int (fun n -> Flags.init := n), " output initial state hash of a test case";
+  "-result", Arg.Int (fun n -> Flags.result := n), " output final state hash of a test case and the number of steps";
 ]
 
 let _ = Mrun.vm_step

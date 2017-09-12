@@ -3,7 +3,7 @@ pragma solidity ^0.4.16;
 contract Tasks {
     
     event Posted(address giver, bytes32 hash, string file, uint id);
-    event Solved(uint id, bytes32 hash, uint steps);
+    event Solved(uint id, bytes32 hash, uint steps, bytes32 init, string file);
     
     struct Task {
         address giver;
@@ -27,7 +27,7 @@ contract Tasks {
         tasks[id].solver = msg.sender;
         tasks[id].result = result;
         tasks[id].steps = steps;
-        Solved(id, result, steps);
+        Solved(id, result, steps, tasks[id].init, tasks[id].file);
     }
 
 }

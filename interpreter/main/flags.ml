@@ -14,4 +14,5 @@ let trace_stack = ref false
 let checkstep = ref (-1)
 
 let init = ref (-1)
+let result = ref (-1)
 

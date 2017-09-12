@@ -12,9 +12,22 @@ var abi = JSON.parse(fs.readFileSync("contracts/Tasks.abi"))
 
 var send_opt = {from:base, gas: 4000000}
 
-var sol_testContract = new web3.eth.Contract(abi)
+// var sol_testContract = new web3.eth.Contract(abi)
+var contract = web3.eth.contract(abi)
 
+/*
 sol_testContract.deploy({data:"0x"+code}).send(send_opt).then(function (contract) {
   console.log('Contract mined! address: ' + contract.options.address)
 })
+*/
 
+contract.new(
+   {
+     from: base, 
+     data: '0x' + code,
+     gas: '4000000'
+   }, function (e, contract){
+    if (typeof contract.address !== 'undefined') {
+         console.log('Contract mined! address: ' + contract.address + ' transactionHash: ' + contract.transactionHash);
+    }
+ })

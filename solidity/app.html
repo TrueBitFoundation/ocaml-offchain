@@ -28,7 +28,11 @@
 
 <div id="posted"></div>
 
+<div id="solve_success"></div>
+
 <h1>Verifier</h1>
+
+<div id="solved"></div>
 
 <script src="socketio.js"></script>
 
@@ -40,8 +44,15 @@
         console.log(obj)
         document.querySelector("#posted").innerHTML += "<br>" + JSON.stringify(obj)
     })
+    socket.on("solved", function (obj) {
+        console.log(obj)
+        document.querySelector("#solved").innerHTML += "<br>" + JSON.stringify(obj)
+    })
     socket.on("task_success", function (id) {
         document.querySelector("#success").innerHTML += "<br>" + id
+    })
+    socket.on("solve_success", function (id) {
+        document.querySelector("#solve_success").innerHTML += "<br>" + id
     })
     
     function newTask() {

@@ -308,6 +308,7 @@ let run_test inst mdle func vs =
   Mrun.setup_calltable vm mdle inst f_resolve;
   if !task_number = !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   incr task_number;
+  let last_step = ref 0 in
   try begin
     for i = 0 to 100000000 do
       if !Flags.trace_stack then trace (stack_to_string vm);
@@ -317,11 +318,13 @@ let run_test inst mdle func vs =
          Mproof.check_proof proof
       end
       else Mrun.vm_step vm;
+      last_step := i;
       test_errors vm
     done;
     raise (Failure "takes too long")
   end
   with VmTrap -> (* check stack pointer, get values *)
+    if !task_number = !Flags.result + 1 then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr

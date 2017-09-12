@@ -23,7 +23,7 @@ var send_opt = {from:base, gas: 4000000}
 
 // var contract = new web3.eth.Contract(abi, "0xe78A0F7E598Cc8b0Bb87894B0F60dD2a88d6a8Ab")
 var contractABI = web3.eth.contract(abi)
-var contract = contractABI.at("0xEDc02d969AF38367B49DCB36b5A2ef7abb8A7fA4")
+var contract = contractABI.at("0x7ff09ea372d90b12325ff084526e48c16d52a1bb")
 
 io.on("connection", function(socket) {
     console.log("Got client")
@@ -78,7 +78,73 @@ function solveTask(obj) {
             if (inithash == obj.hash) {
                 console.log("Initial hash matches")
             }
-            else console.log("Initial hash was wrong")
+            else {
+                console.log("Initial hash was wrong")
+                return
+            }
+            execFile('../interpreter/wasm', ["-m", "-result", "0", filename], function (error, stdout, stderr) {
+                if (error) {
+                    console.error('stderr', stderr)
+                    return
+                }
+                var res = JSON.parse(stdout)
+                contract.solve(obj.id, res.result, res.steps, send_opt, function (err, tr) {
+                        if (err) console.log(err)
+                        else {
+                            console.log("Success", tr)
+                            io.emit("solve_success", tr)
+                        }
+                    })
+            })
+        })
+    })
+}
+
+function verifyTask(obj) {
+    var filename = obj.filehash + ".wast"
+    // store into filesystem
+    fs.writeFile(filename, obj.file, function () {
+        execFile('../interpreter/wasm', ["-m", "-init", "0", filename], (error, stdout, stderr) => {
+            if (error) {
+                console.error('stderr', stderr)
+                return
+            }
+            var inithash = JSON.parse(stdout)
+            if (inithash == obj.init) {
+                console.log("Initial hash matches")
+            }
+            else {
+                console.log("Initial hash was wrong")
+                return
+            }
+            execFile('../interpreter/wasm', ["-m", "-result", "0", filename], function (error, stdout, stderr) {
+                if (error) {
+                    console.error('stderr', stderr)
+                    return
+                }
+                var res = JSON.parse(stdout)
+                if (res.result != obj.hash) console.log("Result mismatch")
+                else if (res.steps != obj.steps) console.log("Wrong number of steps")
+                else console.log("Seems correct")
+            })
+        })
+    })
+}
+
+function getFile(fileid, cont) {
+    ipfs.get(fileid, function (err, stream) {
+        if (err) {
+            console.log(err)
+            return
+        }
+        var chunks = []
+        stream.on('data', (file) => {
+            file.content.on("data", function (chunk) {
+                chunks.push(chunk);
+            })
+            file.content.on("end", function () {
+                cont(Buffer.concat(chunks).toString())
+            })
         })
     })
 }
@@ -88,25 +154,16 @@ contract.Posted("latest").watch(function (err, ev) {
     if (err) console.log(err)
     io.emit("posted", {giver: ev.args.giver, hash: ev.args.hash, file:ev.args.file, id:ev.args.id.toString()})
     // download file from IPFS
-    ipfs.get(ev.args.file, function (err, stream) {
-        if (err) {
-            console.log(err)
-            return
-        }
-        stream.on('data', (file) => {
-            file.content.on("data", function (chunk) {
-                console.log("chnnk")
-                chunks.push(chunk);
-            })
+    getFile(ev.args.file, function (filestr) {
+        solveTask({giver: ev.args.giver, hash: ev.args.hash, file:filestr, filehash:ev.args.file, id:ev.args.id.toString()})
+    })
+})
 
-            // Send the buffer or you can put it into a var
-            file.content.on("end", function () {
-                var filestr = Buffer.concat(chunks).toString()
-                solveTask({giver: ev.args.giver, hash: ev.args.hash, file:filestr, filehash:ev.args.file, id:ev.args.id.toString()})
-            })
-        })
-        var chunks = []
-
+contract.Solved("latest").watch(function (err, ev) {
+    if (err) console.log(err)
+    io.emit("solved", {hash: ev.args.hash, file:ev.args.file, init: ev.args.init, id:ev.args.id.toString(), steps:ev.args.steps.toString()})
+    getFile(ev.args.file, function (filestr) {
+        verifyTask({hash: ev.args.hash, file: filestr, filehash:ev.args.file, init: ev.args.init, id:ev.args.id.toString(), steps:ev.args.steps.toString()})
     })
 })
 

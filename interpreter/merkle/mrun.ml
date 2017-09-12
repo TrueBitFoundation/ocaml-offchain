@@ -502,6 +502,7 @@ let store_memory_limit addr (op:'a memop) =
 
 let test_errors vm = match vm.code.(vm.pc) with
  | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | PUSHBRK _ | PUSHBRKRETURN _ -> if Array.length vm.break_stack <= vm.break_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
