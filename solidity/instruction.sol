@@ -10,11 +10,12 @@ contract Instruction {
     uint init;
     address winner;
 
-    function Instruction(bytes32[14] arr, address c, address p, uint i) {
+    function setup(bytes32[14] arr, address c, address p, uint i) {
         phases = arr;
         challenger = c;
         prover = p;
         init = i;
+        winner = challenger;
     }
 
     struct VM {
@@ -74,6 +75,24 @@ contract Instruction {
         vm.break_ptr = break_ptr;
         vm.call_ptr = call_ptr;
         vm.memsize = memsize;
+    }
+    
+    function setVM2(bytes32[8] roots, uint[5] pointers) {
+        require(msg.sender == prover);
+        vm.code = roots[0];
+        vm.stack = roots[1];
+        vm.mem = roots[2];
+        vm.call_stack = roots[3];
+        vm.break_stack1 = roots[4];
+        vm.break_stack2 = roots[5];
+        vm.globals = roots[6];
+        vm.calltable = roots[7];
+
+        vm.pc = pointers[0];
+        vm.stack_ptr = pointers[1];
+        vm.break_ptr = pointers[2];
+        vm.call_ptr = pointers[3];
+        vm.memsize = pointers[4];
     }
     
     function hashVM() returns (bytes32) {
@@ -649,6 +668,22 @@ contract Instruction {
         require(state2 == hashVM());
         winner = prover;
         return true;
+    }
+    
+    function provePhase(bytes32[] proof, uint loc, bytes32 op) {
+        if (init == 0) proveFetch(proof);
+        if (init == 1) proveInit(op);
+        if (init == 2) proveRead1(proof, loc);
+        if (init == 3) proveRead2(proof, loc);
+        if (init == 4) proveRead3(proof, loc);
+        if (init == 5) proveALU();
+        if (init == 6) proveWrite1(proof, loc);
+        if (init == 7) proveWrite2(proof, loc);
+        if (init == 8) proveUpdatePC();
+        if (init == 9) proveUpdateBreakPtr();
+        if (init == 10) proveUpdateStackPtr();
+        if (init == 11) proveUpdateCallPtr();
+        if (init == 12) proveUpdateMemsize();
     }
     
     // a and b are integer values that represent 8 bytes each
