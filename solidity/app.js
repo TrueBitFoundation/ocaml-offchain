@@ -291,8 +291,6 @@ iactive.PostedPhases("latest").watch(function (err,ev) {
     replyPhases(ev.uniq, ev.idx1.toNumber(), ev.arr)
 })
 
-
-
 http.listen(22448, function(){
     console.log("listening on *:22448")
 })

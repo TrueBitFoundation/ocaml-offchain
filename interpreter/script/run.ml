@@ -329,6 +329,9 @@ let run_test inst mdle func vs =
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
+   | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))
+   | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
+   | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
 
 let run_test_micro inst mdle func vs =
   let open Mrun in

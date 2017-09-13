@@ -25,6 +25,7 @@ let i x = I32 (Int32.of_int x)
 
 
 type inst =
+ | EXIT
  | UNREACHABLE
  | NOP
  | JUMP of int
@@ -195,7 +196,7 @@ and compile' ctx = function
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let ctx = {ctx with ptr=ctx.ptr-2; label=ctx.label+2} in
-   ctx, [JUMPI else_label; DROP; DROP; JUMP end_label; LABEL else_label; DUP 1; SWAP 2; DROP; DROP; DROP; LABEL end_label]
+   ctx, [JUMPI else_label; SWAP 2; DROP; JUMP end_label; LABEL else_label; DROP; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
    trace ("get local " ^ string_of_int (Int32.to_int v.it) ^ " from " ^  string_of_int (ctx.ptr - Int32.to_int v.it));
@@ -312,7 +313,7 @@ let compile_test m func vs =
      let sz = List.length acc in
      Hashtbl.add f_resolve n sz;
      build (n+1) (acc@resolve_to sz md) tl in
-  let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; UNREACHABLE] in
+  let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
   let flat_code = build 0 test_code module_codes in
   List.map (resolve_inst2 f_resolve) flat_code, f_resolve
 

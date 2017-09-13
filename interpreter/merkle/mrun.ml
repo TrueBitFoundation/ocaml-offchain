@@ -69,6 +69,7 @@ type alu_code =
  | Compare of Ast.relop
  | Test of Ast.testop
  | Trap
+ | Exit
  | Min
  | CheckJump
  | Nop
@@ -276,7 +277,8 @@ let handle_alu r1 r2 r3 ireg = function
  | Test op -> value_of_bool (Eval_numeric.eval_testop op r1)
  | Binary op -> Eval_numeric.eval_binop op r1 r2
  | Compare op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
- | Trap -> raise VmTrap
+ | Trap -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
+ | Exit -> raise VmTrap
  | Nop -> r1
  | CheckJump ->
    trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
@@ -289,6 +291,7 @@ open Ast
 let get_code = function
  | NOP -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
+ | EXIT -> {noop with alu_code=Exit}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD -> {noop with read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
@@ -354,7 +357,8 @@ let micro_step vm =
 
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
- | UNREACHABLE -> raise VmTrap
+ | EXIT -> raise VmTrap
+ | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMP x ->
    vm.pc <- x
  | JUMPI x ->
@@ -509,7 +513,7 @@ let test_errors vm = match vm.code.(vm.pc) with
    let len = Array.length vm.calltable in
    if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
    if addr < 0 then raise (Eval.Trap (Source.no_region, "undefined element")) else
-   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "undefined element")) else
+   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "uninitialized element " ^ string_of_int addr)) else
    if vm.calltable_types.(addr) <> x then begin
      trace ("At address " ^ string_of_int addr);
      trace ("Expected " ^ Int64.to_string x);
@@ -530,6 +534,7 @@ let test_errors vm = match vm.code.(vm.pc) with
 let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | UNREACHABLE -> "UNREACHABLE"
+ | EXIT -> "EXIT"
  | JUMP x -> "JUMP"
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in
