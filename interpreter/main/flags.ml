@@ -11,10 +11,12 @@ let merkle = ref false
 let microstep = ref false
 let trace_stack = ref false
 
+let insert_error = ref (-1)
+
 let checkstep = ref (-1)
 
-let init = ref (-1)
-let result = ref (-1)
+let init = ref false
+let result = ref false
 
 let case = ref (-1)
 let location = ref (-1)

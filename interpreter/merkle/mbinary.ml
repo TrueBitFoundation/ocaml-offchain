@@ -199,7 +199,7 @@ let in_code_byte = function
  | MemoryIn1 -> 0x0f
  | TableIn -> 0x10
  | MemoryIn2 -> 0x11
- | TableTypeIn -> 0x10
+ | TableTypeIn -> 0x12
 
 let reg_byte = function
  | Reg1 -> 0x01

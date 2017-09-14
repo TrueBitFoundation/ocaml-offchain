@@ -37,11 +37,12 @@ let argspec = Arg.align
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-merkletest", Arg.Int (fun n -> Mbinary.test n; exit 0), " just run a merkle root computation test with a number of leafs";
-  "-init", Arg.Int (fun n -> Flags.init := n), " output initial state hash of a test case";
-  "-result", Arg.Int (fun n -> Flags.result := n), " output final state hash of a test case and the number of steps";
+  "-init", Arg.Set Flags.init, " output initial state hash of a test case";
+  "-result", Arg.Set Flags.result, " output final state hash of a test case and the number of steps";
   "-case", Arg.Int (fun n -> Flags.case := n), " for which test case the hash or proofs will be generated";
   "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
+  "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
 ]
 
 let _ = Mrun.vm_step
