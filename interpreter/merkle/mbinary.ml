@@ -24,11 +24,13 @@ let size_code = function
 let alu_byte = function
  | Mrun.Nop -> op 0x00
  | Trap -> op 0x01
+ (* implement these in solidity *)
  | Min -> op 0x02
  | CheckJump -> op 0x03
  | CheckJumpForward -> op 0x04
  | HandleBrkReturn -> op 0x05
  | Exit -> op 0x06
+ | CheckDynamicCall -> op 0x07
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
     op (0xc0 lor (type_code ty lsl 4) lor size_code sz);
       | Test (I32 I32Op.Eqz) -> op 0x45
@@ -197,6 +199,7 @@ let in_code_byte = function
  | MemoryIn1 -> 0x0f
  | TableIn -> 0x10
  | MemoryIn2 -> 0x11
+ | TableTypeIn -> 0x10
 
 let reg_byte = function
  | Reg1 -> 0x01
@@ -358,6 +361,7 @@ let hash_vm vm =
   let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
   let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
   let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
+  let hash_ttable = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) in
   let hash_break1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack) in
   let hash_break2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack) in
   let hash = Hash.keccak 256 in
@@ -369,6 +373,7 @@ let hash_vm vm =
   hash#add_string hash_break1;
   hash#add_string hash_break2;
   hash#add_string hash_table;
+  hash#add_string hash_ttable;
   hash#add_string (u256 vm.pc);
   hash#add_string (u256 vm.stack_ptr);
   hash#add_string (u256 vm.call_ptr);
@@ -385,6 +390,7 @@ type vm_bin = {
   bin_call_stack : w256;
   bin_globals : w256;
   bin_calltable : w256;
+  bin_calltable_types : w256;
 
   bin_pc : int;
   bin_stack_ptr : int;
@@ -403,6 +409,7 @@ let hash_vm_bin vm =
   hash#add_string vm.bin_break_stack1;
   hash#add_string vm.bin_break_stack2;
   hash#add_string vm.bin_calltable;
+  hash#add_string vm.bin_calltable_types;
   hash#add_string (u256 vm.bin_pc);
   hash#add_string (u256 vm.bin_stack_ptr);
   hash#add_string (u256 vm.bin_call_ptr);
@@ -417,6 +424,7 @@ let vm_to_bin vm = {
   bin_globals = get_hash (Array.map (fun v -> get_value v) vm.globals);
   bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);
   bin_calltable = get_hash (Array.map (fun v -> u256 v) vm.calltable);
+  bin_calltable_types = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types);
   bin_break_stack1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack);
   bin_break_stack2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack);
   bin_pc = vm.pc;

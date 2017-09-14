@@ -57,7 +57,8 @@ type inst =
  | POPI1 of int
  | POPI2 of int
  | BREAKTABLE
- | CALLI of Int64.t (* indirect call, check from table *)
+ | CALLI (* indirect call, check from table *)
+ | CHECKCALLI of Int64.t (* indirect call, check from table *)
  | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
  | CMP of relop                  (* numeric comparison *)
@@ -190,7 +191,7 @@ and compile' ctx = function
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
    trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CALLI (Byteutil.ftype_hash (FuncType (par,ret)))]
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI]
  | Select ->
    trace "select";
    let else_label = ctx.label in

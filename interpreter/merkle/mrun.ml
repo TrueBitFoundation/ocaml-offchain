@@ -61,6 +61,7 @@ type in_code =
  | MemsizeIn
  | TableIn
  | MemoryIn2
+ | TableTypeIn
 
 type alu_code =
  | Unary of Ast.unop
@@ -76,6 +77,7 @@ type alu_code =
  | FixMemory of Types.value_type * (Memory.mem_size * Memory.extension) option
  | CheckJumpForward
  | HandleBrkReturn
+ | CheckDynamicCall
 
 type reg =
  | Reg1
@@ -163,6 +165,7 @@ let read_register vm reg = function
  | MemoryIn2 -> I64 vm.memory.((value_to_int reg.reg1+value_to_int reg.ireg) / 8 + 1)
  | MemsizeIn -> i vm.memsize
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
+ | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -227,8 +230,7 @@ let setup_memory vm m instance =
     for i = 0 to sz-1 do
       set_byte (offset+i) (I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))))
     done in 
-  List.iter init m.data;
-  ()
+  List.iter init m.data
 
 let setup_calltable vm m instance f_resolve =
   let open Ast in
@@ -242,8 +244,16 @@ let setup_calltable vm m instance f_resolve =
       let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
       trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
       vm.calltable_types.(offset+i) <- func) dta.it.init in
-  List.iter init m.elems;
-  ()
+  List.iter init m.elems
+
+let setup_globals (vm:vm) (m:Ast.module_') instance =
+  trace "Initializing globals";
+  let open Source in
+  let open Ast in
+  let init i (dta:Ast.global) =
+    let v = Eval.eval_const instance dta.it.value in
+    vm.globals.(i) <- v in
+  List.iteri init m.globals
 
 let handle_ptr regs ptr = function
  | StackRegSub -> ptr - value_to_int regs.reg1
@@ -285,6 +295,9 @@ let handle_alu r1 r2 r3 ireg = function
    if value_bool r2 then r1 else i (value_to_int r3)
  | CheckJumpForward -> i (value_to_int r2 + value_to_int r1)
  | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1 - 1)
+ | CheckDynamicCall -> (* expected type is in the immediate, reg2 has the type of called function *)
+   if r2 <> ireg then raise (Eval.Trap (Source.no_region, "indirect call signature mismatch"))
+   else i 0
 
 open Ast
 
@@ -296,7 +309,8 @@ let get_code = function
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD -> {noop with read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
- | CALLI x -> {noop with immed=I64 x; read_reg1=ReadPc; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc}
+ | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
+ | CALLI -> {noop with read_reg1=ReadPc; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
  | PUSHBRKRETURN x ->
@@ -312,7 +326,7 @@ let get_code = function
  | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}
  | LOADGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=GlobalIn; write1=(Reg2, StackOut0); stack_ch=StackInc}
- | STOREGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, GlobalOut)}
+ | STOREGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, GlobalOut); stack_ch=StackDec}
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
  | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
  | PUSH lit -> {noop with immed=lit; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
@@ -376,12 +390,13 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
- | CALLI x ->
+ | CALLI ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- vm.calltable.(addr)
+ | CHECKCALLI _ -> inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x ->
    inc_pc vm;
@@ -437,7 +452,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr + 1
  | STOREGLOBAL x ->
    inc_pc vm;
-   vm.globals.(x) <- vm.stack.(vm.stack_ptr)
+   vm.globals.(x) <- vm.stack.(vm.stack_ptr);
+   vm.stack_ptr <- vm.stack_ptr - 1
  | CURMEM ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- I32 (Int32.of_int vm.memsize);
@@ -508,7 +524,7 @@ let test_errors vm = match vm.code.(vm.pc) with
  | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | PUSHBRK _ | PUSHBRKRETURN _ -> if Array.length vm.break_stack <= vm.break_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
- | CALLI x ->
+ | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    let len = Array.length vm.calltable in
    if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
@@ -565,7 +581,8 @@ let trace_step vm = match vm.code.(vm.pc) with
  | TEST op -> "TEST"
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | CALLI x -> "CALLI"
+ | CALLI -> "CALLI"
+ | CHECKCALLI x -> "CHECKCALLI"
 
 let stack_to_string vm = 
   let res = ref "" in

@@ -47,6 +47,7 @@ let read_position vm regs = function
  | MemoryIn1 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
+ | TableTypeIn -> value_to_int regs.reg1
 
 let write_position vm regs = function
  | NoOut -> 0
@@ -82,6 +83,7 @@ let get_read_location m loc =
  | MemoryIn1 -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
  | MemoryIn2 -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
  | TableIn -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
+ | TableTypeIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
  | BreakLocIn -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (fst a)) vm.break_stack))
  | BreakStackIn -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (snd a)) vm.break_stack))
  | BreakLocInReg -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (fst a)) vm.break_stack))
@@ -229,6 +231,7 @@ let read_position_bin vm regs = function
  | MemoryIn1 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
+ | TableTypeIn -> value_to_int regs.reg1
 
 let write_position_bin vm regs = function
  | NoOut -> 0
@@ -257,6 +260,7 @@ let read_root_bin vm = function
  | MemoryIn1 -> vm.bin_memory
  | MemoryIn2 -> vm.bin_memory
  | TableIn -> vm.bin_calltable
+ | TableTypeIn -> vm.bin_calltable_types
  | _ -> assert false
 
 let write_root_bin vm = function
@@ -432,6 +436,7 @@ let vm_to_string vm =
   " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^
   " \"globals\": " ^ to_hex vm.bin_globals ^ "," ^
   " \"calltable\": " ^ to_hex vm.bin_calltable ^ "," ^
+  " \"calltypes\": " ^ to_hex vm.bin_calltable_types ^ "," ^
   " \"pc\": " ^ string_of_int vm.bin_pc ^ "," ^
   " \"stack_ptr\": " ^ string_of_int vm.bin_stack_ptr ^ "," ^
   " \"break_ptr\": " ^ string_of_int vm.bin_break_ptr ^ "," ^
