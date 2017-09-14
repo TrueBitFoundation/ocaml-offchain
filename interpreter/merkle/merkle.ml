@@ -30,7 +30,7 @@ type inst =
  | NOP
  | JUMP of int
  | JUMPI of int
- | JUMPFORWARD
+ | JUMPFORWARD of int (* size of jump table *)
  | CALL of int
  | LABEL of int
  | PUSHBRK of int
@@ -54,9 +54,6 @@ type inst =
  | STOREGLOBAL of int
  | CURMEM
  | GROW
- | POPI1 of int
- | POPI2 of int
- | BREAKTABLE
  | CALLI (* indirect call, check from table *)
  | CHECKCALLI of Int64.t (* indirect call, check from table *)
  | PUSH of value                  (* constant *)
@@ -168,7 +165,7 @@ and compile' ctx = function
    let jumps = List.mapi (fun i _ -> JUMP (ctx.label+i)) (tab@[def]) in
    let pieces = List.mapi make_piece (tab@[def]) in
    {ctx with ptr = ctx.ptr-1-rets; label=ctx.label + List.length tab + 2},
-   [POPI1 (List.length tab); JUMPFORWARD] @ jumps @ List.flatten pieces
+   [JUMPFORWARD (List.length tab)] @ jumps @ List.flatten pieces
  | Return ->
    let num = ctx.bptr-1 in
    let ptr, rets = List.nth ctx.block_return num in

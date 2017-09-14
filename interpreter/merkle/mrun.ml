@@ -293,7 +293,11 @@ let handle_alu r1 r2 r3 ireg = function
  | CheckJump ->
    trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
    if value_bool r2 then r1 else i (value_to_int r3)
- | CheckJumpForward -> i (value_to_int r2 + value_to_int r1)
+ | CheckJumpForward ->
+   let idx = value_to_int r1 in
+   let x = value_to_int ireg in
+   let idx = if idx < 0 || idx >= x then x else idx in
+   i (value_to_int r2 + idx)
  | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1 - 1)
  | CheckDynamicCall -> (* expected type is in the immediate, reg2 has the type of called function *)
    if r2 <> ireg then raise (Eval.Trap (Source.no_region, "indirect call signature mismatch"))
@@ -307,10 +311,10 @@ let get_code = function
  | EXIT -> {noop with alu_code=Exit}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
- | JUMPFORWARD -> {noop with read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
+ | JUMPFORWARD x -> {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
- | CALLI -> {noop with read_reg1=ReadPc; read_reg2=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc}
+ | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
  | PUSHBRKRETURN x ->
@@ -335,9 +339,6 @@ let get_code = function
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
  | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Binary op; stack_ch=StackDec}
  | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Compare op; stack_ch=StackDec}
- | POPI1 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; alu_code=Min; write1=(Reg1, StackOut1)}
- | POPI2 x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; read_reg3=StackInReg2; write1=(Reg3, StackOutReg1); stack_ch=StackRegSub}
- | BREAKTABLE -> {noop with read_reg1=StackIn0; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDec; stack_ch=StackReg3; pc_ch=StackReg2}
 
 let micro_step vm =
   let open Values in
@@ -378,13 +379,11 @@ let vm_step vm = match vm.code.(vm.pc) with
  | JUMPI x ->
    vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
    vm.stack_ptr <- vm.stack_ptr - 1
- | JUMPFORWARD ->
-   vm.pc <- vm.pc + 1 + value_to_int vm.stack.(vm.stack_ptr-1);
-   vm.stack_ptr <- vm.stack_ptr - 1
- | POPI1 x ->
-   inc_pc vm;
+ | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
-   vm.stack.(vm.stack_ptr-1) <- i (if idx < 0 || idx >= x then x else idx)
+   let idx = if idx < 0 || idx >= x then x else idx in
+   vm.pc <- vm.pc + 1 + idx;
+   vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
    (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
@@ -462,17 +461,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
- | POPI2 x ->
-   inc_pc vm;
-   let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
-   vm.stack.(vm.stack_ptr-x-1) <- vm.stack.(vm.stack_ptr-idx-1);
-   vm.stack_ptr <- vm.stack_ptr - x
- | BREAKTABLE ->
-   let pos = value_to_int (vm.stack.(vm.stack_ptr-1)) in
-   let loc, sptr = vm.break_stack.(vm.break_ptr-pos) in
-   vm.break_ptr <- vm.break_ptr - 1;
-   vm.stack_ptr <- sptr;
-   vm.pc <- loc
  | PUSH lit ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- lit;
@@ -527,9 +515,11 @@ let test_errors vm = match vm.code.(vm.pc) with
  | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    let len = Array.length vm.calltable in
+   trace ("Call table length " ^ string_of_int len);
    if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
    if addr < 0 then raise (Eval.Trap (Source.no_region, "undefined element")) else
-   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "uninitialized element " ^ string_of_int addr)) else
+(*   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "uninitialized element " ^ string_of_int addr)) else *)
+   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "undefined element")) else
    if vm.calltable_types.(addr) <> x then begin
      trace ("At address " ^ string_of_int addr);
      trace ("Expected " ^ Int64.to_string x);
@@ -555,7 +545,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in
    "JUMPI " ^ (if value_bool x then " jump" else " no jump") ^ " " ^ string_of_value x
- | JUMPFORWARD -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | JUMPFORWARD x -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | PUSHBRK x -> "PUSHBRK"
@@ -572,9 +562,6 @@ let trace_step vm = match vm.code.(vm.pc) with
  | STOREGLOBAL x -> "STOREGLOBAL"
  | CURMEM -> "CURMEM"
  | GROW -> "GROW"
- | POPI1 x -> "POPI1"
- | POPI2 x -> "POPI2"
- | BREAKTABLE -> "BREAKTABLE"
  | PUSH lit -> "PUSH " ^ string_of_value lit
  | CONV op -> "CONV"
  | UNA op -> "UNA"
