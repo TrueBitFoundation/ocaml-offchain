@@ -175,6 +175,48 @@ let micro_step_proofs vm =
    update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; update_ptr_proof4;
    memsize_proof; finalize_proof}
 
+let micro_step_proofs_with_error vm =
+  (* fetch code *)
+  let op = get_code vm.code.(vm.pc) in
+  let fetch_code_proof = make_fetch_code vm in
+  (* init registers *)
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  let init_regs_proof = (vm_to_bin vm, op) in
+  (* read registers *)
+  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  let read_register_proof1 = make_register_proof1 m in
+  regs.reg1 <- read_register vm regs op.read_reg1;
+  let read_register_proof2 = make_register_proof2 m in
+  regs.reg2 <- read_register vm regs op.read_reg2;
+  let read_register_proof3 = make_register_proof3 m in
+  regs.reg3 <- read_register vm regs op.read_reg3;
+  (* ALU *)
+  let alu_proof = machine_to_bin m in
+  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  (* Insert error *)
+  vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l);
+  (* Write registers *)
+  let write_proof1 = make_write_proof m op.write1 in
+  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+  let write_proof2 = make_write_proof m op.write2 in
+  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  (* update pointers *)
+  let update_ptr_proof1 = (machine_to_bin m, vm_to_bin vm) in
+  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  let update_ptr_proof2 = (machine_to_bin m, vm_to_bin vm) in
+  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  let update_ptr_proof4 = (machine_to_bin m, vm_to_bin vm) in
+  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  let finalize_proof = vm_to_bin vm in
+  {fetch_code_proof; init_regs_proof; 
+   read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
+   update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; update_ptr_proof4;
+   memsize_proof; finalize_proof}
+
 (* Doing checks *)
 
 let check_fetch state1 state2 (vm_bin, proof) =

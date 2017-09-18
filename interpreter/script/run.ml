@@ -316,7 +316,9 @@ let run_test inst mdle func vs =
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
-         let proof = Mproof.micro_step_proofs vm in
+         let proof =
+           if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
+           else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end
       else Mrun.vm_step vm;
