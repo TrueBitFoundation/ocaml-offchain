@@ -10,6 +10,9 @@ os:
     #before_install:
     #- sudo add-apt-repository ppa:avsm/ppa -y
     #- sudo apt-get update -y
+    #
+before_install:
+  - opam install cryptokit yojson -y
 
 install: 
 #- sudo apt-get install opam -y
