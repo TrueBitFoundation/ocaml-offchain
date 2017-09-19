@@ -16,6 +16,7 @@ let insert_error = ref (-1)
 let checkstep = ref (-1)
 
 let init = ref false
+let init_vm = ref false
 let result = ref false
 
 let case = ref (-1)

@@ -476,6 +476,7 @@ let vm_to_string vm =
   " \"code\": " ^ to_hex vm.bin_code ^ "," ^
   " \"stack\": " ^ to_hex vm.bin_stack ^ "," ^
   " \"memory\": " ^ to_hex vm.bin_memory ^ "," ^
+  " \"input\": " ^ to_hex vm.bin_input ^ "," ^
   " \"break_stack1\": " ^ to_hex vm.bin_break_stack1 ^ "," ^
   " \"break_stack2\": " ^ to_hex vm.bin_break_stack2 ^ "," ^
   " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^

@@ -17,5 +17,5 @@
   )
 )
 
-(assert_return (invoke "read-test" (i64.const 2)) (i64.const 0))
+(invoke "read-test" (i64.const 2))
 
