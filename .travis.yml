@@ -20,7 +20,7 @@ before_install:
   - eval `opam config env`
   - opam update
   - opam install -y ocamlbuild ocamlfind yojson cryptokit
-  - ./interpreter/meta/travis/install-ocaml.sh
+    #- ./interpreter/meta/travis/install-ocaml.sh
 
 script: 
   - ./interpreter/meta/travis/build-test.sh
