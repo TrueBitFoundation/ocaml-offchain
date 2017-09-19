@@ -18,8 +18,9 @@ before_install:
     #- ./interpreter/meta/travis/install-ocaml.sh
 
 script: 
+  - pwd
   - cd interpreter
-  - cd make
+  - make
   - chmod +x runtests.sh
   - ./runtests.sh
 #- ./interpreter/meta/travis/build-test.sh
