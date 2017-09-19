@@ -21,6 +21,7 @@ script:
   - pwd
   - cd interpreter
   - make
+  - ls
   - chmod +x runtests.sh
   - ./runtests.sh
 #- ./interpreter/meta/travis/build-test.sh
