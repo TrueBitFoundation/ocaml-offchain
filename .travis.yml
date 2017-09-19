@@ -17,6 +17,7 @@ install:
     #- eval $(opam config env)
     #- opam install cryptokit yojson -y
   - ./interpreter/meta/travis/install-ocaml.sh
+  - sudo apt-get install ocamlfind -y
   - ocamlfind install cryptokit yojson -y
 
 script: 
