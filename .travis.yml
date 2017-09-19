@@ -7,7 +7,7 @@ os:
   - osx
 
 before_script: 
-  - apt-get install ocamlfind opam -y
+  - sudo apt-get install ocamlfind opam -y
   - opam init -y
   - eval $(opam config env)
   - opam install cryptokit yojson
