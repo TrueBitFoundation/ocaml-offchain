@@ -32,9 +32,9 @@ This command will print the trace messages, it will basically output every instr
 
 Outputting proofs:
 ```
-./wasm -step 4 -m ../test/core/fac.wast
+./wasm -case 0 -step 4 -m ../test/core/fac.wast
 ```
-This will make a proof for step 4 in the computation. Because there are many test cases, it will output many proofs.
+This will make a proof for step 4 in the computation. Because there are many test cases, one of them has to be selected, so for example `-case 0` will select the first test case.
 
 # WebAssembly spec README.md
 
