@@ -7,8 +7,8 @@ os:
   - osx
 
 before_install:
-  - sudo add-apt-repository ppa:avsm/ppa
-  - sudo apt-get update
+  - sudo add-apt-repository ppa:avsm/ppa -y
+  - sudo apt-get update -y
 
 before_script: 
   - sudo apt-get install opam -y
