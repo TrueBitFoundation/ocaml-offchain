@@ -11,8 +11,6 @@ os:
     #- sudo add-apt-repository ppa:avsm/ppa -y
     #- sudo apt-get update -y
     #
-before_install:
-  - opam install cryptokit yojson -y
 
 install: 
 #- sudo apt-get install opam -y
@@ -20,6 +18,7 @@ install:
 #- eval $(opam config env)
 #- opam install cryptokit yojson ocamlfind -y
   - ./interpreter/meta/travis/install-ocaml.sh
+  - opam install cryptokit yojson -y
 
 script: 
   - ./interpreter/meta/travis/build-test.sh
