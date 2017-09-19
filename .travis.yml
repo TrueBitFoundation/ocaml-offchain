@@ -6,6 +6,10 @@ os:
   - linux
   - osx
 
+before_install:
+  - sudo add-apt-repository ppa:avsm/ppa
+  - sudo apt-get update
+
 before_script: 
   - sudo apt-get install opam -y
   - opam init -y
