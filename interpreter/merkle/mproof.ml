@@ -48,6 +48,7 @@ let read_position vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
+ | InputIn -> value_to_int regs.reg1
 
 let write_position vm regs = function
  | NoOut -> 0
@@ -89,6 +90,7 @@ let get_read_location m loc =
  | BreakLocInReg -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (fst a)) vm.break_stack))
  | BreakStackInReg -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (snd a)) vm.break_stack))
  | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
+ | InputIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.input))
 
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
@@ -274,6 +276,7 @@ let read_position_bin vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
+ | InputIn -> value_to_int regs.reg1
 
 let write_position_bin vm regs = function
  | NoOut -> 0

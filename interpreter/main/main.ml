@@ -3,6 +3,7 @@ let version = "1.0"
 
 let configure () =
   Import.register (Utf8.decode "spectest") Spectest.lookup;
+  Import.register (Utf8.decode "input") Input.lookup;
   Import.register (Utf8.decode "env") Env.lookup
 
 let banner () =

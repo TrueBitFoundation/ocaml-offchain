@@ -9,8 +9,8 @@ type vm = {
   code : inst array;
   stack : value array;
   memory : Int64.t array;
+  input : Int64.t array;
   break_stack : (int*int) array;
-(*  call_stack : (int*int*int) array; *)
   call_stack : int array;
   globals : value array;
   calltable : int array;
@@ -28,6 +28,7 @@ let create_vm code = {
   code = Array.of_list code;
   stack = Array.make (16*1024) (i 0);
   memory = Array.make (1024*32) 0L;
+  input = Array.make 1024 0L;
   call_stack = Array.make 1024 0;
   break_stack = Array.make 1024 (0,0);
   globals = Array.make 64 (i 0);
@@ -62,6 +63,7 @@ type in_code =
  | TableIn
  | MemoryIn2
  | TableTypeIn
+ | InputIn
 
 type alu_code =
  | Unary of Ast.unop
@@ -166,6 +168,7 @@ let read_register vm reg = function
  | MemsizeIn -> i vm.memsize
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
  | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
+ | InputIn -> I64 vm.input.(value_to_int reg.reg1)
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -315,6 +318,7 @@ let get_code = function
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
  | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
+ | READINPUT -> {noop with read_reg1=StackIn0; read_reg2=InputIn; write1 = (Reg2, StackOut1)}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
  | PUSHBRKRETURN x ->
@@ -442,6 +446,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
+ | READINPUT ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- I64 vm.input.(value_to_int vm.stack.(vm.stack_ptr-1))
  | SWAP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
@@ -541,6 +548,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
+ | READINPUT -> "READINPUT"
  | JUMP x -> "JUMP"
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in

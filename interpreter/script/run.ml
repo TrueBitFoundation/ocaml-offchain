@@ -544,8 +544,9 @@ let rec run_command cmd =
   | Action act ->
     quote := cmd :: !quote;
     if not !Flags.dry then begin
-      let vs = run_action act in
-      if vs <> [] then print_result vs
+       ignore (run_action act)
+(*      let vs = run_action act in
+      if vs <> [] then print_result vs *)
     end
 
   | Assertion ass ->
