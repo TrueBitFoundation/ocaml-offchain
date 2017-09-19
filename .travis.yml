@@ -12,13 +12,11 @@ os:
 #
 
 install: 
-#- sudo apt-get install opam -y
-#- opam init -y
-#- eval $(opam config env)
-#- opam install cryptokit yojson ocamlfind -y
-  - ./interpreter/meta/travis/install-ocaml.sh
-  - sudo apt-get install opam
+  - sudo apt-get install opam -y
+  - opam init -y
+  - eval $(opam config env)
   - opam install cryptokit yojson -y
+  - ./interpreter/meta/travis/install-ocaml.sh
 
 script: 
   - ./interpreter/meta/travis/build-test.sh
