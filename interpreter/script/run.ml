@@ -300,13 +300,29 @@ let values_from_arr arr start len =
 
 let task_number = ref 0
 
-let run_test inst mdle func vs =
+let setup_input vm fname =
   let open Mrun in
+  let open Yojson.Basic in
+  match from_file fname with
+  | `List lst ->
+    vm.input <- Array.make (List.length lst) 0L;
+    List.iteri (fun i el -> vm.input.(i) <- Int64.of_string (Util.to_string el)) lst
+  | _ -> ()
+
+let setup_vm inst mdle func vs =
   let code, f_resolve = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve;
+  ( match !Flags.input_file with
+  | Some fn -> setup_input vm fn
+  | None -> () );
+  vm
+
+let run_test inst mdle func vs =
+  let open Mrun in
+  let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   incr task_number;
   let last_step = ref 0 in
@@ -339,11 +355,7 @@ let run_test inst mdle func vs =
 
 let run_test_micro inst mdle func vs =
   let open Mrun in
-  let code, f_resolve = Merkle.compile_test mdle func vs in
-  let vm = Mrun.create_vm code in
-  Mrun.setup_memory vm mdle inst;
-  Mrun.setup_globals vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve;
+  let vm = setup_vm inst mdle func vs in
   try begin
     for i = 0 to 100000000 do
       ignore i;

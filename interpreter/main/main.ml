@@ -44,9 +44,8 @@ let argspec = Arg.align
   "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
+  "-input-file", Arg.String (fun file -> Flags.input_file := Some file), " set the file that contains input from the blockchain";
 ]
-
-let _ = Mrun.vm_step
 
 let () =
   Printexc.record_backtrace true;

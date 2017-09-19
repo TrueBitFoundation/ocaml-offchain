@@ -9,7 +9,7 @@ type vm = {
   code : inst array;
   stack : value array;
   memory : Int64.t array;
-  input : Int64.t array;
+  mutable input : Int64.t array;
   break_stack : (int*int) array;
   call_stack : int array;
   globals : value array;

@@ -21,3 +21,4 @@ let result = ref false
 let case = ref (-1)
 let location = ref (-1)
 
+let input_file : string option ref = ref None
