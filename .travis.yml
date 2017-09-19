@@ -2,17 +2,16 @@ dist: trusty
 sudo: required
 language: c++
 
-sudo: off
+os:
+  - linux
+  - osx
 
-install: 
+before_script: 
   - apt-get install ocamlfind opam -y
   - opam init -y
   - eval $(opam config env)
   - opam install cryptokit yojson
   - ./interpreter/meta/travis/install-ocaml.sh
 
-script: ./interpreter/meta/travis/build-test.sh
-
-os:
-  - linux
-  - osx
+script: 
+  - ./interpreter/meta/travis/build-test.sh
