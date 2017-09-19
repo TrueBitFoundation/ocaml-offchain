@@ -1,15 +1,10 @@
-#dist: trusty
+dist: trusty
 sudo: required
 language: c++
 
 os:
   - linux
   - osx
-
-#before_install:
-#- sudo add-apt-repository ppa:avsm/ppa -y
-#- sudo apt-get update -y
-
 
 before_install: 
   - sudo apt-get update -qq
@@ -23,4 +18,8 @@ before_install:
     #- ./interpreter/meta/travis/install-ocaml.sh
 
 script: 
-  - ./interpreter/meta/travis/build-test.sh
+  - cd interpreter
+  - cd make
+  - chmod +x runtests.sh
+  - ./runtests.sh
+#- ./interpreter/meta/travis/build-test.sh
