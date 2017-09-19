@@ -1,16 +1,15 @@
 #dist: trusty
-#sudo: required
-sudo: off
+sudo: required
 language: c++
 
 os:
   - linux
   - osx
 
-    #before_install:
-    #- sudo add-apt-repository ppa:avsm/ppa -y
-    #- sudo apt-get update -y
-    #
+#before_install:
+#- sudo add-apt-repository ppa:avsm/ppa -y
+#- sudo apt-get update -y
+#
 
 install: 
 #- sudo apt-get install opam -y
@@ -18,6 +17,7 @@ install:
 #- eval $(opam config env)
 #- opam install cryptokit yojson ocamlfind -y
   - ./interpreter/meta/travis/install-ocaml.sh
+  - sudo apt-get install opam
   - opam install cryptokit yojson -y
 
 script: 
