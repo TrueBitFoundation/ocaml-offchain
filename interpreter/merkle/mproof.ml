@@ -471,6 +471,35 @@ let t1 (a,_,_) = a
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
 
+let array_to_string arr =
+  let res = Buffer.create 1000 in
+  Buffer.add_string res "[";
+  for i = 0 to Array.length arr - 1 do
+    if i > 0 then Buffer.add_string res ",";
+    Buffer.add_string res (to_hex arr.(i))
+  done;
+  Buffer.add_string res "]";
+  Buffer.contents res
+
+let whole_vm_to_string vm =
+  "{" ^
+  " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
+  " \"stack\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.stack) ^ "," ^
+  " \"memory\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.memory) ^ "," ^
+  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^
+  " \"break_stack1\": " ^ array_to_string (Array.map (fun v -> u256 (fst v)) vm.break_stack) ^ "," ^
+  " \"break_stack2\": " ^ array_to_string (Array.map (fun v -> u256 (snd v)) vm.break_stack) ^ "," ^
+  " \"call_stack\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.call_stack) ^ "," ^
+  " \"globals\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.globals) ^ "," ^
+  " \"calltable\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.calltable) ^ "," ^
+  " \"calltypes\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) ^ "," ^
+  " \"pc\": " ^ string_of_int vm.pc ^ "," ^
+  " \"stack_ptr\": " ^ string_of_int vm.stack_ptr ^ "," ^
+  " \"break_ptr\": " ^ string_of_int vm.break_ptr ^ "," ^
+  " \"call_ptr\": " ^ string_of_int vm.call_ptr ^ "," ^
+  " \"memsize\": " ^ string_of_int vm.memsize ^ " " ^
+  "}"
+
 let vm_to_string vm =
   "{" ^
   " \"code\": " ^ to_hex vm.bin_code ^ "," ^
