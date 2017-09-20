@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/TrueBitFoundation/ocaml-offchain.svg?branch=master)](https://travis-ci.org/TrueBitFoundation/ocaml-offchain)
+
 # Installation of the off-chain interpreter
 
 These instructions were tested on Ubuntu 17.04.
