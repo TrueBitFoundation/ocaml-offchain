@@ -244,18 +244,37 @@ let setup_calltable vm m instance f_resolve =
     List.iteri (fun i el ->
       let f_num = Int32.to_int el.it in
       vm.calltable.(offset+i) <- Hashtbl.find f_resolve f_num;
+      trace ("Table element " ^ Int32.to_string el.it);
       let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
       trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
       vm.calltable_types.(offset+i) <- func) dta.it.init in
   List.iter init m.elems
 
+let find_global a b t =
+ let open Types in
+ match Utf8.encode a with
+ | "env" -> Env.lookup b (ExternalGlobalType t)
+ | "global" -> Global.lookup b (ExternalGlobalType t)
+ | _ -> assert false
+
 let setup_globals (vm:vm) (m:Ast.module_') instance =
   trace "Initializing globals";
   let open Source in
   let open Ast in
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | GlobalImport t ->
+       ( match find_global im.module_name im.item_name t with
+       | Instance.ExternalGlobal x -> vm.globals.(i) <- x
+       | _ -> () );
+       im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let num_imports = List.length (get_imports 0 m.imports) in
   let init i (dta:Ast.global) =
     let v = Eval.eval_const instance dta.it.value in
-    vm.globals.(i) <- v in
+    vm.globals.(i+num_imports) <- v in
   List.iteri init m.globals
 
 let handle_ptr regs ptr = function
