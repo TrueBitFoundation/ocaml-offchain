@@ -481,6 +481,8 @@ let array_to_string arr =
   Buffer.add_string res "]";
   Buffer.contents res
 
+(* let _ = prerr_endline (to_hex (microp_word (get_code Merkle.EXIT))) *)
+
 let whole_vm_to_string vm =
   "{" ^
   " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
@@ -540,6 +542,8 @@ let proof3_to_string (m, vm, loc) =
 
 let proof2_to_string (m, vm) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
+
+let print_fetch (a, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
 let check_proof proof =
   let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
