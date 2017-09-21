@@ -325,7 +325,7 @@ let run_test inst mdle func vs =
   let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   if !task_number = !Flags.case && !Flags.init_vm then
-    Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm));
+    Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   incr task_number;
   let last_step = ref 0 in
   try begin
