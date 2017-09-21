@@ -286,9 +286,20 @@ let make_tables m =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
   List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | FuncImport tvar ->
+        let ty = Hashtbl.find ttab tvar.it in
+        Hashtbl.add ftab (Int32.of_int i) ty;
+        im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let f_imports = get_imports 0 m.imports in
+  let num_imports = List.length f_imports in
   List.iteri (fun i f ->
     let ty = Hashtbl.find ttab f.it.ftype.it in
-    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+    Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
 let compile_test m func vs =

@@ -244,6 +244,7 @@ let setup_calltable vm m instance f_resolve =
     List.iteri (fun i el ->
       let f_num = Int32.to_int el.it in
       vm.calltable.(offset+i) <- Hashtbl.find f_resolve f_num;
+      trace ("Table element " ^ Int32.to_string el.it);
       let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
       trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
       vm.calltable_types.(offset+i) <- func) dta.it.init in
