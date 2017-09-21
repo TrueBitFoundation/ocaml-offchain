@@ -50,8 +50,7 @@ let lookup name t =
   | "memoryBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "tableBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | _, ExternalFuncType t -> ExternalFunc (HostFunc (t, abort))
-  | "memory", ExternalMemoryType (MemoryType {min;max}) ->
-    ExternalMemory (Memory.create {min;max})
+  | "memory", ExternalMemoryType (MemoryType {min;max}) -> ExternalMemory (Memory.create {min;max})
   | "table", ExternalTableType (TableType ({min;max}, t)) -> ExternalTable (Table.create t {min;max})
   | _ -> raise Not_found
 
