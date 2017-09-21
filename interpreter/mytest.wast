@@ -15,7 +15,10 @@
   (func $read-test (export "read-test") (param $n i64) (result i64)
           (call $read (get_local $n))
   )
+  (func (export "error-test") (param $n i64) (result i64)
+          (unreachable)
+  )
 )
 
-(invoke "read-test" (i64.const 2))
+(invoke "error-test" (i64.const 2))
 

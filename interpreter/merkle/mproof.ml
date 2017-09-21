@@ -481,6 +481,8 @@ let array_to_string arr =
   Buffer.add_string res "]";
   Buffer.contents res
 
+(* let _ = prerr_endline (to_hex (microp_word (get_code Merkle.EXIT))) *)
+
 let whole_vm_to_string vm =
   "{" ^
   " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
@@ -540,6 +542,8 @@ let proof3_to_string (m, vm, loc) =
 
 let proof2_to_string (m, vm) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
+
+let print_fetch (a, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
 let check_proof proof =
   let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
@@ -603,5 +607,57 @@ let check_proof proof =
   Printf.printf "  \"final\": %s\n" (vm_to_string proof.finalize_proof);
   Printf.printf "}\n";
   ()
+
+let micro_step_states vm =
+  let open Values in
+  (* fetch code *)
+  let res = ref [] in
+  let push st = res := st :: !res in
+  try
+  push (hash_vm vm);
+  let op = get_code vm.code.(vm.pc) in
+  push (keccak (hash_vm vm) (microp_word op));
+  (* init registers *)
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  push (hash_machine m);
+  (* read registers *)
+  regs.reg1 <- read_register vm regs op.read_reg1;
+  push (hash_machine m);
+  trace ("read R1 " ^ string_of_value regs.reg1);
+  regs.reg2 <- read_register vm regs op.read_reg2;
+  push (hash_machine m);
+  trace ("read R2 " ^ string_of_value regs.reg2);
+  regs.reg3 <- read_register vm regs op.read_reg3;
+  push (hash_machine m);
+  trace ("read R3 " ^ string_of_value regs.reg3);
+  (* ALU *)
+  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  push (hash_machine m);
+  (* Write registers *)
+  let w1 = get_register regs (fst op.write1) in
+  push (hash_machine m);
+  trace ("write 1: " ^ string_of_value w1);
+  write_register vm regs w1 (snd op.write1);
+  let w2 = get_register regs (fst op.write2) in
+  push (hash_machine m);
+  trace ("write 2: " ^ string_of_value w2);
+  write_register vm regs w2 (snd op.write2);
+  push (hash_machine m);
+  (* update pointers *)
+  trace "update pointers";
+  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  push (hash_machine m);
+  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  push (hash_machine m);
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  push (hash_machine m);
+  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  push (hash_machine m);
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  push (hash_vm vm);
+  raise VmError
+  with a ->
+    Printf.printf "{\"states\": [%s]}\n" (String.concat ", " (List.map to_hex (List.rev !res)))
 
 

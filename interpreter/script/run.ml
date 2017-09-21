@@ -333,7 +333,9 @@ let run_test inst mdle func vs =
       if !Flags.trace_stack then trace (stack_to_string vm);
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
-      if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
+      if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
+      if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
+      else if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
          let proof =
            if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
@@ -351,9 +353,13 @@ let run_test inst mdle func vs =
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
+   | a -> (* Print error result *)
+    if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.u256 0)) (!last_step + 1);
+   ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
    | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
+   | a -> raise a )
 
 let run_test_micro inst mdle func vs =
   let open Mrun in

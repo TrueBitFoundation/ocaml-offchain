@@ -14,6 +14,8 @@ let trace_stack = ref false
 let insert_error = ref (-1)
 
 let checkstep = ref (-1)
+let checkfinal = ref (-1)
+let checkerror = ref (-1)
 
 let init = ref false
 let init_vm = ref false
