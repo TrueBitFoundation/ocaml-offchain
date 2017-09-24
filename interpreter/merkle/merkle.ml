@@ -49,13 +49,14 @@ type inst =
  | STORE of storeop
  | DROP
  | DUP of int
- | SWAP of int
+ | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
  | STOREGLOBAL of int
- | CURMEM
- | GROW
- | CALLI (* indirect call, check from table *)
- | CHECKCALLI of Int64.t (* indirect call, check from table *)
+ | READINPUT
+ | CURMEM 
+ | GROW                     (* Grow memory *)
+ | CALLI                    (* indirect call *)
+ | CHECKCALLI of Int64.t    (* check type of indirect call *)
  | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
  | CMP of relop                  (* numeric comparison *)
@@ -183,6 +184,7 @@ and compile' ctx = function
    {ctx with ptr=ctx.ptr-1}, [STOREGLOBAL (Int32.to_int x.it)]
  | Call v ->
    (* Will just push the pc *)
+   trace ("Function call " ^ Int32.to_string v.it);
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
  | CallIndirect v ->
@@ -260,6 +262,7 @@ let resolve_inst2 tab = function
 
 let empty_ctx = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1}
 
+(*
 let compile_module m =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
@@ -277,14 +280,26 @@ let compile_module m =
      build (n+1) (acc@resolve_to sz md) tl in
   let flat_code = build 0 [] module_codes in
   List.map (resolve_inst2 f_resolve) flat_code
+*)
 
 let make_tables m =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
   List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | FuncImport tvar ->
+        let ty = Hashtbl.find ttab tvar.it in
+        Hashtbl.add ftab (Int32.of_int i) ty;
+        im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let f_imports = get_imports 0 m.imports in
+  let num_imports = List.length f_imports in
   List.iteri (fun i f ->
     let ty = Hashtbl.find ttab f.it.ftype.it in
-    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+    Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
 let compile_test m func vs =
@@ -297,30 +312,49 @@ let compile_test m func vs =
   let ttab = Hashtbl.create 10 in
   List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
   let entry = ref 0 in
+  (* handle imports first *)
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | FuncImport tvar ->
+        let ty = Hashtbl.find ttab tvar.it in
+        Hashtbl.add ftab (Int32.of_int i) ty;
+        im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let f_imports = get_imports 0 m.imports in
+  let num_imports = List.length f_imports in
+  trace ("Found " ^ string_of_int num_imports ^ " imported functions");
   List.iteri (fun i f ->
-    if f = func then ( (* prerr_endline "found it" ; *) entry := i );
+    if f = func then ( trace "found invoked function" ; entry := i + num_imports );
     let ty = Hashtbl.find ttab f.it.ftype.it in
-    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
+    Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
+  let import_codes = List.map (fun im ->
+     let mname = Utf8.encode im.module_name in
+     let fname = Utf8.encode im.item_name in
+     trace ("importing " ^ mname ^ " from " ^ fname);
+     if mname = "input" && fname = "read" then [READINPUT;RETURN] else [RETURN]) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc = function
    | [] -> acc
-   | (_,md)::tl ->
+   | fcode::tl ->
      let sz = List.length acc in
      Hashtbl.add f_resolve n sz;
-     build (n+1) (acc@resolve_to sz md) tl in
+     build (n+1) (acc@resolve_to sz fcode) tl in
   let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
-  let flat_code = build 0 test_code module_codes in
+  let flat_code = build 0 test_code (import_codes @ List.map snd module_codes) in
   List.map (resolve_inst2 f_resolve) flat_code, f_resolve
 
 (* perhaps for now just make a mega module *)
+(*
 let compile_modules lst =
   let mega = {empty_module with
      types=List.flatten (List.map (fun m -> m.types) lst);
      funcs=List.flatten (List.map (fun m -> m.funcs) lst);
   } in
   compile_module mega
-
+*)
 

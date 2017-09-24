@@ -300,14 +300,32 @@ let values_from_arr arr start len =
 
 let task_number = ref 0
 
-let run_test inst mdle func vs =
+let setup_input vm fname =
   let open Mrun in
+  let open Yojson.Basic in
+  match from_file fname with
+  | `List lst ->
+    vm.input <- Array.make (List.length lst) 0L;
+    List.iteri (fun i el -> vm.input.(i) <- Int64.of_string (Util.to_string el)) lst
+  | _ -> ()
+
+let setup_vm inst mdle func vs =
   let code, f_resolve = Merkle.compile_test mdle func vs in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve;
+  ( match !Flags.input_file with
+  | Some fn -> setup_input vm fn
+  | None -> () );
+  vm
+
+let run_test inst mdle func vs =
+  let open Mrun in
+  let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+  if !task_number = !Flags.case && !Flags.init_vm then
+    Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   incr task_number;
   let last_step = ref 0 in
   try begin
@@ -315,8 +333,12 @@ let run_test inst mdle func vs =
       if !Flags.trace_stack then trace (stack_to_string vm);
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
-      if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
-         let proof = Mproof.micro_step_proofs vm in
+      if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
+      if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
+      else if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
+         let proof =
+           if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
+           else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end
       else Mrun.vm_step vm;
@@ -331,17 +353,17 @@ let run_test inst mdle func vs =
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
+   | a -> (* Print error result *)
+    if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.u256 0)) (!last_step + 1);
+   ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
    | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
+   | a -> raise a )
 
 let run_test_micro inst mdle func vs =
   let open Mrun in
-  let code, f_resolve = Merkle.compile_test mdle func vs in
-  let vm = Mrun.create_vm code in
-  Mrun.setup_memory vm mdle inst;
-  Mrun.setup_globals vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve;
+  let vm = setup_vm inst mdle func vs in
   try begin
     for i = 0 to 100000000 do
       ignore i;
@@ -542,8 +564,9 @@ let rec run_command cmd =
   | Action act ->
     quote := cmd :: !quote;
     if not !Flags.dry then begin
-      let vs = run_action act in
-      if vs <> [] then print_result vs
+       ignore (run_action act)
+(*      let vs = run_action act in
+      if vs <> [] then print_result vs *)
     end
 
   | Assertion ass ->

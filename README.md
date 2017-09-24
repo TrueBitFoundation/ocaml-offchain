@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/TrueBitFoundation/ocaml-offchain.svg?branch=master)](https://travis-ci.org/TrueBitFoundation/ocaml-offchain)
+
 # Installation of the off-chain interpreter
 
 These instructions were tested on Ubuntu 17.04.
@@ -7,7 +9,7 @@ First install dependencies
 apt-get install -y wget gcc ocaml opam libzarith-ocaml-dev m4 pkg-config zlib1g-dev
 opam init -y
 eval $(opam config env)
-opam install cryptokit
+opam install cryptokit yojson
 ```
 
 Then go to the `interpreter` directory of the repo
@@ -32,9 +34,9 @@ This command will print the trace messages, it will basically output every instr
 
 Outputting proofs:
 ```
-./wasm -step 4 -m ../test/core/fac.wast
+./wasm -case 0 -step 4 -m ../test/core/fac.wast
 ```
-This will make a proof for step 4 in the computation. Because there are many test cases, it will output many proofs.
+This will make a proof for step 4 in the computation. Because there are many test cases, one of them has to be selected, so for example `-case 0` will select the first test case.
 
 # WebAssembly spec README.md
 

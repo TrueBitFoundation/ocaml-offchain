@@ -14,10 +14,14 @@ let trace_stack = ref false
 let insert_error = ref (-1)
 
 let checkstep = ref (-1)
+let checkfinal = ref (-1)
+let checkerror = ref (-1)
 
 let init = ref false
+let init_vm = ref false
 let result = ref false
 
 let case = ref (-1)
 let location = ref (-1)
 
+let input_file : string option ref = ref None

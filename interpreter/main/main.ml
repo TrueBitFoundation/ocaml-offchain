@@ -3,6 +3,8 @@ let version = "1.0"
 
 let configure () =
   Import.register (Utf8.decode "spectest") Spectest.lookup;
+  Import.register (Utf8.decode "input") Input.lookup;
+  Import.register (Utf8.decode "global") Global.lookup;
   Import.register (Utf8.decode "env") Env.lookup
 
 let banner () =
@@ -38,14 +40,17 @@ let argspec = Arg.align
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-merkletest", Arg.Int (fun n -> Mbinary.test n; exit 0), " just run a merkle root computation test with a number of leafs";
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
+  "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";
   "-result", Arg.Set Flags.result, " output final state hash of a test case and the number of steps";
   "-case", Arg.Int (fun n -> Flags.case := n), " for which test case the hash or proofs will be generated";
   "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
+  "-error-step", Arg.Int (fun n -> Flags.checkerror := n), " for which step the intermediate state will be generated";
+  "-final", Arg.Int (fun n -> Flags.checkfinal := n), " generate finality proof for the specified step";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
+  "-input-file", Arg.String (fun file -> Flags.input_file := Some file), " set the file that contains input from the blockchain";
+  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); add_arg "(invoke \"_main\")"), " run main function from this file"
 ]
-
-let _ = Mrun.vm_step
 
 let () =
   Printexc.record_backtrace true;

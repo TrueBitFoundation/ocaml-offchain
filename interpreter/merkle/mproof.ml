@@ -48,6 +48,7 @@ let read_position vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
+ | InputIn -> value_to_int regs.reg1
 
 let write_position vm regs = function
  | NoOut -> 0
@@ -89,6 +90,7 @@ let get_read_location m loc =
  | BreakLocInReg -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (fst a)) vm.break_stack))
  | BreakStackInReg -> LocationProof (loc_proof pos (Array.map (fun a -> u256 (snd a)) vm.break_stack))
  | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
+ | InputIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.input))
 
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
@@ -175,6 +177,48 @@ let micro_step_proofs vm =
    update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; update_ptr_proof4;
    memsize_proof; finalize_proof}
 
+let micro_step_proofs_with_error vm =
+  (* fetch code *)
+  let op = get_code vm.code.(vm.pc) in
+  let fetch_code_proof = make_fetch_code vm in
+  (* init registers *)
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  let init_regs_proof = (vm_to_bin vm, op) in
+  (* read registers *)
+  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  let read_register_proof1 = make_register_proof1 m in
+  regs.reg1 <- read_register vm regs op.read_reg1;
+  let read_register_proof2 = make_register_proof2 m in
+  regs.reg2 <- read_register vm regs op.read_reg2;
+  let read_register_proof3 = make_register_proof3 m in
+  regs.reg3 <- read_register vm regs op.read_reg3;
+  (* ALU *)
+  let alu_proof = machine_to_bin m in
+  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  (* Insert error *)
+  vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l);
+  (* Write registers *)
+  let write_proof1 = make_write_proof m op.write1 in
+  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+  let write_proof2 = make_write_proof m op.write2 in
+  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  (* update pointers *)
+  let update_ptr_proof1 = (machine_to_bin m, vm_to_bin vm) in
+  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  let update_ptr_proof2 = (machine_to_bin m, vm_to_bin vm) in
+  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  let update_ptr_proof4 = (machine_to_bin m, vm_to_bin vm) in
+  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  let finalize_proof = vm_to_bin vm in
+  {fetch_code_proof; init_regs_proof; 
+   read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
+   update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; update_ptr_proof4;
+   memsize_proof; finalize_proof}
+
 (* Doing checks *)
 
 let check_fetch state1 state2 (vm_bin, proof) =
@@ -232,6 +276,7 @@ let read_position_bin vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
+ | InputIn -> value_to_int regs.reg1
 
 let write_position_bin vm regs = function
  | NoOut -> 0
@@ -426,11 +471,43 @@ let t1 (a,_,_) = a
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
 
+let array_to_string arr =
+  let res = Buffer.create 1000 in
+  Buffer.add_string res "[";
+  for i = 0 to Array.length arr - 1 do
+    if i > 0 then Buffer.add_string res ",";
+    Buffer.add_string res (to_hex arr.(i))
+  done;
+  Buffer.add_string res "]";
+  Buffer.contents res
+
+(* let _ = prerr_endline (to_hex (microp_word (get_code Merkle.EXIT))) *)
+
+let whole_vm_to_string vm =
+  "{" ^
+  " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
+  " \"stack\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.stack) ^ "," ^
+  " \"memory\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.memory) ^ "," ^
+  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^
+  " \"break_stack1\": " ^ array_to_string (Array.map (fun v -> u256 (fst v)) vm.break_stack) ^ "," ^
+  " \"break_stack2\": " ^ array_to_string (Array.map (fun v -> u256 (snd v)) vm.break_stack) ^ "," ^
+  " \"call_stack\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.call_stack) ^ "," ^
+  " \"globals\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.globals) ^ "," ^
+  " \"calltable\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.calltable) ^ "," ^
+  " \"calltypes\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) ^ "," ^
+  " \"pc\": " ^ string_of_int vm.pc ^ "," ^
+  " \"stack_ptr\": " ^ string_of_int vm.stack_ptr ^ "," ^
+  " \"break_ptr\": " ^ string_of_int vm.break_ptr ^ "," ^
+  " \"call_ptr\": " ^ string_of_int vm.call_ptr ^ "," ^
+  " \"memsize\": " ^ string_of_int vm.memsize ^ " " ^
+  "}"
+
 let vm_to_string vm =
   "{" ^
   " \"code\": " ^ to_hex vm.bin_code ^ "," ^
   " \"stack\": " ^ to_hex vm.bin_stack ^ "," ^
   " \"memory\": " ^ to_hex vm.bin_memory ^ "," ^
+  " \"input\": " ^ to_hex vm.bin_input ^ "," ^
   " \"break_stack1\": " ^ to_hex vm.bin_break_stack1 ^ "," ^
   " \"break_stack2\": " ^ to_hex vm.bin_break_stack2 ^ "," ^
   " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^
@@ -465,6 +542,8 @@ let proof3_to_string (m, vm, loc) =
 
 let proof2_to_string (m, vm) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
+
+let print_fetch (a, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
 let check_proof proof =
   let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
@@ -528,5 +607,57 @@ let check_proof proof =
   Printf.printf "  \"final\": %s\n" (vm_to_string proof.finalize_proof);
   Printf.printf "}\n";
   ()
+
+let micro_step_states vm =
+  let open Values in
+  (* fetch code *)
+  let res = ref [] in
+  let push st = res := st :: !res in
+  try
+  push (hash_vm vm);
+  let op = get_code vm.code.(vm.pc) in
+  push (keccak (hash_vm vm) (microp_word op));
+  (* init registers *)
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
+  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  push (hash_machine m);
+  (* read registers *)
+  regs.reg1 <- read_register vm regs op.read_reg1;
+  push (hash_machine m);
+  trace ("read R1 " ^ string_of_value regs.reg1);
+  regs.reg2 <- read_register vm regs op.read_reg2;
+  push (hash_machine m);
+  trace ("read R2 " ^ string_of_value regs.reg2);
+  regs.reg3 <- read_register vm regs op.read_reg3;
+  push (hash_machine m);
+  trace ("read R3 " ^ string_of_value regs.reg3);
+  (* ALU *)
+  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  push (hash_machine m);
+  (* Write registers *)
+  let w1 = get_register regs (fst op.write1) in
+  push (hash_machine m);
+  trace ("write 1: " ^ string_of_value w1);
+  write_register vm regs w1 (snd op.write1);
+  let w2 = get_register regs (fst op.write2) in
+  push (hash_machine m);
+  trace ("write 2: " ^ string_of_value w2);
+  write_register vm regs w2 (snd op.write2);
+  push (hash_machine m);
+  (* update pointers *)
+  trace "update pointers";
+  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  push (hash_machine m);
+  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
+  push (hash_machine m);
+  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  push (hash_machine m);
+  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  push (hash_machine m);
+  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  push (hash_vm vm);
+  raise VmError
+  with a ->
+    Printf.printf "{\"states\": [%s]}\n" (String.concat ", " (List.map to_hex (List.rev !res)))
 
 

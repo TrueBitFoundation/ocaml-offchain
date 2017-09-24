@@ -9,8 +9,8 @@ type vm = {
   code : inst array;
   stack : value array;
   memory : Int64.t array;
+  mutable input : Int64.t array;
   break_stack : (int*int) array;
-(*  call_stack : (int*int*int) array; *)
   call_stack : int array;
   globals : value array;
   calltable : int array;
@@ -28,6 +28,7 @@ let create_vm code = {
   code = Array.of_list code;
   stack = Array.make (16*1024) (i 0);
   memory = Array.make (1024*32) 0L;
+  input = Array.make 1024 0L;
   call_stack = Array.make 1024 0;
   break_stack = Array.make 1024 (0,0);
   globals = Array.make 64 (i 0);
@@ -62,6 +63,7 @@ type in_code =
  | TableIn
  | MemoryIn2
  | TableTypeIn
+ | InputIn
 
 type alu_code =
  | Unary of Ast.unop
@@ -166,6 +168,7 @@ let read_register vm reg = function
  | MemsizeIn -> i vm.memsize
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
  | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
+ | InputIn -> I64 vm.input.(value_to_int reg.reg1)
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -241,18 +244,37 @@ let setup_calltable vm m instance f_resolve =
     List.iteri (fun i el ->
       let f_num = Int32.to_int el.it in
       vm.calltable.(offset+i) <- Hashtbl.find f_resolve f_num;
+      trace ("Table element " ^ Int32.to_string el.it);
       let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
       trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
       vm.calltable_types.(offset+i) <- func) dta.it.init in
   List.iter init m.elems
 
+let find_global a b t =
+ let open Types in
+ match Utf8.encode a with
+ | "env" -> Env.lookup b (ExternalGlobalType t)
+ | "global" -> Global.lookup b (ExternalGlobalType t)
+ | _ -> assert false
+
 let setup_globals (vm:vm) (m:Ast.module_') instance =
   trace "Initializing globals";
   let open Source in
   let open Ast in
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | GlobalImport t ->
+       ( match find_global im.module_name im.item_name t with
+       | Instance.ExternalGlobal x -> vm.globals.(i) <- x
+       | _ -> () );
+       im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let num_imports = List.length (get_imports 0 m.imports) in
   let init i (dta:Ast.global) =
     let v = Eval.eval_const instance dta.it.value in
-    vm.globals.(i) <- v in
+    vm.globals.(i+num_imports) <- v in
   List.iteri init m.globals
 
 let handle_ptr regs ptr = function
@@ -315,6 +337,7 @@ let get_code = function
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
  | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
+ | READINPUT -> {noop with read_reg1=StackIn0; read_reg2=InputIn; write1 = (Reg2, StackOut1)}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
  | PUSHBRKRETURN x ->
@@ -442,6 +465,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
+ | READINPUT ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- I64 vm.input.(value_to_int vm.stack.(vm.stack_ptr-1))
  | SWAP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
@@ -541,6 +567,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
+ | READINPUT -> "READINPUT"
  | JUMP x -> "JUMP"
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in
