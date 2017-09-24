@@ -37,3 +37,6 @@ Outputting proofs:
 ./wasm -case 0 -step 4 -m ../test/core/fac.wast
 ```
 This will make a proof for step 4 in the computation. Because there are many test cases, one of them has to be selected, so for example `-case 0` will select the first test case.
+
+# License
+The license for the test folder is the original Apache 2.0 license. we have re-licensed the interpreter folder to MIT. the license for the rest of the repo is MIT.<br/>
