@@ -3,7 +3,10 @@ platform:
 
 install:
   - cmd: choco install cygwin make
+  - cmd: dir
   - cmd: cygwin
+  - cmd: ls
+  - cmd: pwd
 
 build_script:
   - cmd: cd interpreter
