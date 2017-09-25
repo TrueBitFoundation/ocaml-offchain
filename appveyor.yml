@@ -4,7 +4,7 @@ platform:
 install:
   - cmd: choco install cygwin make
   - cmd: dir
-  - cmd: cygwin
+  - cmd: cygwin pwd
   - cmd: ls
   - cmd: pwd
 
