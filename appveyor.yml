@@ -2,7 +2,7 @@ platform:
   - x64
 
 install:
-  - cmd: choco install cygwin make ocaml
+  - cmd: choco install cygwin make
   - cmd: cygwin
 
 build_script:
