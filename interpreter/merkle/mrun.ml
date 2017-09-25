@@ -349,7 +349,7 @@ let get_code = function
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
  | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg2, MemoryOut1 (x.ty,x.sz)); write2=(Reg2, MemoryOut2 (x.ty,x.sz)); stack_ch=StackDec2}
- | DROP -> {noop with stack_ch=StackDec}
+ | DROP x -> {noop with immed=i x; read_reg1 = Immed; stack_ch=StackRegSub}
  | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}
  | LOADGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=GlobalIn; write1=(Reg2, StackOut0); stack_ch=StackInc}
@@ -458,9 +458,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.memory.(loc/8+1) <- b;
    trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b)));
    vm.stack_ptr <- vm.stack_ptr - 2
- | DROP ->
+ | DROP x ->
    inc_pc vm;
-   vm.stack_ptr <- vm.stack_ptr - 1
+   vm.stack_ptr <- vm.stack_ptr - x
  | DUP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
@@ -582,7 +582,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | RETURN -> "RETURN"
  | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2)
- | DROP -> "DROP"
+ | DROP x -> "DROP" ^ string_of_int x
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
  | SWAP x -> "SWAP " ^ string_of_int x
  | LOADGLOBAL x -> "LOADGLOBAL"

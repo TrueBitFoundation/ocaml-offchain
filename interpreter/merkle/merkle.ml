@@ -47,7 +47,7 @@ type inst =
  | RETURN
  | LOAD of loadop
  | STORE of storeop
- | DROP
+ | DROP of int
  | DUP of int
  | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
@@ -64,13 +64,19 @@ type inst =
  | BIN of binop                   (* binary numeric operator *)
  | CONV of cvtop
 
+type control = {
+  target : int;
+  rets : int;
+  level : int;
+}
+
 type context = {
   ptr : int;
   bptr : int;
   label : int;
   f_types : (Int32.t, func_type) Hashtbl.t;
   f_types2 : (Int32.t, func_type) Hashtbl.t;
-  block_return : (int * int) list;
+  block_return : control list;
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
@@ -80,14 +86,14 @@ let rec make a n = if n = 0 then [] else a :: make a (n-1)
 let rec adjust_stack_aux diff num =
   if num = 0 then [] else
   begin
-    [DUP num; SWAP (diff + num + 1); DROP] @ adjust_stack_aux diff (num-1)
+    [DUP num; SWAP (diff + num + 1); DROP 1] @ adjust_stack_aux diff (num-1)
   end
 
 let adjust_stack diff num =
   if diff = 0 then [] else
   if diff < 0 then ( trace "Cannot adjust" ; [] ) else
   ( trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values");
-    adjust_stack_aux diff num @ make DROP diff )
+    adjust_stack_aux diff num @ [DROP diff] )
 
 let rec compile ctx expr = compile' ctx expr.it
 and compile' ctx = function
@@ -101,11 +107,11 @@ and compile' ctx = function
    let end_label = ctx.label in
    let old_return = ctx.block_return in
    let old_ptr = ctx.ptr in
-   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return=(old_ptr+rets, rets)::ctx.block_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=old_ptr+rets; rets=rets; target=end_label}::ctx.block_return} in
    let ctx, body = compile_block ctx lst in
    trace ("block end " ^ string_of_int ctx.ptr);
-   let add_brk = if rets = 0 then [PUSHBRK end_label] else [PUSH (i rets); PUSHBRKRETURN end_label] in
-   {ctx with bptr=ctx.bptr-1; block_return=old_return; ptr=old_ptr+rets}, add_brk @ body @ [POPBRK; LABEL end_label]
+(*   let add_brk = if rets = 0 then [PUSHBRK end_label] else [PUSH (i rets); PUSHBRKRETURN end_label] in *)
+   {ctx with bptr=ctx.bptr-1; block_return=old_return; ptr=old_ptr+rets}, body @ [LABEL end_label]
  | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit.it]
  | Test t -> ctx, [TEST t]
  | Compare i ->
@@ -118,64 +124,59 @@ and compile' ctx = function
  | Convert i -> ctx, [CONV i]
  | Loop (_, lst) ->
    let start_label = ctx.label in
-   let end_label = ctx.label+1 in
    let sptr = ctx.ptr in
    let old_return = ctx.block_return in
    trace ("loop start " ^ string_of_int sptr);
-   let ctx = {ctx with label=ctx.label+2; bptr=ctx.bptr+1; block_return=(ctx.ptr, 0)::old_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
    trace ("loop end " ^ string_of_int ctx.ptr);
-   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label; PUSHBRK start_label] @ body @ [POPBRK; LABEL end_label]
+   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
  | If (ty, texp, fexp) ->
    trace ("if " ^ string_of_int ctx.ptr);
    let if_label = ctx.label in
    let end_label = ctx.label+1 in
    let a_ptr = ctx.ptr-1 in
    let ctx = {ctx with ptr=a_ptr; label=ctx.label+2} in
-   (*
-   let ctx, tbody = compile_block ctx texp in
-   let ctx, fbody = compile_block {ctx with ptr=a_ptr} fexp in
-   *)
    let ctx, tbody = compile' ctx (Block (ty, texp)) in
    let ctx, fbody = compile' {ctx with ptr=a_ptr} (Block (ty, fexp)) in
    ctx, [JUMPI if_label] @ fbody @ [JUMP end_label; LABEL if_label] @ tbody @ [LABEL end_label]
  | Br x ->
    let num = Int32.to_int x.it in
-   let ptr, rets = List.nth ctx.block_return num in
-   trace ("br: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
-   let adjust = adjust_stack (ctx.ptr - ptr) rets in
-   {ctx with ptr=ctx.ptr - rets}, adjust @ [BREAK num]
+   let c = List.nth ctx.block_return num in
+   trace ("br: " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
+   let adjust = adjust_stack (ctx.ptr - c.level) c.rets in
+   {ctx with ptr=ctx.ptr - c.rets}, adjust @ [JUMP c.target]
  | BrIf x ->
    trace ("brif " ^ Int32.to_string x.it);
    let num = Int32.to_int x.it in
-   let ptr, rets = List.nth ctx.block_return num in
-   let adjust = adjust_stack (ctx.ptr - ptr - 1) rets in
+   let c = List.nth ctx.block_return num in
+   let adjust = adjust_stack (ctx.ptr - c.level - 1) c.rets in
    let continue_label = ctx.label in
    let end_label = ctx.label+1 in
    {ctx with label=ctx.label+2; ptr = ctx.ptr-1},
-   [JUMPI continue_label; JUMP end_label; LABEL continue_label] @ adjust @ [BREAK num; LABEL end_label]
+   [JUMPI continue_label; JUMP end_label; LABEL continue_label] @ adjust @ [JUMP c.target; LABEL end_label]
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
-   let _, rets = List.nth ctx.block_return num in
+   let { rets; _ } = List.nth ctx.block_return num in
    (* Every level might need different adjustment, so generate the pieces here... at least the number returned values should be same *)
    let make_piece i idx =
      let num = Int32.to_int idx.it in
-     let ptr, _ = List.nth ctx.block_return num in
+     let {level=ptr; target; _ } = List.nth ctx.block_return num in
      let adjust = adjust_stack (ctx.ptr - ptr - 1) rets in
-     [LABEL (ctx.label+i)] @ adjust @ [BREAK num] in
+     [LABEL (ctx.label+i)] @ adjust @ [JUMP target] in
    let jumps = List.mapi (fun i _ -> JUMP (ctx.label+i)) (tab@[def]) in
    let pieces = List.mapi make_piece (tab@[def]) in
    {ctx with ptr = ctx.ptr-1-rets; label=ctx.label + List.length tab + 2},
    [JUMPFORWARD (List.length tab)] @ jumps @ List.flatten pieces
  | Return ->
    let num = ctx.bptr-1 in
-   let ptr, rets = List.nth ctx.block_return num in
+   let {level=ptr; rets; target } = List.nth ctx.block_return num in
    trace ("return: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
    let adjust = adjust_stack (ctx.ptr - ptr) rets in
-   {ctx with ptr=ctx.ptr - rets}, adjust @ [BREAK num]
+   {ctx with ptr=ctx.ptr - rets}, adjust @ [JUMP target]
  | Drop ->
     trace "drop";
-    {ctx with ptr=ctx.ptr-1}, [DROP]
+    {ctx with ptr=ctx.ptr-1}, [DROP 1]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
  | CurrentMemory -> {ctx with ptr=ctx.ptr+1}, [CURMEM]
  | GetGlobal x -> {ctx with ptr=ctx.ptr+1}, [LOADGLOBAL (Int32.to_int x.it)]
@@ -196,14 +197,14 @@ and compile' ctx = function
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let ctx = {ctx with ptr=ctx.ptr-2; label=ctx.label+2} in
-   ctx, [JUMPI else_label; SWAP 2; DROP; JUMP end_label; LABEL else_label; DROP; LABEL end_label]
+   ctx, [JUMPI else_label; SWAP 2; DROP 1; JUMP end_label; LABEL else_label; DROP 1; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
    trace ("get local " ^ string_of_int (Int32.to_int v.it) ^ " from " ^  string_of_int (ctx.ptr - Int32.to_int v.it));
    {ctx with ptr=ctx.ptr+1}, [DUP (ctx.ptr - Int32.to_int v.it)]
  | SetLocal v ->
    trace "set local";
-   {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP]
+   {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP 1]
  | TeeLocal v ->
    ctx, [SWAP (ctx.ptr - Int32.to_int v.it)]
  | Load op -> ctx, [LOAD op]
@@ -231,9 +232,8 @@ let compile_func ctx func =
 (*  make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @ *)
   List.map (fun x -> PUSH (default_value x)) func.it.locals @
   body @
-  List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP]) ret) @
-  make DROP (List.length par + List.length func.it.locals) @
-  [RETURN]
+  List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP 1]) ret) @
+  [DROP (List.length par + List.length func.it.locals); RETURN]
 
 (* This resolves only one function, think more *)
 let resolve_inst tab = function
