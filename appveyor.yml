@@ -2,7 +2,8 @@ platform:
   - x64
 
 install:
-  - cmd: choco install cygwin make ocaml opam
+  - cmd: choco install cygwin make ocaml
+  - cmd: cygwin
 
 build_script:
   - cmd: cd interpreter
