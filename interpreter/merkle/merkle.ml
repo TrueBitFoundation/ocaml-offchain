@@ -33,17 +33,6 @@ type inst =
  | JUMPFORWARD of int (* size of jump table *)
  | CALL of int
  | LABEL of int
- | PUSHBRK of int
- | PUSHBRKRETURN of int
-(*
- | L_JUMP of int
- | L_JUMPI of int
- | L_CALL of int
- | L_LABEL of int
- | L_PUSHBRK of int
-*)
- | POPBRK
- | BREAK of int
  | RETURN
  | LOAD of loadop
  | STORE of storeop
@@ -246,9 +235,6 @@ let resolve_inst tab = function
    let loc = Hashtbl.find tab l in
    trace ("resolve jumpi " ^ string_of_int l ^ " -> " ^ string_of_int loc);
    JUMPI loc
-(* | CALL l -> CALL (Hashtbl.find tab l) *)
- | PUSHBRK l -> PUSHBRK (Hashtbl.find tab l)
- | PUSHBRKRETURN l -> PUSHBRKRETURN (Hashtbl.find tab l)
  | a -> a
 
 let resolve_to n lst =

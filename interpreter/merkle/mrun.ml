@@ -10,7 +10,6 @@ type vm = {
   stack : value array;
   memory : Int64.t array;
   mutable input : Int64.t array;
-  break_stack : (int*int) array;
   call_stack : int array;
   globals : value array;
   calltable : int array;
@@ -30,7 +29,6 @@ let create_vm code = {
   memory = Array.make (1024*32) 0L;
   input = Array.make 1024 0L;
   call_stack = Array.make 1024 0;
-  break_stack = Array.make 1024 (0,0);
   globals = Array.make 64 (i 0);
   calltable = Array.make 64 (-1);
   calltable_types = Array.make 64 0L;
@@ -53,10 +51,6 @@ type in_code =
  | StackInReg2
  | ReadPc
  | ReadStackPtr
- | BreakLocIn
- | BreakStackIn
- | BreakLocInReg
- | BreakStackInReg
  | CallIn
  | MemoryIn1
  | MemsizeIn
@@ -78,7 +72,6 @@ type alu_code =
  | Nop
  | FixMemory of Types.value_type * (Memory.mem_size * Memory.extension) option
  | CheckJumpForward
- | HandleBrkReturn
  | CheckDynamicCall
 
 type reg =
@@ -87,8 +80,6 @@ type reg =
  | Reg3
 
 type out_code =
- | BreakLocOut
- | BreakStackOut
  | StackOutReg1
  | StackOut0
  | StackOut1
@@ -119,7 +110,6 @@ type microp = {
   alu_code : alu_code;
   call_ch : stack_ch;
   stack_ch : stack_ch;
-  break_ch : stack_ch;
   pc_ch : stack_ch;
   mem_ch : bool;
   immed : value;
@@ -134,7 +124,6 @@ let noop = {
   alu_code = Nop;
   call_ch = StackNop;
   stack_ch = StackNop;
-  break_ch = StackNop;
   pc_ch = StackInc;
   mem_ch = false;
   immed = I32 Int32.zero;
@@ -158,10 +147,6 @@ let read_register vm reg = function
  | StackInReg2 -> vm.stack.(vm.stack_ptr-value_to_int reg.reg2)
  | ReadPc -> i (vm.pc+1)
  | ReadStackPtr -> i vm.stack_ptr
- | BreakLocIn -> i (fst (vm.break_stack.(vm.break_ptr-1)))
- | BreakStackIn -> i (snd (vm.break_stack.(vm.break_ptr-1)))
- | BreakLocInReg -> i (fst (vm.break_stack.(vm.break_ptr-1-value_to_int reg.reg1)))
- | BreakStackInReg -> i (snd (vm.break_stack.(vm.break_ptr-1-value_to_int reg.reg1)))
  | CallIn -> i vm.call_stack.(vm.call_ptr-1)
  | MemoryIn1 -> I64 vm.memory.((value_to_int reg.reg1+value_to_int reg.ireg) / 8)
  | MemoryIn2 -> I64 vm.memory.((value_to_int reg.reg1+value_to_int reg.ireg) / 8 + 1)
@@ -206,12 +191,6 @@ let write_register vm regs v = function
     trace ("pop to stack: " ^ string_of_value v);
     vm.stack.(vm.stack_ptr-2) <- v
  | StackOutReg1 -> vm.stack.(vm.stack_ptr-value_to_int regs.reg1) <- v
- | BreakLocOut ->
-   let (a,b) = vm.break_stack.(vm.break_ptr) in
-   vm.break_stack.(vm.break_ptr) <- (value_to_int v, b)
- | BreakStackOut ->
-   let (a,b) = vm.break_stack.(vm.break_ptr) in
-   vm.break_stack.(vm.break_ptr) <- (a, value_to_int v)
 
 let setup_memory vm m instance =
   let open Ast in
@@ -320,7 +299,6 @@ let handle_alu r1 r2 r3 ireg = function
    let x = value_to_int ireg in
    let idx = if idx < 0 || idx >= x then x else idx in
    i (value_to_int r2 + idx)
- | HandleBrkReturn -> i (value_to_int r2 + value_to_int r1 - 1)
  | CheckDynamicCall -> (* expected type is in the immediate, reg2 has the type of called function *)
    if r2 <> ireg then raise (Eval.Trap (Source.no_region, "indirect call signature mismatch"))
    else i 0
@@ -339,12 +317,6 @@ let get_code = function
  | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
  | READINPUT -> {noop with read_reg1=StackIn0; read_reg2=InputIn; write1 = (Reg2, StackOut1)}
  | LABEL _ -> raise VmError (* these should have been processed away *)
- | PUSHBRK x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = ReadStackPtr; write1 = (Reg1, BreakLocOut); write2 = (Reg2, BreakStackOut); break_ch=StackInc}
- | PUSHBRKRETURN x ->
-   {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadStackPtr; read_reg3 = Immed; alu_code = HandleBrkReturn;
-              write1 = (Reg3, BreakLocOut); write2 = (Reg1, BreakStackOut); break_ch=StackInc; stack_ch = StackDec}
- | POPBRK -> {noop with break_ch=StackDec}
- | BREAK x -> {noop with immed=i x; read_reg1=Immed; read_reg2=BreakLocInReg; read_reg3=BreakStackInReg; break_ch=StackDecImmed; stack_ch=StackReg3; pc_ch=StackReg2}
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
@@ -388,7 +360,6 @@ let micro_step vm =
   (* update pointers *)
   trace "update pointers";
   vm.pc <- handle_ptr regs vm.pc op.pc_ch;
-  vm.break_ptr <- handle_ptr regs vm.break_ptr op.break_ch;
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
@@ -420,23 +391,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.pc <- vm.calltable.(addr)
  | CHECKCALLI _ -> inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
- | PUSHBRK x ->
-   inc_pc vm;
-   vm.break_stack.(vm.break_ptr) <- (x, vm.stack_ptr);
-   vm.break_ptr <- vm.break_ptr + 1
- | PUSHBRKRETURN x ->
-   inc_pc vm;
-   vm.break_stack.(vm.break_ptr) <- (x, vm.stack_ptr + value_to_int vm.stack.(vm.stack_ptr-1) - 1);
-   vm.break_ptr <- vm.break_ptr + 1;
-   vm.stack_ptr <- vm.stack_ptr - 1
- | POPBRK ->
-   inc_pc vm;
-   vm.break_ptr <- vm.break_ptr - 1
- | BREAK x ->
-   let loc, sptr = vm.break_stack.(vm.break_ptr-1-x) in
-   vm.break_ptr <- vm.break_ptr - 1 - x;
-   vm.stack_ptr <- sptr;
-   vm.pc <- loc
  | RETURN ->
    vm.pc <- vm.call_stack.(vm.call_ptr-1);
    vm.call_ptr <- vm.call_ptr - 1
@@ -536,7 +490,6 @@ let store_memory_limit addr (op:'a memop) =
 
 let test_errors vm = match vm.code.(vm.pc) with
  | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
- | PUSHBRK _ | PUSHBRKRETURN _ -> if Array.length vm.break_stack <= vm.break_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
@@ -575,10 +528,6 @@ let trace_step vm = match vm.code.(vm.pc) with
  | JUMPFORWARD x -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
- | PUSHBRK x -> "PUSHBRK"
- | PUSHBRKRETURN x -> "PUSHBRKRETURN stack: " ^ string_of_int (vm.stack_ptr + value_to_int vm.stack.(vm.stack_ptr-1) - 1)
- | POPBRK -> "POPBRK"
- | BREAK x -> "BREAK " ^ string_of_int x
  | RETURN -> "RETURN"
  | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2)

@@ -28,7 +28,6 @@ let alu_byte = function
  | Min -> op 0x02
  | CheckJump -> op 0x03
  | CheckJumpForward -> op 0x04
- | HandleBrkReturn -> op 0x05
  | Exit -> op 0x06
  | CheckDynamicCall -> op 0x07
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
@@ -191,10 +190,6 @@ let in_code_byte = function
  | StackIn1 -> 0x07
  | StackInReg -> 0x08
  | StackInReg2 -> 0x09
- | BreakLocIn -> 0x0a
- | BreakStackIn -> 0x0b
- | BreakLocInReg -> 0x0c
- | BreakStackInReg -> 0x0d
  | CallIn -> 0x0e
  | MemoryIn1 -> 0x0f
  | TableIn -> 0x10
@@ -215,13 +210,11 @@ let out_sz_code = function
 
 let out_code_byte = function
  | NoOut -> 0x00
- | BreakStackOut -> 0x01
  | StackOutReg1 -> 0x02
  | StackOut0 -> 0x03
  | StackOut1 -> 0x04
  | MemoryOut1 (ty, sz) -> 0x80 lor (type_code ty lsl 3) lor out_sz_code sz
  | CallOut -> 0x06
- | BreakLocOut -> 0x07
  | GlobalOut -> 0x08
  | StackOut2 -> 0x09
  | MemoryOut2 (ty, sz) -> 0xc0 lor (type_code ty lsl 3) lor out_sz_code sz
@@ -261,7 +254,7 @@ let microp_word op =
   u8 (out_code_byte (snd op.write2));
   u8 (stack_ch_byte op.call_ch);
   u8 (stack_ch_byte op.stack_ch);
-  u8 (stack_ch_byte op.break_ch);
+  u8 0x00;
   u8 (stack_ch_byte op.pc_ch);
   u8 (if op.mem_ch then 1 else 0);
   value op.immed;
@@ -364,16 +357,12 @@ let hash_vm vm =
   let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
   let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
   let hash_ttable = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) in
-  let hash_break1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack) in
-  let hash_break2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack) in
   let hash = Hash.keccak 256 in
   hash#add_string hash_code;
   hash#add_string hash_mem;
   hash#add_string hash_stack;
   hash#add_string hash_global;
   hash#add_string hash_call;
-  hash#add_string hash_break1;
-  hash#add_string hash_break2;
   hash#add_string hash_table;
   hash#add_string hash_ttable;
   hash#add_string hash_input;
@@ -388,8 +377,6 @@ type vm_bin = {
   bin_code : w256;
   bin_stack : w256;
   bin_memory : w256;
-  bin_break_stack1 : w256;
-  bin_break_stack2 : w256;
   bin_call_stack : w256;
   bin_globals : w256;
   bin_calltable : w256;
@@ -398,7 +385,6 @@ type vm_bin = {
 
   bin_pc : int;
   bin_stack_ptr : int;
-  bin_break_ptr : int;
   bin_call_ptr : int;
   bin_memsize : int;
 }
@@ -410,15 +396,12 @@ let hash_vm_bin vm =
   hash#add_string vm.bin_stack;
   hash#add_string vm.bin_globals;
   hash#add_string vm.bin_call_stack;
-  hash#add_string vm.bin_break_stack1;
-  hash#add_string vm.bin_break_stack2;
   hash#add_string vm.bin_calltable;
   hash#add_string vm.bin_calltable_types;
   hash#add_string vm.bin_input;
   hash#add_string (u256 vm.bin_pc);
   hash#add_string (u256 vm.bin_stack_ptr);
   hash#add_string (u256 vm.bin_call_ptr);
-  hash#add_string (u256 vm.bin_break_ptr);
   hash#add_string (u256 vm.bin_memsize);
   hash#result
 
@@ -431,11 +414,8 @@ let vm_to_bin vm = {
   bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);
   bin_calltable = get_hash (Array.map (fun v -> u256 v) vm.calltable);
   bin_calltable_types = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types);
-  bin_break_stack1 = get_hash (Array.map (fun v -> u256 (fst v)) vm.break_stack);
-  bin_break_stack2 = get_hash (Array.map (fun v -> u256 (snd v)) vm.break_stack);
   bin_pc = vm.pc;
   bin_stack_ptr = vm.stack_ptr;
-  bin_break_ptr = vm.break_ptr;
   bin_call_ptr = vm.call_ptr;
   bin_memsize = vm.memsize;
 }
