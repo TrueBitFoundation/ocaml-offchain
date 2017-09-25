@@ -1,0 +1,10 @@
+environment:
+
+branches:
+  - master
+
+install:
+  - cmd: choco install cygwin make ocaml opam
+
+build_script:
+  - cmd: cd interpreter && make
