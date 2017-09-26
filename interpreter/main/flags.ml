@@ -21,6 +21,8 @@ let init = ref false
 let init_vm = ref false
 let result = ref false
 
+let run_wasm = ref false
+
 let case = ref (-1)
 let location = ref (-1)
 

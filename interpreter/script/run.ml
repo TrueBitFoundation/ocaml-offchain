@@ -310,7 +310,8 @@ let setup_input vm fname =
   | _ -> ()
 
 let setup_vm inst mdle func vs =
-  let code, f_resolve = Merkle.compile_test mdle func vs in
+  let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"] else [] in
+  let code, f_resolve = Merkle.compile_test mdle func vs init in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;
@@ -322,6 +323,7 @@ let setup_vm inst mdle func vs =
 
 let run_test inst mdle func vs =
   let open Mrun in
+  if !Flags.run_wasm then trace (string_of_int (Merkle.find_function_index mdle inst (Utf8.decode "_malloc")));
   let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   if !task_number = !Flags.case && !Flags.init_vm then
