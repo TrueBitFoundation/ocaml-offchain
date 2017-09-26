@@ -25,6 +25,7 @@ let inc_pc vm = vm.pc <- vm.pc+1
 
 let create_vm code = {
   code = Array.of_list code;
+(*  stack = Array.make 1024 (i 0); memory = Array.make 1024 0L; *)
   stack = Array.make (16*1024) (i 0);
   memory = Array.make (1024*32) 0L;
   input = Array.make 1024 0L;

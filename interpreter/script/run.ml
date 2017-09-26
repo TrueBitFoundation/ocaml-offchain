@@ -330,7 +330,10 @@ let run_test inst mdle func vs =
   let last_step = ref 0 in
   try begin
     for i = 0 to 100000000 do
-      if !Flags.trace_stack then trace (stack_to_string vm);
+      if !Flags.trace_stack then begin
+        trace (stack_to_string vm);
+        trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack))
+      end;
       trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
