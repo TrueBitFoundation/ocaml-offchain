@@ -5,6 +5,8 @@ let configure () =
   Import.register (Utf8.decode "spectest") Spectest.lookup;
   Import.register (Utf8.decode "input") Input.lookup;
   Import.register (Utf8.decode "global") Global.lookup;
+  Import.register (Utf8.decode "global.Math") Global.lookup_math;
+  Import.register (Utf8.decode "asm2wasm") Global.lookup_asm2wasm;
   Import.register (Utf8.decode "env") Env.lookup
 
 let banner () =
@@ -49,7 +51,7 @@ let argspec = Arg.align
   "-final", Arg.Int (fun n -> Flags.checkfinal := n), " generate finality proof for the specified step";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
   "-input-file", Arg.String (fun file -> Flags.input_file := Some file), " set the file that contains input from the blockchain";
-  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); add_arg "(invoke \"_main\")"), " run main function from this file"
+  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); add_arg "(invoke \"_main\" (const ))"), " run main function from this file"
 ]
 
 let () =
