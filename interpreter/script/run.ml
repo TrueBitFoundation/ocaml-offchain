@@ -310,7 +310,7 @@ let setup_input vm fname =
   | _ -> ()
 
 let setup_vm inst mdle func vs =
-  let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"] else [] in
+  let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"; "myfile"] else [] in
   let code, f_resolve = Merkle.compile_test mdle func vs init in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
