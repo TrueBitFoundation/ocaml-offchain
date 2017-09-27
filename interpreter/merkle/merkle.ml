@@ -52,6 +52,7 @@ type inst =
  | UNA of unop                     (* unary numeric operator *)
  | BIN of binop                   (* binary numeric operator *)
  | CONV of cvtop
+ | STUB of string
 
 type control = {
   target : int;
@@ -248,26 +249,6 @@ let resolve_inst2 tab = function
 
 let empty_ctx = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1}
 
-(*
-let compile_module m =
-  let ftab = Hashtbl.create 10 in
-  let ttab = Hashtbl.create 10 in
-  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
-  List.iteri (fun i f ->
-    let ty = Hashtbl.find ttab f.it.ftype.it in
-    Hashtbl.add ftab (Int32.of_int i) ty) m.funcs;
-  let module_codes = List.map (compile_func {empty_ctx with f_types2=ttab; f_types=ftab}) m.funcs in
-  let f_resolve = Hashtbl.create 10 in
-  let rec build n acc = function
-   | [] -> acc
-   | (_,md)::tl ->
-     let sz = List.length acc in
-     Hashtbl.add f_resolve n sz;
-     build (n+1) (acc@resolve_to sz md) tl in
-  let flat_code = build 0 [] module_codes in
-  List.map (resolve_inst2 f_resolve) flat_code
-*)
-
 let make_tables m =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
@@ -288,7 +269,49 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
-let compile_test m func vs =
+let find_function m func =
+  let ftab = Hashtbl.create 10 in
+  let ttab = Hashtbl.create 10 in
+  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
+  let rec get_imports i = function
+   | [] -> []
+   | {it=im; _} :: tl ->
+     match im.idesc.it with
+     | FuncImport tvar ->
+        let ty = Hashtbl.find ttab tvar.it in
+        Hashtbl.add ftab (Int32.of_int i) ty;
+        im :: get_imports (i+1) tl
+     | _ -> get_imports i tl in
+  let num_imports = List.length (get_imports 0 m.imports) in
+  let entry = ref (-1) in
+  List.iteri (fun i f ->
+    if f = func then ( trace "found invoked function" ; entry := i + num_imports )) m.funcs;
+  !entry
+
+let find_function_index m inst name =
+  ( match Instance.export inst name with
+  | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> find_function m func
+  | _ -> raise Not_found )
+
+let malloc_string mdle malloc str =
+  let open Memory in
+  let open Types in
+  let len = String.length str + 1 in
+  let res = ref [] in
+  for j = 0 to len-2 do
+    res := [DUP 0; PUSH (i (Char.code str.[j])); STORE {ty=I32Type; align=0; offset=Int32.of_int j; sz=Some Mem8}] :: !res
+  done;
+  res := [DUP 0; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
+  (* array address is left *)
+  [PUSH (i len); CALL malloc] @ List.flatten (List.rev (!res))
+
+let make_args mdle inst lst =
+  let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
+  [PUSH (i (List.length lst)); (* argc *)
+   PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
+  List.flatten (List.mapi (fun i str -> [DUP 0] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4); sz=None}]) lst)
+
+let compile_test m func vs init =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));
@@ -315,11 +338,23 @@ let compile_test m func vs =
     if f = func then ( trace "found invoked function" ; entry := i + num_imports );
     let ty = Hashtbl.find ttab f.it.ftype.it in
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
+  (* perhaps could do something with the function type *)
+  (* one idea would be to use a debugging message *)
   let import_codes = List.map (fun im ->
      let mname = Utf8.encode im.module_name in
      let fname = Utf8.encode im.item_name in
      trace ("importing " ^ mname ^ " from " ^ fname);
-     if mname = "input" && fname = "read" then [READINPUT;RETURN] else [RETURN]) f_imports in
+     if mname = "input" && fname = "read" then [READINPUT;RETURN] else
+(*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
+     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
+     if mname = "env" && fname = "abort" then [UNREACHABLE] else
+     if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "___syscall5" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "___syscall3" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "___syscall6" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "___syscall140" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "___syscall146" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     [STUB (mname ^ " . " ^ fname); RETURN]) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
@@ -330,17 +365,7 @@ let compile_test m func vs =
      let sz = List.length acc in
      Hashtbl.add f_resolve n sz;
      build (n+1) (acc@resolve_to sz fcode) tl in
-  let test_code = List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
+  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
   let flat_code = build 0 test_code (import_codes @ List.map snd module_codes) in
   List.map (resolve_inst2 f_resolve) flat_code, f_resolve
-
-(* perhaps for now just make a mega module *)
-(*
-let compile_modules lst =
-  let mega = {empty_module with
-     types=List.flatten (List.map (fun m -> m.types) lst);
-     funcs=List.flatten (List.map (fun m -> m.funcs) lst);
-  } in
-  compile_module mega
-*)
 
