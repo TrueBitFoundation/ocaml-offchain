@@ -26,14 +26,14 @@ let inc_pc vm = vm.pc <- vm.pc+1
 let create_vm code = {
   code = Array.of_list code;
 (*  stack = Array.make 1024 (i 0); memory = Array.make 1024 0L; *)
-  stack = Array.make (16*1024) (i 0);
+  stack = Array.make !Flags.stack_size (i 0);
 (*  memory = Array.make (1024*64) 0L; *)
-  memory = Array.make (1024*1024*256) 0L;
+  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   input = Array.make 1024 0L;
-  call_stack = Array.make 1024 0;
-  globals = Array.make 64 (i 0);
-  calltable = Array.make 1024 (-1);
-  calltable_types = Array.make 1024 0L;
+  call_stack = Array.make (!Flags.call_size) 0;
+  globals = Array.make (!Flags.globals_size) (i 0);
+  calltable = Array.make (!Flags.table_size) (-1);
+  calltable_types = Array.make (!Flags.table_size) 0L;
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
@@ -198,10 +198,10 @@ let setup_memory vm m instance =
   let open Ast in
   let open Types in
   let open Source in
-  if List.length m.data > 0 then vm.memsize <- 1000000;
   List.iter (function MemoryType {min; _} ->
     trace ("Memory size " ^ Int32.to_string min);
     vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
+  if !Flags.run_wasm then vm.memsize <- 1000000;
   trace ("Segments: " ^ string_of_int (List.length m.data));
   let set_byte loc v =
     let mem = get_memory vm.memory loc in

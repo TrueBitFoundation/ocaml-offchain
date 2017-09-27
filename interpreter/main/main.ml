@@ -51,6 +51,11 @@ let argspec = Arg.align
   "-final", Arg.Int (fun n -> Flags.checkfinal := n), " generate finality proof for the specified step";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
   "-input-file", Arg.String (fun file -> Flags.input_file := Some file), " set the file that contains input from the blockchain";
+  "-memory-size", Arg.Int (fun sz -> Flags.memory_size := sz), " how many pages the size of the memory should be. One page is 64kb";
+  "-table-size", Arg.Int (fun sz -> Flags.table_size := sz), " how many elements should the call table have. Default 64";
+  "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
+  "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
+  "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
   "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); Flags.run_wasm := true; add_arg "(invoke \"_main\")"), " run main function from this file"
 ]
 

@@ -21,6 +21,12 @@ let init = ref false
 let init_vm = ref false
 let result = ref false
 
+let memory_size = ref 2
+let table_size = ref 64
+let globals_size = ref 64
+let stack_size = ref (16*1024)
+let call_size = ref 1024
+
 let run_wasm = ref false
 
 let case = ref (-1)
