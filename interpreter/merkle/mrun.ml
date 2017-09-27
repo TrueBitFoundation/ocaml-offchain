@@ -368,9 +368,65 @@ let micro_step vm =
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
 
+let get_memory_int vm loc =
+   let a = vm.memory.(loc/8) in
+   let b = vm.memory.(loc/8+1) in
+   let res = value_to_int (load (I64 a) (I64 b) Types.I32Type None loc) in
+   trace ("load int " ^ string_of_int res ^ " from " ^ string_of_int loc);
+   res
+
+let get_memory_char vm loc =
+   let a = vm.memory.(loc/8) in
+   let b = vm.memory.(loc/8+1) in
+   let res = value_to_int (load (I64 a) (I64 b) Types.I32Type (Some (Memory.Mem8, Memory.ZX)) loc) in
+   trace ("load byte " ^ string_of_int res ^ " from " ^ string_of_int loc);
+   Char.chr res
+
+let get_vm_string vm loc =
+  let res = ref "" in
+(*  let loc = ref (get_memory_int vm loc) in *)
+  let loc = ref loc in
+  while Char.code (get_memory_char vm !loc) <> 0 do
+    res := !res ^ String.make 1 (get_memory_char vm !loc);
+    incr loc
+  done;
+  !res
+
+let string_of_char byte = String.make 1 (Char.chr byte)
+
+let get_vm_bytes vm loc len =
+  let res = ref [] in
+  for i = 0 to len-1 do
+    res := Char.code (get_memory_char vm (loc+i)) :: !res
+  done;
+  List.rev !res
+
+let rec get_datas vm ptr count =
+  if count = 0 then [] else
+  let len = get_memory_int vm (ptr+4) in
+  (get_vm_bytes vm (get_memory_int vm ptr) len) :: get_datas vm (ptr+8) (count-1)
+
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
- | STUB _ -> inc_pc vm
+ | STUB "env . ___syscall5" ->
+   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   trace ("Opening file " ^ get_vm_string vm (get_memory_int vm varargs) ^
+          " flags " ^ string_of_int (get_memory_int vm (varargs+4)) ^
+          " mode " ^ string_of_int (get_memory_int vm (varargs+8))
+          );
+   inc_pc vm
+ | STUB "env . ___syscall146" ->
+   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   let ptr = get_memory_int vm (varargs+4) in
+   let count = get_memory_int vm (varargs+8) in
+   let lst = get_datas vm ptr count in
+   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
+          " ptr " ^ string_of_int ptr ^
+          " count " ^ string_of_int count ^ 
+          " data " ^ String.concat "" (List.map string_of_char (List.flatten lst)) );
+   inc_pc vm
+ | STUB _ ->
+   inc_pc vm
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMP x ->
@@ -536,7 +592,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
  | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2)
+ | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
  | DROP x -> "DROP" ^ string_of_int x
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
  | SWAP x -> "SWAP " ^ string_of_int x

@@ -299,9 +299,9 @@ let malloc_string mdle malloc str =
   let len = String.length str + 1 in
   let res = ref [] in
   for j = 0 to len-2 do
-    res := [DUP 0; PUSH (i (Char.code str.[j])); STORE {ty=I32Type; align=0; offset=Int32.of_int j; sz=Some Mem8}] :: !res
+    res := [DUP 1; PUSH (i (Char.code str.[j])); STORE {ty=I32Type; align=0; offset=Int32.of_int j; sz=Some Mem8}] :: !res
   done;
-  res := [DUP 0; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
+  res := [DUP 1; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
   (* array address is left *)
   [PUSH (i len); CALL malloc] @ List.flatten (List.rev (!res))
 
@@ -309,7 +309,7 @@ let make_args mdle inst lst =
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i (List.length lst)); (* argc *)
    PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
-  List.flatten (List.mapi (fun i str -> [DUP 0] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4); sz=None}]) lst)
+  List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4); sz=None}]) lst)
 
 let compile_test m func vs init =
   trace ("Function types: " ^ string_of_int (List.length m.types));
@@ -348,12 +348,15 @@ let compile_test m func vs init =
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
+     if mname = "env" && fname = "_exit" then [EXIT] else
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
-     if mname = "env" && fname = "___syscall5" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     (* opening file *)
+     if mname = "env" && fname = "___syscall5" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i (-1)); RETURN] else
      if mname = "env" && fname = "___syscall3" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
      if mname = "env" && fname = "___syscall6" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
      if mname = "env" && fname = "___syscall140" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
-     if mname = "env" && fname = "___syscall146" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
+     (* writing to file descriptor *)
+     if mname = "env" && fname = "___syscall146" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 1); RETURN] else
      [STUB (mname ^ " . " ^ fname); RETURN]) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
