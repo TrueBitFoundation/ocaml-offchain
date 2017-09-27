@@ -348,6 +348,11 @@ let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 
 let u256 i = get_value (I32 (Int32.of_int i))
 
+let hash_stack arr =
+  let hash = Hash.keccak 256 in
+  Array.iter (fun v -> hash#add_string (get_value v)) arr;
+  hash#result
+
 let hash_vm vm =
   let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
   let hash_mem = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory) in
@@ -504,7 +509,7 @@ let test2 () =
   *)
   hash#add_string (u256 1);
   prerr_endline (w256_to_string hash#result);
-  prerr_endline (w256_to_string (microp_word {noop with immed=I32 0xfffffl}))
+  prerr_endline (w256_to_string (microp_word (get_code Merkle.EXIT)))
 
 (*
 let _ = test2()

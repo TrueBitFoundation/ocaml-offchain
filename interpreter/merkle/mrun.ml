@@ -25,13 +25,15 @@ let inc_pc vm = vm.pc <- vm.pc+1
 
 let create_vm code = {
   code = Array.of_list code;
-  stack = Array.make (16*1024) (i 0);
-  memory = Array.make (1024*32) 0L;
+(*  stack = Array.make 1024 (i 0); memory = Array.make 1024 0L; *)
+  stack = Array.make !Flags.stack_size (i 0);
+(*  memory = Array.make (1024*64) 0L; *)
+  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   input = Array.make 1024 0L;
-  call_stack = Array.make 1024 0;
-  globals = Array.make 64 (i 0);
-  calltable = Array.make 64 (-1);
-  calltable_types = Array.make 64 0L;
+  call_stack = Array.make (!Flags.call_size) 0;
+  globals = Array.make (!Flags.globals_size) (i 0);
+  calltable = Array.make (!Flags.table_size) (-1);
+  calltable_types = Array.make (!Flags.table_size) 0L;
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
@@ -199,6 +201,7 @@ let setup_memory vm m instance =
   List.iter (function MemoryType {min; _} ->
     trace ("Memory size " ^ Int32.to_string min);
     vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
+  if !Flags.run_wasm then vm.memsize <- 1000000;
   trace ("Segments: " ^ string_of_int (List.length m.data));
   let set_byte loc v =
     let mem = get_memory vm.memory loc in
@@ -270,8 +273,8 @@ let handle_ptr regs ptr = function
 let load r2 r3 ty sz loc =
   let open Byteutil in
   let mem = mini_memory_v r2 r3 in
-  trace ("LOADING " ^ w256_to_string (get_value r2) ^ " & " ^ Byteutil.w256_to_string (get_value r3));
-  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes mem));
+(*  trace ("LOADING " ^ w256_to_string (get_value r2) ^ " & " ^ Byteutil.w256_to_string (get_value r3));
+  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes mem)); *)
   let addr = Int64.of_int (loc-(loc/8)*8) in
   ( match sz with
   | None -> Memory.load mem addr 0l ty
@@ -307,6 +310,7 @@ open Ast
 
 let get_code = function
  | NOP -> noop
+ | STUB _ -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
  | EXIT -> {noop with alu_code=Exit}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
@@ -366,6 +370,7 @@ let micro_step vm =
 
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
+ | STUB _ -> inc_pc vm
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMP x ->
@@ -518,6 +523,7 @@ let test_errors vm = match vm.code.(vm.pc) with
 
 let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
+ | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
  | READINPUT -> "READINPUT"

@@ -61,10 +61,9 @@ let u64 s =
 
 let mini_memory bytes =
   let s = stream (Memory.to_bytes bytes) in
-  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes bytes));
-(*  trace ("Get memory: " ^ string_of_int (Bytes.length (Memory.to_bytes bytes))); *)
+(*  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes bytes)); *)
   let a = u64 s and b = u64 s in
-  trace ("A: " ^ Int64.to_string a);
+(*  trace ("A: " ^ Int64.to_string a); *)
   (a, b)
 
 let word bytes =
