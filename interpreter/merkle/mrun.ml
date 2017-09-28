@@ -5,23 +5,34 @@ open Values
 exception VmTrap
 exception VmError
 
+type input = {
+  file_name : string array;
+  file_data : string array;
+  file_size : int array;
+}
+
 type vm = {
   code : inst array;
   stack : value array;
   memory : Int64.t array;
-  mutable input : Int64.t array;
+  input : input;
   call_stack : int array;
   globals : value array;
   calltable : int array;
   calltable_types : Int64.t array;
   mutable pc : int;
   mutable stack_ptr : int;
-  mutable break_ptr : int;
   mutable call_ptr : int;
   mutable memsize : int;
 }
 
 let inc_pc vm = vm.pc <- vm.pc+1
+
+let empty_input sz = {
+  file_name = Array.make sz "";
+  file_data = Array.make sz "";
+  file_size = Array.make sz 0;
+}
 
 let create_vm code = {
   code = Array.of_list code;
@@ -29,7 +40,7 @@ let create_vm code = {
   stack = Array.make !Flags.stack_size (i 0);
 (*  memory = Array.make (1024*64) 0L; *)
   memory = Array.make (!Flags.memory_size*1024*8) 0L;
-  input = Array.make 1024 0L;
+  input = empty_input 8;
   call_stack = Array.make (!Flags.call_size) 0;
   globals = Array.make (!Flags.globals_size) (i 0);
   calltable = Array.make (!Flags.table_size) (-1);
@@ -37,7 +48,6 @@ let create_vm code = {
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
-  break_ptr = 0;
   call_ptr = 0;
 }
 
@@ -59,7 +69,9 @@ type in_code =
  | TableIn
  | MemoryIn2
  | TableTypeIn
- | InputIn
+ | InputSizeIn
+ | InputNameIn
+ | InputDataIn
 
 type alu_code =
  | Unary of Ast.unop
@@ -155,7 +167,9 @@ let read_register vm reg = function
  | MemsizeIn -> i vm.memsize
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
  | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
- | InputIn -> I64 vm.input.(value_to_int reg.reg1)
+ | InputSizeIn -> i vm.input.file_size.(value_to_int reg.reg1)
+ | InputNameIn -> i (Char.code vm.input.file_name.(value_to_int reg.reg1).[value_to_int reg.reg2])
+ | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg1).[value_to_int reg.reg2])
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -319,7 +333,9 @@ let get_code = function
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
  | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
- | READINPUT -> {noop with read_reg1=StackIn0; read_reg2=InputIn; write1 = (Reg2, StackOut1)}
+ | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
+ | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputSizeIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
+ | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
@@ -480,9 +496,19 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
    vm.stack_ptr <- vm.stack_ptr + 1
- | READINPUT ->
+ | INPUTSIZE ->
    inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- I64 vm.input.(value_to_int vm.stack.(vm.stack_ptr-1))
+   vm.stack.(vm.stack_ptr-1) <- i vm.input.file_size.(value_to_int vm.stack.(vm.stack_ptr-1))
+ | INPUTNAME ->
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_name.(s1).[s2]);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | INPUTDATA ->
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s1).[s2]);
+   vm.stack_ptr <- vm.stack_ptr - 1
  | SWAP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
@@ -582,7 +608,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
- | READINPUT -> "READINPUT"
+ | INPUTSIZE -> "INPUTSIZE"
+ | INPUTNAME -> "INPUTNAME"
+ | INPUTDATA -> "INPUTDATA"
  | JUMP x -> "JUMP"
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in

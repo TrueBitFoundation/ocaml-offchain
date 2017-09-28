@@ -3,14 +3,28 @@ open Merkle
 open Values
 open Mrun
 open Mbinary
+open Byteutil
 
 let trace = Merkle.trace
+
+let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
+
+let machine_to_string m =
+  "{" ^
+  " \"vm\": " ^ to_hex m.bin_vm ^ "," ^
+  " \"op\": " ^ to_hex (microp_word m.bin_microp) ^ "," ^
+  " \"reg1\": " ^ to_hex (get_value m.bin_regs.reg1) ^ "," ^
+  " \"reg2\": " ^ to_hex (get_value m.bin_regs.reg2) ^ "," ^
+  " \"reg3\": " ^ to_hex (get_value m.bin_regs.reg3) ^ "," ^
+  " \"ireg\": " ^ to_hex (get_value m.bin_regs.ireg) ^ " " ^
+  "}"
 
 (* so now we need the different proofs *)
 
 type location_proof =
  | SimpleProof
  | LocationProof of (int * w256 list)
+ | LocationProof2 of (int * int * (w256 list * w256 list)) (* loc1, loc2, proof1, proof2 *)
 
 (*
 type pointer =
@@ -20,12 +34,10 @@ type pointer =
 *)
 
 let make_fetch_code vm =
-  trace "microp word";
+  trace ("microp word " ^ to_hex (microp_word (get_code vm.code.(vm.pc))));
   let code = Array.map (fun v -> microp_word (get_code v)) vm.code in
-  trace "fetch code";
   let loc_proof = location_proof code vm.pc in
-  trace "fetched code";
-  (vm_to_bin vm, loc_proof)
+  (vm_to_bin vm, get_code vm.code.(vm.pc), loc_proof)
 
 let read_position vm regs = function
  | NoIn -> 0
@@ -45,7 +57,9 @@ let read_position vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
- | InputIn -> value_to_int regs.reg1
+ | InputSizeIn -> value_to_int regs.reg1
+ | InputNameIn -> 0
+ | InputDataIn -> 0
 
 let write_position vm regs = function
  | NoOut -> 0
@@ -60,7 +74,7 @@ let write_position vm regs = function
 
 let loc_proof loc arr = (loc, location_proof arr loc)
 
-open Byteutil
+let loc_proof2 loc1 loc2 arr = (loc1, loc2, location_proof2 arr loc1 loc2)
 
 let get_read_location m loc =
  let pos = read_position m.m_vm m.m_regs loc in
@@ -81,7 +95,11 @@ let get_read_location m loc =
  | TableIn -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
  | TableTypeIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
  | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
- | InputIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.input))
+ | InputSizeIn -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
+ | InputNameIn ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
+ | InputDataIn ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
 
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
@@ -110,8 +128,8 @@ let make_write_proof m wr =
   (machine_to_bin m, vm_to_bin m.m_vm, get_write_location m (snd wr))
 
 type micro_proof = {
-  fetch_code_proof : vm_bin * w256 list;
-  init_regs_proof : vm_bin * microp;
+  fetch_code_proof : vm_bin * microp * w256 list;
+  init_regs_proof : machine_bin;
   read_register_proof1 : machine_bin * vm_bin * location_proof;
   read_register_proof2 : machine_bin * vm_bin * location_proof;
   read_register_proof3 : machine_bin * vm_bin * location_proof;
@@ -130,8 +148,10 @@ let micro_step_proofs vm =
   let op = get_code vm.code.(vm.pc) in
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
+  trace ("init regs proof");
+  ignore (hash_machine_bin init_regs_proof);
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  let init_regs_proof = (vm_to_bin vm, op) in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
   let read_register_proof1 = make_register_proof1 m in
@@ -168,7 +188,7 @@ let micro_step_proofs_with_error vm =
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  let init_regs_proof = (vm_to_bin vm, op) in
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
   let read_register_proof1 = make_register_proof1 m in
@@ -203,32 +223,37 @@ let micro_step_proofs_with_error vm =
 
 (* Doing checks *)
 
-let check_fetch state1 state2 (vm_bin, proof) =
+let check_fetch state1 state2 (vm_bin, op, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
-  let c1 = (state1 = hash_vm_bin vm_bin) in
+  trace ("OP: " ^ to_hex (microp_word op));
+  if microp_word op <> microp then trace ("MICROP MISMATCH");
+  trace ("Hashing VM");
+  let vmhash = hash_vm_bin vm_bin in
+  let c1 = (state1 = vmhash) in
   let c2 = (vm_bin.bin_code = get_root vm_bin.bin_pc proof) in
-  let c3 = (state2 = keccak (hash_vm_bin vm_bin) microp) in
+  let m = {bin_vm=hash_vm_bin vm_bin; bin_microp=op; bin_regs={reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=i 0}} in
+  trace ("STATE2: " ^ machine_to_string m);
+  let c3 = (state2 = hash_machine_bin m) in
   if not c1 then trace "Bad initial state";
   if not c2 then trace "Bad code";
   if not c3 then trace "Bad final state";
-  c1 && c2 && c3
+  c1 && c2 && c3 && microp_word op = microp
 (*  state1 = hash_vm_bin vm_bin &&
   vm_bin.bin_code = get_root vm_bin.bin_pc proof &&
   state2 = keccak (hash_vm_bin vm_bin) microp *)
 
-let check_init_registers state1 state2 (vm_bin, microp) =
-  let regs = {reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=microp.immed} in
-  let vm_bin = hash_vm_bin vm_bin in
-  state1 = keccak vm_bin (microp_word microp) &&
-  state2 = hash_machine_bin {bin_vm=vm_bin; bin_microp=microp; bin_regs=regs}
+let check_init_registers state1 state2 m =
+  let regs = {reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=m.bin_microp.immed} in
+  state1 = hash_machine_bin m &&
+  state2 = hash_machine_bin {m with bin_regs=regs}
 
 let value_from_proof = function
  | SimpleProof ->
-    trace "Was empty";
     raise EmptyArray
  | LocationProof (loc, lst) ->
-    trace "Ok here";
     get_leaf loc lst
+ | LocationProof2 (_, loc2, (_, lst2)) ->
+    get_leaf loc2 lst2
 
 let read_from_proof regs vm proof = function
  | NoIn -> get_value (i 0)
@@ -254,7 +279,9 @@ let read_position_bin vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
- | InputIn -> value_to_int regs.reg1
+ | InputSizeIn -> value_to_int regs.reg1
+ | InputNameIn -> 0
+ | InputDataIn -> 0
 
 let write_position_bin vm regs = function
  | NoOut -> 0
@@ -297,6 +324,22 @@ let check_read_proof regs vm proof = function
  | ReadPc -> true
  | MemsizeIn -> true
  | ReadStackPtr -> true
+ | InputNameIn ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg1 = loc1 &&
+       value_to_int regs.reg2 = loc2 &&
+       vm.bin_input_name = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root loc2 lst2
+    | _ -> false )
+ | InputDataIn ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg1 = loc1 &&
+       value_to_int regs.reg2 = loc2 &&
+       vm.bin_input_data = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root loc2 lst2
+    | _ -> false )
  | a ->
     ( match proof with
     | LocationProof (loc, lst) ->
@@ -430,8 +473,6 @@ let check_write2_proof state1 state2 (m, vm, proof) =
 
 let t1 (a,_,_) = a
 
-let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
-
 let array_to_string arr =
   let res = Buffer.create 1000 in
   Buffer.add_string res "[";
@@ -449,7 +490,7 @@ let whole_vm_to_string vm =
   " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
   " \"stack\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.stack) ^ "," ^
   " \"memory\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.memory) ^ "," ^
-  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^
+(*  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^ *)
   " \"call_stack\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.call_stack) ^ "," ^
   " \"globals\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.globals) ^ "," ^
   " \"calltable\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.calltable) ^ "," ^
@@ -465,7 +506,9 @@ let vm_to_string vm =
   " \"code\": " ^ to_hex vm.bin_code ^ "," ^
   " \"stack\": " ^ to_hex vm.bin_stack ^ "," ^
   " \"memory\": " ^ to_hex vm.bin_memory ^ "," ^
-  " \"input\": " ^ to_hex vm.bin_input ^ "," ^
+  " \"input_size\": " ^ to_hex vm.bin_input_size ^ "," ^
+  " \"input_name\": " ^ to_hex vm.bin_input_name ^ "," ^
+  " \"input_data\": " ^ to_hex vm.bin_input_data ^ "," ^
   " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^
   " \"globals\": " ^ to_hex vm.bin_globals ^ "," ^
   " \"calltable\": " ^ to_hex vm.bin_calltable ^ "," ^
@@ -478,19 +521,12 @@ let vm_to_string vm =
 
 let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 
-let machine_to_string m =
-  "{" ^
-  " \"vm\": " ^ to_hex m.bin_vm ^ "," ^
-  " \"op\": " ^ to_hex (microp_word m.bin_microp) ^ "," ^
-  " \"reg1\": " ^ to_hex (get_value m.bin_regs.reg1) ^ "," ^
-  " \"reg2\": " ^ to_hex (get_value m.bin_regs.reg2) ^ "," ^
-  " \"reg3\": " ^ to_hex (get_value m.bin_regs.reg3) ^ "," ^
-  " \"ireg\": " ^ to_hex (get_value m.bin_regs.ireg) ^ " " ^
-  "}"
-
 let loc_to_string = function
  | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+ | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+    "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
+    " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
 
 let proof3_to_string (m, vm, loc) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ ", \"merkle\": " ^ loc_to_string loc ^ " }"
@@ -498,11 +534,13 @@ let proof3_to_string (m, vm, loc) =
 let proof2_to_string (m, vm) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
 
-let print_fetch (a, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
+let print_fetch (a, _, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
 let check_proof proof =
-  let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
-  let state2 = keccak (hash_vm_bin (fst proof.init_regs_proof)) (microp_word (snd proof.init_regs_proof)) in
+  let vm1, _, proof1 = proof.fetch_code_proof in
+  let state1 = hash_vm_bin vm1 in
+  trace ("STATE1: " ^ machine_to_string (proof.init_regs_proof));
+  let state2 = hash_machine_bin proof.init_regs_proof in
   if check_fetch state1 state2 proof.fetch_code_proof then trace "Fetch Success"
   else trace "Fetch Failure";
   let state3 = hash_machine_bin (t1 proof.read_register_proof1) in
@@ -542,9 +580,8 @@ let check_proof proof =
   Printf.printf "{\n";
   Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));
   Printf.printf "  \"fetch\": { \"vm\": %s, \"location\": %s },\n"
-    (vm_to_string (fst proof.fetch_code_proof)) (list_to_string (snd proof.fetch_code_proof));
-  Printf.printf "  \"init\": { \"vm\": %s, \"op\": %s },\n"
-    (vm_to_string (fst proof.init_regs_proof)) (to_hex (microp_word (snd proof.init_regs_proof)));
+    (vm_to_string vm1) (list_to_string proof1);
+  Printf.printf "  \"init\": %s,\n" (machine_to_string proof.init_regs_proof);
   Printf.printf "  \"reg1\": %s,\n" (proof3_to_string proof.read_register_proof1);
   Printf.printf "  \"reg2\": %s,\n" (proof3_to_string proof.read_register_proof2);
   Printf.printf "  \"reg3\": %s,\n" (proof3_to_string proof.read_register_proof3);
@@ -566,11 +603,12 @@ let micro_step_states vm =
   let push st = res := st :: !res in
   try
   push (hash_vm vm);
+  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0} in
   let op = get_code vm.code.(vm.pc) in
-  push (keccak (hash_vm vm) (microp_word op));
-  (* init registers *)
-  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+  push (hash_machine m);
+  (* init registers *)
+  regs.ireg <- op.immed;
   push (hash_machine m);
   (* read registers *)
   regs.reg1 <- read_register vm regs op.read_reg1;
