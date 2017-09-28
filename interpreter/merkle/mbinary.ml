@@ -382,32 +382,6 @@ let hash_input input =
   hash#result
 *)
 
-let hash_vm vm =
-  let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
-  let hash_mem = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory) in
-  let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
-  let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
-  let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
-  let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
-  let hash_ttable = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) in
-  let hash = Hash.keccak 256 in
-  hash#add_string hash_code;
-  hash#add_string hash_mem;
-  hash#add_string hash_stack;
-  hash#add_string hash_global;
-  hash#add_string hash_call;
-  hash#add_string hash_table;
-  hash#add_string hash_ttable;
-  hash#add_string (get_hash (Array.map u256 vm.input.file_size));
-  hash#add_string (get_hash (Array.map string_to_root vm.input.file_name));
-  hash#add_string (get_hash (Array.map string_to_root vm.input.file_data));
-  hash#add_string (u256 vm.pc);
-  hash#add_string (u256 vm.stack_ptr);
-  hash#add_string (u256 vm.call_ptr);
-  hash#add_string (u256 vm.break_ptr);
-  hash#add_string (u256 vm.memsize);
-  hash#result
-
 type vm_bin = {
   bin_code : w256;
   bin_stack : w256;
@@ -442,7 +416,9 @@ let hash_vm_bin vm =
   hash#add_string (u256 vm.bin_stack_ptr);
   hash#add_string (u256 vm.bin_call_ptr);
   hash#add_string (u256 vm.bin_memsize);
-  hash#result
+  let res = hash#result in
+  trace ("hash vm bin " ^ w256_to_string res);
+  res
 
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
@@ -460,6 +436,34 @@ let vm_to_bin vm = {
   bin_call_ptr = vm.call_ptr;
   bin_memsize = vm.memsize;
 }
+
+let hash_vm vm =
+  let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
+  let hash_mem = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory) in
+  let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
+  let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
+  let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
+  let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
+  let hash_ttable = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) in
+  let hash = Hash.keccak 256 in
+  hash#add_string hash_code;
+  hash#add_string hash_mem;
+  hash#add_string hash_stack;
+  hash#add_string hash_global;
+  hash#add_string hash_call;
+  hash#add_string hash_table;
+  hash#add_string hash_ttable;
+  hash#add_string (get_hash (Array.map u256 vm.input.file_size));
+  hash#add_string (get_hash (Array.map string_to_root vm.input.file_name));
+  hash#add_string (get_hash (Array.map string_to_root vm.input.file_data));
+  hash#add_string (u256 vm.pc);
+  hash#add_string (u256 vm.stack_ptr);
+  hash#add_string (u256 vm.call_ptr);
+  hash#add_string (u256 vm.memsize);
+  let res = hash#result in
+  trace ("hash vm " ^ w256_to_string res);
+  trace ("and hash vm bin " ^ w256_to_string (hash_vm_bin (vm_to_bin vm)));
+  res
 
 type machine_bin = {
   bin_vm : w256;
@@ -501,7 +505,9 @@ let hash_machine m =
   hash#add_string (get_value m.m_regs.reg2);
   hash#add_string (get_value m.m_regs.reg3);
   hash#add_string (get_value m.m_regs.ireg);
-  hash#result
+  let res = hash#result in
+  trace ("hash machine " ^ w256_to_string res);
+  res
 
 let hash_machine_bin m =
   let hash = Hash.keccak 256 in
@@ -512,7 +518,7 @@ let hash_machine_bin m =
   hash#add_string (get_value m.bin_regs.reg3);
   hash#add_string (get_value m.bin_regs.ireg);
   let res = hash#result in
-  trace ("hash " ^ w256_to_string res);
+  trace ("hash machine bin " ^ w256_to_string res);
   res
 
 let hash_machine_regs m regs =
@@ -524,7 +530,7 @@ let hash_machine_regs m regs =
   hash#add_string (regs.b_reg3);
   hash#add_string (regs.b_ireg);
   let res = hash#result in
-  trace ("hash " ^ w256_to_string res);
+  trace ("hash machine regs " ^ w256_to_string res);
   res
 
 let from_hex str =

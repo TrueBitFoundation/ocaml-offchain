@@ -22,7 +22,6 @@ type vm = {
   calltable_types : Int64.t array;
   mutable pc : int;
   mutable stack_ptr : int;
-  mutable break_ptr : int;
   mutable call_ptr : int;
   mutable memsize : int;
 }
@@ -49,7 +48,6 @@ let create_vm code = {
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
-  break_ptr = 0;
   call_ptr = 0;
 }
 
