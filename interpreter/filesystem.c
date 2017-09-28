@@ -1,6 +1,5 @@
 
 #include <stdlib.h>
-#include <string.h>
 
 char inputName(int, int);
 int inputSize(int);
@@ -58,6 +57,15 @@ void initSystem() {
   sys = s;
 }
 
+int str_eq(char *s1, char *s2) {
+   while (*s1 == *s2) {
+     if (!s1[0] && !s2[0]) return 1;
+     s1++;
+     s2++;
+   }
+   return 0;
+}
+
 int ___syscall5(int which, int *varargs) {
   char *name = varargs[0];
   int flags = varargs[1];
@@ -66,7 +74,7 @@ int ___syscall5(int which, int *varargs) {
   if (!name || !name[0]) return -1;
   int index = 0;
   while (sys->file_name[index]) {
-      if (strcmp(sys->file_name[index], name)) {
+      if (str_eq(sys->file_name[index], name)) {
               int fd = sys->next_fd;
               sys->ptr[fd] = index;
               sys->pos[fd] = 0;
