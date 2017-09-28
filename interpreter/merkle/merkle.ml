@@ -23,7 +23,6 @@ let value_to_int = function
 
 let i x = I32 (Int32.of_int x)
 
-
 type inst =
  | EXIT
  | UNREACHABLE
@@ -41,8 +40,10 @@ type inst =
  | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
  | STOREGLOBAL of int
- | READINPUT
- | CURMEM 
+ | INPUTSIZE
+ | INPUTNAME
+ | INPUTDATA
+ | CURMEM
  | GROW                     (* Grow memory *)
  | CALLI                    (* indirect call *)
  | CHECKCALLI of Int64.t    (* check type of indirect call *)
@@ -344,7 +345,9 @@ let compile_test m func vs init =
      let mname = Utf8.encode im.module_name in
      let fname = Utf8.encode im.item_name in
      trace ("importing " ^ mname ^ " from " ^ fname);
-     if mname = "input" && fname = "read" then [READINPUT;RETURN] else
+     if mname = "env" && fname = "inputName" then [INPUTNAME;RETURN] else
+     if mname = "env" && fname = "inputSize" then [INPUTSIZE;RETURN] else
+     if mname = "env" && fname = "inputData" then [INPUTDATA;RETURN] else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else

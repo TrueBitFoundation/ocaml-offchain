@@ -195,7 +195,9 @@ let in_code_byte = function
  | TableIn -> 0x10
  | MemoryIn2 -> 0x11
  | TableTypeIn -> 0x12
- | InputIn -> 0x13
+ | InputSizeIn -> 0x13
+ | InputNameIn -> 0x14
+ | InputDataIn -> 0x15
 
 let reg_byte = function
  | Reg1 -> 0x01
@@ -348,15 +350,40 @@ let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 
 let u256 i = get_value (I32 (Int32.of_int i))
 
+(* simple hash, not merkle root *)
 let hash_stack arr =
   let hash = Hash.keccak 256 in
   Array.iter (fun v -> hash#add_string (get_value v)) arr;
   hash#result
 
+let string_to_array str =
+  (* need one extra for nil terminated strings*)
+  let res = Array.make (String.length str + 1) (u256 0) in
+  for i = 0 to String.length str - 1 do
+    res.(i) <- u256 (Char.code str.[i])
+  done;
+  res
+
+let string_to_root str = get_hash (string_to_array str)
+
+(* probably most simple to just generate two proofs *)
+let location_proof2 arr loc1 loc2 =
+  (* first make the first level proof *)
+  let proof1 = location_proof (Array.map string_to_root arr) loc1 in
+  let proof2 = location_proof (string_to_array arr.(loc1)) loc2 in
+  (proof1, proof2)
+
+let hash_input input =
+  let hash = Hash.keccak 256 in
+  hash#add_string (u256 (Array.length input.file_size));
+  hash#add_string (get_hash (Array.map u256 input.file_size));
+  hash#add_string (get_hash (Array.map string_to_root input.file_name));
+  hash#add_string (get_hash (Array.map string_to_root input.file_data));
+  hash#result
+
 let hash_vm vm =
   let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
   let hash_mem = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory) in
-  let hash_input = get_hash (Array.map (fun v -> get_value (I64 v)) vm.input) in
   let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
   let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
   let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
@@ -370,7 +397,7 @@ let hash_vm vm =
   hash#add_string hash_call;
   hash#add_string hash_table;
   hash#add_string hash_ttable;
-  hash#add_string hash_input;
+  hash#add_string (hash_input vm.input);
   hash#add_string (u256 vm.pc);
   hash#add_string (u256 vm.stack_ptr);
   hash#add_string (u256 vm.call_ptr);
@@ -413,7 +440,7 @@ let hash_vm_bin vm =
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
   bin_memory = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory);
-  bin_input = get_hash (Array.map (fun v -> get_value (I64 v)) vm.input);
+  bin_input = hash_input vm.input;
   bin_stack = get_hash (Array.map (fun v -> get_value v) vm.stack);
   bin_globals = get_hash (Array.map (fun v -> get_value v) vm.globals);
   bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);

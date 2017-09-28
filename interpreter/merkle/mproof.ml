@@ -11,6 +11,7 @@ let trace = Merkle.trace
 type location_proof =
  | SimpleProof
  | LocationProof of (int * w256 list)
+ | LocationProof2 of (int * int * (w256 list * w256 list)) (* loc1, loc2, proof1, proof2 *)
 
 (*
 type pointer =
@@ -45,7 +46,9 @@ let read_position vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
- | InputIn -> value_to_int regs.reg1
+ | InputSizeIn -> value_to_int regs.reg1
+ | InputNameIn -> 0
+ | InputDataIn -> 0
 
 let write_position vm regs = function
  | NoOut -> 0
@@ -59,6 +62,8 @@ let write_position vm regs = function
  | StackOut2 -> vm.stack_ptr-2
 
 let loc_proof loc arr = (loc, location_proof arr loc)
+
+let loc_proof2 loc1 loc2 arr = (loc1, loc2, location_proof2 arr loc1 loc2)
 
 open Byteutil
 
@@ -81,7 +86,11 @@ let get_read_location m loc =
  | TableIn -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
  | TableTypeIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
  | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
- | InputIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.input))
+ | InputSizeIn -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
+ | InputNameIn ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
+ | InputDataIn ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
 
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
@@ -224,11 +233,11 @@ let check_init_registers state1 state2 (vm_bin, microp) =
 
 let value_from_proof = function
  | SimpleProof ->
-    trace "Was empty";
     raise EmptyArray
  | LocationProof (loc, lst) ->
-    trace "Ok here";
     get_leaf loc lst
+ | LocationProof2 (_, loc2, (_, lst2)) ->
+    get_leaf loc2 lst2
 
 let read_from_proof regs vm proof = function
  | NoIn -> get_value (i 0)
@@ -254,7 +263,9 @@ let read_position_bin vm regs = function
  | MemoryIn2 -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8 + 1
  | TableIn -> value_to_int regs.reg1
  | TableTypeIn -> value_to_int regs.reg1
- | InputIn -> value_to_int regs.reg1
+ | InputSizeIn -> value_to_int regs.reg1
+ | InputNameIn -> 0
+ | InputDataIn -> 0
 
 let write_position_bin vm regs = function
  | NoOut -> 0
@@ -449,7 +460,7 @@ let whole_vm_to_string vm =
   " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
   " \"stack\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.stack) ^ "," ^
   " \"memory\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.memory) ^ "," ^
-  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^
+(*  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^ *)
   " \"call_stack\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.call_stack) ^ "," ^
   " \"globals\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.globals) ^ "," ^
   " \"calltable\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.calltable) ^ "," ^
@@ -491,6 +502,9 @@ let machine_to_string m =
 let loc_to_string = function
  | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+ | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+    "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
+     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
 
 let proof3_to_string (m, vm, loc) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ ", \"merkle\": " ^ loc_to_string loc ^ " }"

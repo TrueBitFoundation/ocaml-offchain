@@ -301,12 +301,14 @@ let values_from_arr arr start len =
 let task_number = ref 0
 
 let setup_input vm fname =
-  let open Mrun in
+(*  let open Mrun in *)
   let open Yojson.Basic in
   match from_file fname with
+    (*
   | `List lst ->
     vm.input <- Array.make (List.length lst) 0L;
     List.iteri (fun i el -> vm.input.(i) <- Int64.of_string (Util.to_string el)) lst
+    *)
   | _ -> ()
 
 let setup_vm inst mdle func vs =
