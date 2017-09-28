@@ -373,13 +373,14 @@ let location_proof2 arr loc1 loc2 =
   let proof2 = location_proof (string_to_array arr.(loc1)) loc2 in
   (proof1, proof2)
 
+(*
 let hash_input input =
   let hash = Hash.keccak 256 in
-  hash#add_string (u256 (Array.length input.file_size));
   hash#add_string (get_hash (Array.map u256 input.file_size));
   hash#add_string (get_hash (Array.map string_to_root input.file_name));
   hash#add_string (get_hash (Array.map string_to_root input.file_data));
   hash#result
+*)
 
 let hash_vm vm =
   let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
@@ -397,7 +398,9 @@ let hash_vm vm =
   hash#add_string hash_call;
   hash#add_string hash_table;
   hash#add_string hash_ttable;
-  hash#add_string (hash_input vm.input);
+  hash#add_string (get_hash (Array.map u256 vm.input.file_size));
+  hash#add_string (get_hash (Array.map string_to_root vm.input.file_name));
+  hash#add_string (get_hash (Array.map string_to_root vm.input.file_data));
   hash#add_string (u256 vm.pc);
   hash#add_string (u256 vm.stack_ptr);
   hash#add_string (u256 vm.call_ptr);
@@ -413,7 +416,9 @@ type vm_bin = {
   bin_globals : w256;
   bin_calltable : w256;
   bin_calltable_types : w256;
-  bin_input : w256;
+  bin_input_size : w256;
+  bin_input_name : w256;
+  bin_input_data : w256;
 
   bin_pc : int;
   bin_stack_ptr : int;
@@ -430,7 +435,9 @@ let hash_vm_bin vm =
   hash#add_string vm.bin_call_stack;
   hash#add_string vm.bin_calltable;
   hash#add_string vm.bin_calltable_types;
-  hash#add_string vm.bin_input;
+  hash#add_string vm.bin_input_size;
+  hash#add_string vm.bin_input_name;
+  hash#add_string vm.bin_input_data;
   hash#add_string (u256 vm.bin_pc);
   hash#add_string (u256 vm.bin_stack_ptr);
   hash#add_string (u256 vm.bin_call_ptr);
@@ -440,7 +447,9 @@ let hash_vm_bin vm =
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
   bin_memory = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory);
-  bin_input = hash_input vm.input;
+  bin_input_size = get_hash (Array.map u256 vm.input.file_size);
+  bin_input_name = get_hash (Array.map string_to_root vm.input.file_name);
+  bin_input_data = get_hash (Array.map string_to_root vm.input.file_data);
   bin_stack = get_hash (Array.map (fun v -> get_value v) vm.stack);
   bin_globals = get_hash (Array.map (fun v -> get_value v) vm.globals);
   bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);

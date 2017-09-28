@@ -308,6 +308,22 @@ let check_read_proof regs vm proof = function
  | ReadPc -> true
  | MemsizeIn -> true
  | ReadStackPtr -> true
+ | InputNameIn ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg1 = loc1 &&
+       value_to_int regs.reg2 = loc2 &&
+       vm.bin_input_name = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root loc2 lst2
+    | _ -> false )
+ | InputDataIn ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg1 = loc1 &&
+       value_to_int regs.reg2 = loc2 &&
+       vm.bin_input_data = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root loc2 lst2
+    | _ -> false )
  | a ->
     ( match proof with
     | LocationProof (loc, lst) ->
@@ -476,7 +492,9 @@ let vm_to_string vm =
   " \"code\": " ^ to_hex vm.bin_code ^ "," ^
   " \"stack\": " ^ to_hex vm.bin_stack ^ "," ^
   " \"memory\": " ^ to_hex vm.bin_memory ^ "," ^
-  " \"input\": " ^ to_hex vm.bin_input ^ "," ^
+  " \"input_size\": " ^ to_hex vm.bin_input_size ^ "," ^
+  " \"input_name\": " ^ to_hex vm.bin_input_name ^ "," ^
+  " \"input_data\": " ^ to_hex vm.bin_input_data ^ "," ^
   " \"call_stack\": " ^ to_hex vm.bin_call_stack ^ "," ^
   " \"globals\": " ^ to_hex vm.bin_globals ^ "," ^
   " \"calltable\": " ^ to_hex vm.bin_calltable ^ "," ^
@@ -504,7 +522,7 @@ let loc_to_string = function
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
  | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
     "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
-     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
+    " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
 
 let proof3_to_string (m, vm, loc) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ ", \"merkle\": " ^ loc_to_string loc ^ " }"
