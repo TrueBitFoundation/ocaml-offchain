@@ -26,7 +26,7 @@ let make_fetch_code vm =
   trace "fetch code";
   let loc_proof = location_proof code vm.pc in
   trace "fetched code";
-  (vm_to_bin vm, loc_proof)
+  (vm_to_bin vm, get_code vm.code.(vm.pc), loc_proof)
 
 let read_position vm regs = function
  | NoIn -> 0
@@ -119,8 +119,8 @@ let make_write_proof m wr =
   (machine_to_bin m, vm_to_bin m.m_vm, get_write_location m (snd wr))
 
 type micro_proof = {
-  fetch_code_proof : vm_bin * w256 list;
-  init_regs_proof : vm_bin * microp;
+  fetch_code_proof : vm_bin * microp * w256 list;
+  init_regs_proof : machine_bin;
   read_register_proof1 : machine_bin * vm_bin * location_proof;
   read_register_proof2 : machine_bin * vm_bin * location_proof;
   read_register_proof3 : machine_bin * vm_bin * location_proof;
@@ -140,7 +140,7 @@ let micro_step_proofs vm =
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  let init_regs_proof = (vm_to_bin vm, op) in
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
   let read_register_proof1 = make_register_proof1 m in
@@ -177,7 +177,7 @@ let micro_step_proofs_with_error vm =
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  let init_regs_proof = (vm_to_bin vm, op) in
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
   let read_register_proof1 = make_register_proof1 m in
@@ -212,24 +212,24 @@ let micro_step_proofs_with_error vm =
 
 (* Doing checks *)
 
-let check_fetch state1 state2 (vm_bin, proof) =
+let check_fetch state1 state2 (vm_bin, op, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
   let c1 = (state1 = hash_vm_bin vm_bin) in
   let c2 = (vm_bin.bin_code = get_root vm_bin.bin_pc proof) in
-  let c3 = (state2 = keccak (hash_vm_bin vm_bin) microp) in
+  let m = {bin_vm=hash_vm_bin vm_bin; bin_microp=op; bin_regs={reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=i 0}} in
+  let c3 = (state2 = hash_machine_bin m) in
   if not c1 then trace "Bad initial state";
   if not c2 then trace "Bad code";
   if not c3 then trace "Bad final state";
-  c1 && c2 && c3
+  c1 && c2 && c3 && microp_word op = microp
 (*  state1 = hash_vm_bin vm_bin &&
   vm_bin.bin_code = get_root vm_bin.bin_pc proof &&
   state2 = keccak (hash_vm_bin vm_bin) microp *)
 
-let check_init_registers state1 state2 (vm_bin, microp) =
-  let regs = {reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=microp.immed} in
-  let vm_bin = hash_vm_bin vm_bin in
-  state1 = keccak vm_bin (microp_word microp) &&
-  state2 = hash_machine_bin {bin_vm=vm_bin; bin_microp=microp; bin_regs=regs}
+let check_init_registers state1 state2 m =
+  let regs = {reg1 = i 0; reg2 = i 0; reg3 = i 0; ireg=m.bin_microp.immed} in
+  state1 = hash_machine_bin m &&
+  state2 = hash_machine_bin {m with bin_regs=regs}
 
 let value_from_proof = function
  | SimpleProof ->
@@ -530,11 +530,12 @@ let proof3_to_string (m, vm, loc) =
 let proof2_to_string (m, vm) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ " }"
 
-let print_fetch (a, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
+let print_fetch (a, _, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
 let check_proof proof =
-  let state1 = hash_vm_bin (fst proof.fetch_code_proof) in
-  let state2 = keccak (hash_vm_bin (fst proof.init_regs_proof)) (microp_word (snd proof.init_regs_proof)) in
+  let vm1, _, proof1 = proof.fetch_code_proof in
+  let state1 = hash_vm_bin vm1 in
+  let state2 = hash_machine_bin proof.init_regs_proof in
   if check_fetch state1 state2 proof.fetch_code_proof then trace "Fetch Success"
   else trace "Fetch Failure";
   let state3 = hash_machine_bin (t1 proof.read_register_proof1) in
@@ -574,9 +575,8 @@ let check_proof proof =
   Printf.printf "{\n";
   Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));
   Printf.printf "  \"fetch\": { \"vm\": %s, \"location\": %s },\n"
-    (vm_to_string (fst proof.fetch_code_proof)) (list_to_string (snd proof.fetch_code_proof));
-  Printf.printf "  \"init\": { \"vm\": %s, \"op\": %s },\n"
-    (vm_to_string (fst proof.init_regs_proof)) (to_hex (microp_word (snd proof.init_regs_proof)));
+    (vm_to_string vm1) (list_to_string proof1);
+  Printf.printf "  \"init\": %s,\n" (machine_to_string proof.init_regs_proof);
   Printf.printf "  \"reg1\": %s,\n" (proof3_to_string proof.read_register_proof1);
   Printf.printf "  \"reg2\": %s,\n" (proof3_to_string proof.read_register_proof2);
   Printf.printf "  \"reg3\": %s,\n" (proof3_to_string proof.read_register_proof3);
