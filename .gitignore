@@ -4,5 +4,7 @@
 **/_build
 **/Qm*
 **/_output
+interpreter/merge.wasm
+interpreter/merge.wast
 solidity/contracts
 solidity/node_modules
