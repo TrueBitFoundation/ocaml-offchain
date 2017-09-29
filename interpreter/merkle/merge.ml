@@ -93,7 +93,10 @@ let merge a b =
   (* function type remapping *)
   let ftmap1 x = x in
   let ftmap2 x = Int32.add x (Int32.of_int (List.length a.it.types)) in
-  let reserve_export x = Hashtbl.add taken_imports (Utf8.encode x.it.name) 0l in
+  let reserve_export x =
+    let name = Utf8.encode x.it.name in
+    let name = if name = "_malloc" then "_env__malloc" else name in
+    Hashtbl.add taken_imports name 0l in
   List.iter reserve_export a.it.exports;
   List.iter reserve_export b.it.exports;
   let add_import taken imports map num imp =
@@ -124,7 +127,10 @@ let merge a b =
   let taken_imports = Hashtbl.create 10 in
   let reserve_export offset x =
     match x.it.edesc.it with
-    | FuncExport v -> Hashtbl.add taken_imports (Utf8.encode x.it.name) (Int32.add offset v.it)
+    | FuncExport v ->
+       let name = Utf8.encode x.it.name in
+       let name = if name = "_malloc" then "_env__malloc" else name in
+       Hashtbl.add taken_imports name (Int32.add offset v.it)
     | _ -> () in
   let num_fa = List.length (func_imports a) in
   let num_fb = List.length (func_imports b) in
