@@ -87,8 +87,3 @@ int ___syscall5(int which, int *varargs) {
   return -1;
 }
 
-int main() {
-   initSystem();
-   ___syscall5(5, 0);
-}
-

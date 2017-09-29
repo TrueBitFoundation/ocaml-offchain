@@ -254,10 +254,12 @@ let modules : Ast.module_ Map.t ref = ref Map.empty
 let instances : Instance.instance Map.t ref = ref Map.empty
 let registry : Instance.instance Map.t ref = ref Map.empty
 
+let anon = ref 0
+
 let bind map x_opt y =
   let map' =
     match x_opt with
-    | None -> !map
+    | None -> incr anon; Map.add ("anon_" ^ string_of_int !anon) y !map
     | Some x -> Map.add x.it y !map
   in map := Map.add "" y map'
 
