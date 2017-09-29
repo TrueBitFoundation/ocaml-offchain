@@ -19,6 +19,8 @@ let add_arg source = args := !args @ [source]
 
 let quote s = "\"" ^ String.escaped s ^ "\""
 
+let merge_mode = ref false
+
 let argspec = Arg.align
 [
   "-", Arg.Set Flags.interactive,
@@ -32,10 +34,12 @@ let argspec = Arg.align
     " configure output width (default is 80)";
   "-s", Arg.Set Flags.print_sig, " show module signatures";
   "-u", Arg.Set Flags.unchecked, " unchecked, do not perform validation";
-  "-h", Arg.Clear Flags.harness, " exclude harness for JS convesion";
+  "-h", Arg.Clear Flags.harness, " exclude harness for JS conversion";
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
   "-v", Arg.Unit banner, " show version";
+  
+  "-merge", Arg.Set merge_mode, " merge files";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
@@ -66,6 +70,19 @@ let () =
     Arg.parse argspec
       (fun file -> add_arg ("(input " ^ quote file ^ ")")) usage;
     List.iter (fun arg -> if not (Run.run_string arg) then exit 1) !args;
+    if !merge_mode then begin
+      Run.trace ("Going to merge");
+      let lst = ref [] in
+      Run.Map.iter (fun a b -> if a <> "" then lst := b :: !lst) !Run.modules;
+      match !lst with
+      | a::b::_ ->
+        Run.trace "found modules";
+        let merged = Merge.merge b a in
+(*        Run.output_stdout (fun () -> merged) *)
+        if !Flags.trace then Run.output_stdout (fun () -> merged)
+        else Run.create_binary_file "merge.wasm" () (fun () -> merged)
+      | _ -> ()
+    end;
     if !args = [] then Flags.interactive := true;
     if !Flags.interactive then begin
       Flags.print_sig := true;
@@ -78,3 +95,5 @@ let () =
       (Sys.argv.(0) ^ ": uncaught exception " ^ Printexc.to_string exn);
     Printexc.print_backtrace stderr;
     exit 2
+
+

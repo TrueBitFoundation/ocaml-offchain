@@ -1,4 +1,10 @@
 
+#include <stdlib.h>
+
+char inputName(int, int);
+int inputSize(int);
+char inputData(int, int);
+
 struct system {
   int next_fd;
   int ptr[1024]; // Pointers to the data blocks for each fd
@@ -28,7 +34,7 @@ char *getName(int ptr) {
 char *getData(int ptr) {
   int sz = inputSize(ptr);
   char *res = malloc(sz+1);
-  for (int i = 0; i < sz; i++) res[i] = inputData(ptr+sz);
+  for (int i = 0; i < sz; i++) res[i] = inputData(ptr, i);
   return res;
 }
 
@@ -51,15 +57,25 @@ void initSystem() {
   sys = s;
 }
 
-int ___syscall5(int which, int *varargs) {
+int str_eq(char *s1, char *s2) {
+   while (*s1 == *s2) {
+     if (!s1[0] && !s2[0]) return 1;
+     s1++;
+     s2++;
+   }
+   return 0;
+}
+
+int env____syscall5(int which, int *varargs) {
   char *name = varargs[0];
   int flags = varargs[1];
   int mode = varargs[2];
   // No empty names allowed
   if (!name || !name[0]) return -1;
   int index = 0;
+  if (!sys) return -1;
   while (sys->file_name[index]) {
-      if (strcmp(sys->file_name[index], name)) {
+      if (str_eq(sys->file_name[index], name)) {
               int fd = sys->next_fd;
               sys->ptr[fd] = index;
               sys->pos[fd] = 0;

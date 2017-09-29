@@ -254,10 +254,12 @@ let modules : Ast.module_ Map.t ref = ref Map.empty
 let instances : Instance.instance Map.t ref = ref Map.empty
 let registry : Instance.instance Map.t ref = ref Map.empty
 
+let anon = ref 0
+
 let bind map x_opt y =
   let map' =
     match x_opt with
-    | None -> !map
+    | None -> incr anon; Map.add ("anon_" ^ string_of_int !anon) y !map
     | Some x -> Map.add x.it y !map
   in map := Map.add "" y map'
 
@@ -332,6 +334,7 @@ let run_test inst mdle func vs =
     Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   incr task_number;
   let last_step = ref 0 in
+(*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)
   try begin
     for i = 0 to 100000000 do
       if !Flags.trace_stack then begin
