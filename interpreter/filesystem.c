@@ -66,13 +66,14 @@ int str_eq(char *s1, char *s2) {
    return 0;
 }
 
-int ___syscall5(int which, int *varargs) {
+int env____syscall5(int which, int *varargs) {
   char *name = varargs[0];
   int flags = varargs[1];
   int mode = varargs[2];
   // No empty names allowed
   if (!name || !name[0]) return -1;
   int index = 0;
+  if (!sys) return -1;
   while (sys->file_name[index]) {
       if (str_eq(sys->file_name[index], name)) {
               int fd = sys->next_fd;
