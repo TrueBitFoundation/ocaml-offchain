@@ -334,6 +334,7 @@ let run_test inst mdle func vs =
     Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   incr task_number;
   let last_step = ref 0 in
+(*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)
   try begin
     for i = 0 to 100000000 do
       if !Flags.trace_stack then begin

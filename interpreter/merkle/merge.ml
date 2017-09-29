@@ -75,6 +75,10 @@ let other_imports m =
    | el::tl -> el :: do_get tl in
   do_get m.it.imports
 
+let do_it f x = {x with it=f x.it}
+
+let remap_elements map el = do_it (fun x -> {x with init=List.map (remap_var map) x.init}) el
+
 (* probably all funcs will have to stay *)
 let merge a b =
   let f_imports = ref [] in
@@ -156,11 +160,13 @@ let merge a b =
   let funcs_a = List.map (remap (Hashtbl.find map1) (Hashtbl.find gmap1) ftmap1) a.it.funcs in
   let funcs_b = List.map (remap (Hashtbl.find map2) (Hashtbl.find gmap2) ftmap2) b.it.funcs in
   let more_imports = other_imports a @ List.filter drop_table_import (other_imports b) in
+  (* table elements have to be remapped *)
   Run.trace ("Remapping globals");
   {a with it={(a.it) with funcs = funcs_a@funcs_b;
      globals = List.map (remap_global (Hashtbl.find map1) (Hashtbl.find gmap1) ftmap1) a.it.globals @
                List.map (remap_global (Hashtbl.find map2) (Hashtbl.find gmap2) ftmap2) b.it.globals;
      imports = List.rev !f_imports @ List.rev !g_imports @ more_imports;
      exports = exports_a@List.filter drop_table exports_b;
+     elems = List.map (remap_elements (Hashtbl.find map1)) a.it.elems;
      types=a.it.types@b.it.types}}
 
