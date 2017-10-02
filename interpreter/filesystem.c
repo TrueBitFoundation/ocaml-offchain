@@ -9,6 +9,7 @@ struct system {
   int next_fd;
   int ptr[1024]; // Pointers to the data blocks for each fd
   int pos[1024]; // Location inside the block
+  int closed[1024];
   char *file_name[1024];
   char *file_data[1024];
   int file_size[1024];
@@ -66,8 +67,9 @@ int str_eq(char *s1, char *s2) {
    return 0;
 }
 
+// Open file
 int env____syscall5(int which, int *varargs) {
-  char *name = varargs[0];
+  char *name = (char*)varargs[0];
   int flags = varargs[1];
   int mode = varargs[2];
   // No empty names allowed
@@ -79,6 +81,7 @@ int env____syscall5(int which, int *varargs) {
               int fd = sys->next_fd;
               sys->ptr[fd] = index;
               sys->pos[fd] = 0;
+              sys->closed[fd] = 0;
               sys->next_fd++;
               return fd;
       }
@@ -87,4 +90,49 @@ int env____syscall5(int which, int *varargs) {
   // No such file
   return -1;
 }
+
+void debugSeek();
+
+// Seeking
+int env____syscall140(int which, int *varargs) {
+  int fd = varargs[0];
+  int offset_high = varargs[1];
+  int offset_low = varargs[2];
+  int *result = (int*)varargs[3];
+  int whence = varargs[4];
+  // llseek(stream, offset_low, whence)
+  if (whence == 1) {
+    sys->pos[fd] += offset_low;
+  }
+  else if (whence == 2) {
+    debugSeek();
+  }
+  else return -1;
+  *result = sys->pos[fd];
+  if (sys->pos[fd] < 0) return -1;
+  return 0;
+}
+
+// Close
+int env____syscall6(int which, int *varargs) {
+  int fd = varargs[0];
+  sys->closed[fd] = 1;
+  return 0;
+}
+
+// Read
+int env____syscall3(int which, int *varargs) {
+  int fd = varargs[0];
+  char *buf = (char*)varargs[1];
+  int count = varargs[2];
+  // read
+  int index = sys->ptr[fd];
+  int pos = sys->pos[fd];
+  int i;
+  for (i = 0; i < count && i+pos < sys->file_size[index]; i++) {
+    buf[i] = sys->file_data[index][pos+i];
+  }
+  return i;
+}
+
 

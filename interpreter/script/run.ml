@@ -321,7 +321,7 @@ let add_input vm i fname =
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
 
 let setup_vm inst mdle func vs =
-  let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"; "myfile"] else [] in
+  let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"; "filesystem.wasm"] else [] in
   let init2 = Merkle.init_system mdle inst in
   let code, f_resolve = Merkle.compile_test mdle func vs (init2@init) in
   let vm = Mrun.create_vm code in
