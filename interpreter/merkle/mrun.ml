@@ -414,14 +414,14 @@ let get_memory_int vm loc =
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
    let res = value_to_int (load (I64 a) (I64 b) Types.I32Type None loc) in
-   trace ("load int " ^ string_of_int res ^ " from " ^ string_of_int loc);
+(*   trace ("load int " ^ string_of_int res ^ " from " ^ string_of_int loc); *)
    res
 
 let get_memory_char vm loc =
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
    let res = value_to_int (load (I64 a) (I64 b) Types.I32Type (Some (Memory.Mem8, Memory.ZX)) loc) in
-   trace ("load byte " ^ string_of_int res ^ " from " ^ string_of_int loc);
+(*   trace ("load byte " ^ string_of_int res ^ " from " ^ string_of_int loc); *)
    Char.chr res
 
 let get_vm_string vm loc =
@@ -450,6 +450,10 @@ let rec get_datas vm ptr count =
 
 let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
+ | STUB "env . _debugString" ->
+   let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   print_string ("DEBUG: " ^ get_vm_string vm ptr ^ "\n");
+   inc_pc vm
  | STUB "env . ___syscall5" ->
    let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("Opening file " ^ get_vm_string vm (get_memory_int vm varargs) ^
@@ -466,6 +470,18 @@ let vm_step vm = match vm.code.(vm.pc) with
           " ptr " ^ string_of_int ptr ^
           " count " ^ string_of_int count ^ 
           " data " ^ String.concat "" (List.map string_of_char (List.flatten lst)) );
+   inc_pc vm
+ | STUB "env . _debugRead" ->
+   let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   trace ("reading " ^ string_of_char chr);
+   inc_pc vm
+ | STUB "env . _debugReadCount" ->
+   let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   trace ("reading " ^ string_of_int chr ^ " bytes");
+   inc_pc vm
+ | STUB "env . _debugSeek" ->
+   let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   trace ("seeking at " ^ string_of_int chr);
    inc_pc vm
  | STUB _ ->
    inc_pc vm
@@ -571,7 +587,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr + 1
  | STOREGLOBAL x ->
    inc_pc vm;
-   vm.globals.(x) <- vm.stack.(vm.stack_ptr);
+   vm.globals.(x) <- vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | CURMEM ->
    inc_pc vm;
@@ -663,7 +679,11 @@ let trace_step vm = match vm.code.(vm.pc) with
  | EXIT -> "EXIT"
  | INPUTSIZE -> "INPUTSIZE"
  | INPUTNAME -> "INPUTNAME"
- | INPUTDATA -> "INPUTDATA"
+ | INPUTDATA ->
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   let str = String.make 1 vm.input.file_data.(s2).[s1] in
+   "INPUTDATA " ^ str
  | OUTPUTSIZE -> "OUTPUTSIZE"
  | OUTPUTNAME -> "OUTPUTNAME"
  | OUTPUTDATA -> "OUTPUTDATA"
@@ -675,13 +695,13 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
- | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
  | DROP x -> "DROP" ^ string_of_int x
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
  | SWAP x -> "SWAP " ^ string_of_int x
- | LOADGLOBAL x -> "LOADGLOBAL"
- | STOREGLOBAL x -> "STOREGLOBAL"
+ | LOADGLOBAL x -> "LOADGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.globals.(x)
+ | STOREGLOBAL x -> "STOREGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CURMEM -> "CURMEM"
  | GROW -> "GROW"
  | PUSH lit -> "PUSH " ^ string_of_value lit

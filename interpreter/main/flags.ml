@@ -33,5 +33,5 @@ let case = ref (-1)
 let location = ref (-1)
 
 let input_files : string list ref = ref []
-
+let arguments : string list ref = ref []
 
