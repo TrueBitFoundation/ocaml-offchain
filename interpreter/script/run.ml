@@ -302,9 +302,16 @@ let values_from_arr arr start len =
 
 let task_number = ref 0
 
+let terminate str =
+  let res = String.make (String.length str + 1) (Char.chr 0) in
+  for i = 0 to String.length str-1 do
+    Bytes.set res i str.[i]
+  done;
+  res
+
 let add_input vm i fname =
   let open Mrun in
-  vm.input.file_name.(i) <- fname;
+  vm.input.file_name.(i) <- terminate fname;
   let ch = open_in_bin fname in
   let sz = in_channel_length ch in
   vm.input.file_size.(i) <- sz;
@@ -315,7 +322,8 @@ let add_input vm i fname =
 
 let setup_vm inst mdle func vs =
   let init = if !Flags.run_wasm then Merkle.make_args mdle inst ["/home/truebit/program.wasm"; "myfile"] else [] in
-  let code, f_resolve = Merkle.compile_test mdle func vs init in
+  let init2 = Merkle.init_system mdle inst in
+  let code, f_resolve = Merkle.compile_test mdle func vs (init2@init) in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;

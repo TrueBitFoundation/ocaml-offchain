@@ -83,7 +83,7 @@ let rec adjust_stack_aux diff num =
 let adjust_stack diff num =
   if diff = 0 then [] else
   if diff < 0 then ( trace "Cannot adjust" ; [] ) else
-  ( trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values");
+  ( (* trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values"); *)
     adjust_stack_aux diff num @ [DROP diff] )
 
 let rec compile ctx expr = compile' ctx expr.it
@@ -94,36 +94,34 @@ and compile' ctx = function
    ctx, [NOP]
  | Block (ty, lst) ->
    let rets = List.length ty in
-   trace ("block start " ^ string_of_int ctx.ptr);
+   (* trace ("block start " ^ string_of_int ctx.ptr); *)
    let end_label = ctx.label in
    let old_return = ctx.block_return in
    let old_ptr = ctx.ptr in
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=old_ptr+rets; rets=rets; target=end_label}::ctx.block_return} in
    let ctx, body = compile_block ctx lst in
-   trace ("block end " ^ string_of_int ctx.ptr);
-(*   let add_brk = if rets = 0 then [PUSHBRK end_label] else [PUSH (i rets); PUSHBRKRETURN end_label] in *)
+   (* trace ("block end " ^ string_of_int ctx.ptr); *)
    {ctx with bptr=ctx.bptr-1; block_return=old_return; ptr=old_ptr+rets}, body @ [LABEL end_label]
  | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit.it]
  | Test t -> ctx, [TEST t]
  | Compare i ->
-   trace "cmp";
+   (* trace "cmp"; *)
    {ctx with ptr = ctx.ptr-1}, [CMP i]
  | Unary i -> ctx, [UNA i]
  | Binary i -> 
-   trace "bin";
+   (* trace "bin"; *)
    {ctx with ptr = ctx.ptr-1}, [BIN i]
  | Convert i -> ctx, [CONV i]
  | Loop (_, lst) ->
    let start_label = ctx.label in
-   let sptr = ctx.ptr in
    let old_return = ctx.block_return in
-   trace ("loop start " ^ string_of_int sptr);
+   (* trace ("loop start " ^ string_of_int ctx.ptr); *)
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
-   trace ("loop end " ^ string_of_int ctx.ptr);
+   (* trace ("loop end " ^ string_of_int ctx.ptr); *)
    {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
  | If (ty, texp, fexp) ->
-   trace ("if " ^ string_of_int ctx.ptr);
+   (* trace ("if " ^ string_of_int ctx.ptr); *)
    let if_label = ctx.label in
    let end_label = ctx.label+1 in
    let a_ptr = ctx.ptr-1 in
@@ -134,11 +132,11 @@ and compile' ctx = function
  | Br x ->
    let num = Int32.to_int x.it in
    let c = List.nth ctx.block_return num in
-   trace ("br: " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
+   (* trace ("br: " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer"); *)
    let adjust = adjust_stack (ctx.ptr - c.level) c.rets in
    {ctx with ptr=ctx.ptr - c.rets}, adjust @ [JUMP c.target]
  | BrIf x ->
-   trace ("brif " ^ Int32.to_string x.it);
+   (* trace ("brif " ^ Int32.to_string x.it); *)
    let num = Int32.to_int x.it in
    let c = List.nth ctx.block_return num in
    let adjust = adjust_stack (ctx.ptr - c.level - 1) c.rets in
@@ -162,45 +160,45 @@ and compile' ctx = function
  | Return ->
    let num = ctx.bptr-1 in
    let {level=ptr; rets; target } = List.nth ctx.block_return num in
-   trace ("return: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
+   (* trace ("return: " ^ string_of_int rets ^ " return values, " ^ string_of_int ptr ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer"); *)
    let adjust = adjust_stack (ctx.ptr - ptr) rets in
    {ctx with ptr=ctx.ptr - rets}, adjust @ [JUMP target]
  | Drop ->
-    trace "drop";
+    (* trace "drop"; *)
     {ctx with ptr=ctx.ptr-1}, [DROP 1]
  | GrowMemory -> {ctx with ptr=ctx.ptr-1}, [GROW]
  | CurrentMemory -> {ctx with ptr=ctx.ptr+1}, [CURMEM]
  | GetGlobal x -> {ctx with ptr=ctx.ptr+1}, [LOADGLOBAL (Int32.to_int x.it)]
  | SetGlobal x ->
-   trace "set global";
+   (* trace "set global"; *)
    {ctx with ptr=ctx.ptr-1}, [STOREGLOBAL (Int32.to_int x.it)]
  | Call v ->
    (* Will just push the pc *)
-   trace ("Function call " ^ Int32.to_string v.it);
+   (* trace ("Function call " ^ Int32.to_string v.it); *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
-   trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
+   (* trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret)))); *)
    {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI]
  | Select ->
-   trace "select";
+   (* trace "select"; *)
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let ctx = {ctx with ptr=ctx.ptr-2; label=ctx.label+2} in
    ctx, [JUMPI else_label; SWAP 2; DROP 1; JUMP end_label; LABEL else_label; DROP 1; LABEL end_label]
  (* Dup ptr will give local 0 *)
  | GetLocal v ->
-   trace ("get local " ^ string_of_int (Int32.to_int v.it) ^ " from " ^  string_of_int (ctx.ptr - Int32.to_int v.it));
+   (* trace ("get local " ^ string_of_int (Int32.to_int v.it) ^ " from " ^  string_of_int (ctx.ptr - Int32.to_int v.it)); *)
    {ctx with ptr=ctx.ptr+1}, [DUP (ctx.ptr - Int32.to_int v.it)]
  | SetLocal v ->
-   trace "set local";
+   (* trace "set local"; *)
    {ctx with ptr=ctx.ptr-1}, [SWAP (ctx.ptr - Int32.to_int v.it); DROP 1]
  | TeeLocal v ->
    ctx, [SWAP (ctx.ptr - Int32.to_int v.it)]
  | Load op -> ctx, [LOAD op]
  | Store op ->
-   trace "store";
+   (* trace "store"; *)
    {ctx with ptr=ctx.ptr-2}, [STORE op]
 
 and compile_block ctx = function
@@ -218,24 +216,23 @@ let compile_func ctx func =
   trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
-  trace ("---- function end " ^ string_of_int ctx.ptr);
+(*  trace ("---- function end " ^ string_of_int ctx.ptr); *)
   ctx,
-(*  make (PUSH (I32 Int32.zero)) (List.length func.it.locals) @ *)
   List.map (fun x -> PUSH (default_value x)) func.it.locals @
   body @
   List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP 1]) ret) @
   [DROP (List.length par + List.length func.it.locals); RETURN]
 
-(* This resolves only one function, think more *)
+(* This resolves only one function *)
 let resolve_inst tab = function
  | LABEL _ -> NOP
  | JUMP l ->
    let loc = Hashtbl.find tab l in
-   trace ("resolve jump " ^ string_of_int l ^ " -> " ^ string_of_int loc);
+(*   trace ("resolve jump " ^ string_of_int l ^ " -> " ^ string_of_int loc); *)
    JUMP loc
  | JUMPI l ->
    let loc = Hashtbl.find tab l in
-   trace ("resolve jumpi " ^ string_of_int l ^ " -> " ^ string_of_int loc);
+(*   trace ("resolve jumpi " ^ string_of_int l ^ " -> " ^ string_of_int loc); *)
    JUMPI loc
  | a -> a
 
@@ -312,6 +309,10 @@ let make_args mdle inst lst =
    PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
   List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4); sz=None}]) lst)
 
+let init_system mdle inst =
+  try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
+  with Not_found -> []
+
 let compile_test m func vs init =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
@@ -345,9 +346,9 @@ let compile_test m func vs init =
      let mname = Utf8.encode im.module_name in
      let fname = Utf8.encode im.item_name in
      trace ("importing " ^ mname ^ " from " ^ fname);
-     if mname = "env" && fname = "inputName" then [INPUTNAME;RETURN] else
-     if mname = "env" && fname = "inputSize" then [INPUTSIZE;RETURN] else
-     if mname = "env" && fname = "inputData" then [INPUTDATA;RETURN] else
+     if mname = "env" && fname = "_inputName" then [INPUTNAME;RETURN] else
+     if mname = "env" && fname = "_inputSize" then [INPUTSIZE;RETURN] else
+     if mname = "env" && fname = "_inputData" then [INPUTDATA;RETURN] else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
