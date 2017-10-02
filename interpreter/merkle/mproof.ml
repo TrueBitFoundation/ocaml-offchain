@@ -50,6 +50,7 @@ let read_position vm regs = function
    trace ("Read stack from " ^ string_of_int (vm.stack_ptr-1));
    vm.stack_ptr-1
  | StackIn1 -> vm.stack_ptr-2
+ | StackIn2 -> vm.stack_ptr-3
  | StackInReg -> vm.stack_ptr-value_to_int regs.reg1
  | StackInReg2 -> vm.stack_ptr-value_to_int regs.reg2
  | CallIn -> vm.call_ptr-1
@@ -62,7 +63,6 @@ let read_position vm regs = function
  | InputDataIn -> 0
 
 let write_position vm regs = function
- | NoOut -> 0
  | GlobalOut -> value_to_int regs.reg1
  | CallOut -> vm.call_ptr
  | MemoryOut1 (_,_) -> (value_to_int regs.reg1+value_to_int regs.ireg) / 8
@@ -71,6 +71,9 @@ let write_position vm regs = function
  | StackOut1 -> vm.stack_ptr-1
  | StackOutReg1 -> vm.stack_ptr-value_to_int regs.reg1
  | StackOut2 -> vm.stack_ptr-2
+ | InputSizeOut -> value_to_int regs.reg1
+ | InputCreateOut -> value_to_int regs.reg1
+ | _ -> 0
 
 let loc_proof loc arr = (loc, location_proof arr loc)
 
@@ -88,6 +91,7 @@ let get_read_location m loc =
  | GlobalIn -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
  | StackIn0 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackIn1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
+ | StackIn2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackInReg -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackInReg2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | MemoryIn1 -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
@@ -114,6 +118,12 @@ let get_write_location m loc =
  | MemoryOut2 _ -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
  | CallOut -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
  | GlobalOut -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
+ | InputSizeOut -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
+ | InputCreateOut -> LocationProof (loc_proof pos (Array.map string_to_root vm.input.file_data))
+ | InputNameOut ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
+ | InputDataOut ->
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -272,6 +282,7 @@ let read_position_bin vm regs = function
  | GlobalIn -> value_to_int regs.reg1
  | StackIn0 -> vm.bin_stack_ptr-1
  | StackIn1 -> vm.bin_stack_ptr-2
+ | StackIn2 -> vm.bin_stack_ptr-3
  | StackInReg -> vm.bin_stack_ptr-value_to_int regs.reg1
  | StackInReg2 -> vm.bin_stack_ptr-value_to_int regs.reg2
  | CallIn -> vm.bin_call_ptr-1
@@ -293,11 +304,15 @@ let write_position_bin vm regs = function
  | StackOut1 -> vm.bin_stack_ptr-1
  | StackOutReg1 -> vm.bin_stack_ptr-value_to_int regs.reg1
  | StackOut2 -> vm.bin_stack_ptr-2
+ | InputSizeOut -> value_to_int regs.reg1
+ | InputCreateOut -> value_to_int regs.reg1
+ | _ -> 0
 
 let read_root_bin vm = function
  | GlobalIn -> vm.bin_globals
  | StackIn0 -> vm.bin_stack
  | StackIn1 -> vm.bin_stack
+ | StackIn2 -> vm.bin_stack
  | StackInReg -> vm.bin_stack
  | StackInReg2 -> vm.bin_stack
  | CallIn -> vm.bin_call_stack
@@ -316,6 +331,8 @@ let write_root_bin vm = function
  | StackOut1 -> vm.bin_stack
  | StackOutReg1 -> vm.bin_stack
  | StackOut2 -> vm.bin_stack
+ | InputSizeOut -> vm.bin_input_size
+ | InputCreateOut -> vm.bin_input_data
  | _ -> assert false
 
 let check_read_proof regs vm proof = function
@@ -445,6 +462,10 @@ let merkle_change_memory2 regs nv sz = function
    get_root loc lst
  | _ -> assert false
 
+let rec make_root v zero =
+  if v > 1 then make_root v (keccak zero zero)
+  else zero
+
 let write_register_bin proof vm regs v = function
  | NoOut -> vm
  | GlobalOut -> {vm with bin_globals=merkle_change v proof}
@@ -453,9 +474,32 @@ let write_register_bin proof vm regs v = function
  | StackOut0 -> {vm with bin_stack=merkle_change v proof}
  | StackOut1 -> {vm with bin_stack=merkle_change v proof}
  | StackOut2 -> {vm with bin_stack=merkle_change v proof}
- (* Should we apply the type here? *)
+ | InputSizeOut -> {vm with bin_input_size=merkle_change v proof}
+ | InputCreateOut -> {vm with bin_input_data=merkle_change (make_root (Int64.to_int (Decode.word v)) (u256 0)) proof}
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
+ | InputNameOut ->
+   ( match proof with
+   | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       assert (value_to_int regs.reg1 = loc1 &&
+               value_to_int regs.reg2 = loc2 &&
+               vm.bin_input_name = get_root loc1 lst1 &&
+               get_leaf loc1 lst1 = get_root loc2 lst2);
+       let lst2 = set_leaf loc2 v lst2 in
+       let lst1 = set_leaf loc1 (get_root loc2 lst2) lst1 in
+       {vm with bin_input_name=get_root loc1 lst1}
+   | _ -> assert false )
+ | InputDataOut ->
+   ( match proof with
+   | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       assert (value_to_int regs.reg1 = loc1 &&
+               value_to_int regs.reg2 = loc2 &&
+               vm.bin_input_data = get_root loc1 lst1 &&
+               get_leaf loc1 lst1 = get_root loc2 lst2);
+       let lst2 = set_leaf loc2 v lst2 in
+       let lst1 = set_leaf loc1 (get_root loc2 lst2) lst1 in
+       {vm with bin_input_data=get_root loc1 lst1}
+   | _ -> assert false )
 
 let check_write1_proof state1 state2 (m, vm, proof) =
   let vm2 = write_register_bin proof vm m.bin_regs (get_value (get_register m.bin_regs (fst m.bin_microp.write1))) (snd m.bin_microp.write1) in
@@ -490,7 +534,6 @@ let whole_vm_to_string vm =
   " \"code\": " ^ array_to_string (Array.map (fun v -> microp_word (get_code v)) vm.code) ^ "," ^
   " \"stack\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.stack) ^ "," ^
   " \"memory\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.memory) ^ "," ^
-(*  " \"input\": " ^ array_to_string (Array.map (fun v -> get_value (I64 v)) vm.input) ^ "," ^ *)
   " \"call_stack\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.call_stack) ^ "," ^
   " \"globals\": " ^ array_to_string (Array.map (fun v -> get_value v) vm.globals) ^ "," ^
   " \"calltable\": " ^ array_to_string (Array.map (fun v -> u256 v) vm.calltable) ^ "," ^
