@@ -1,22 +1,24 @@
 
 #include <stdlib.h>
 
-char inputName(int, int);
+unsigned char inputName(int, int);
 int inputSize(int);
-char inputData(int, int);
+unsigned char inputData(int, int);
 
 struct system {
   int next_fd;
   int ptr[1024]; // Pointers to the data blocks for each fd
   int pos[1024]; // Location inside the block
   int closed[1024];
-  char *file_name[1024];
-  char *file_data[1024];
+  unsigned char *file_name[1024];
+  unsigned char *file_data[1024];
   int file_size[1024];
 };
 
 // Global variable that will store our system
 struct system *sys;
+
+int debugString(char *dta);
 
 int getNameLength(int ptr) {
   int res = 0;
@@ -24,17 +26,17 @@ int getNameLength(int ptr) {
   return res;
 }
 
-char *getName(int ptr) {
+unsigned char *getName(int ptr) {
   int sz = getNameLength(ptr);
-  char *res = malloc(sz+1);
+  unsigned char *res = malloc(sz+1);
   for (int i = 0; i < sz; i++) res[i] = inputName(ptr, i);
   res[sz] = 0;
   return res;
 }
 
-char *getData(int ptr) {
+unsigned char *getData(int ptr) {
   int sz = inputSize(ptr);
-  char *res = malloc(sz+1);
+  unsigned char *res = malloc(sz);
   for (int i = 0; i < sz; i++) res[i] = inputData(ptr, i);
   return res;
 }
@@ -58,7 +60,7 @@ void initSystem() {
   sys = s;
 }
 
-int str_eq(char *s1, char *s2) {
+int str_eq(unsigned char *s1, unsigned char *s2) {
    while (*s1 == *s2) {
      if (!s1[0] && !s2[0]) return 1;
      s1++;
@@ -69,11 +71,12 @@ int str_eq(char *s1, char *s2) {
 
 // Open file
 int env____syscall5(int which, int *varargs) {
-  char *name = (char*)varargs[0];
+  unsigned char *name = (unsigned char*)varargs[0];
   int flags = varargs[1];
   int mode = varargs[2];
   // No empty names allowed
   if (!name || !name[0]) return -1;
+  debugString((char*)name);
   int index = 0;
   if (!sys) return -1;
   while (sys->file_name[index]) {
@@ -91,7 +94,7 @@ int env____syscall5(int which, int *varargs) {
   return -1;
 }
 
-void debugSeek();
+int debugSeek(int c);
 
 // Seeking
 int env____syscall140(int which, int *varargs) {
@@ -104,8 +107,11 @@ int env____syscall140(int which, int *varargs) {
   if (whence == 1) {
     sys->pos[fd] += offset_low;
   }
+  // Maybe this is seeking from end?
   else if (whence == 2) {
-    debugSeek();
+    int sz = sys->file_size[sys->ptr[fd]];
+    sys->pos[fd] = sz + offset_low;
+    debugSeek(offset_low);
   }
   else return -1;
   *result = sys->pos[fd];
@@ -120,19 +126,46 @@ int env____syscall6(int which, int *varargs) {
   return 0;
 }
 
+void debugRead(int c);
+int debugReadCount(int c);
+
 // Read
 int env____syscall3(int which, int *varargs) {
   int fd = varargs[0];
-  char *buf = (char*)varargs[1];
+  unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
+  debugReadCount(count);
   // read
   int index = sys->ptr[fd];
   int pos = sys->pos[fd];
   int i;
   for (i = 0; i < count && i+pos < sys->file_size[index]; i++) {
     buf[i] = sys->file_data[index][pos+i];
+    debugRead(buf[i]);
   }
+  sys->pos[fd] += i;
   return i;
 }
 
+struct stat {
+};
+
+// Stat
+int env____syscall195(int which, int *varargs) {
+  unsigned char *path = (unsigned char*)varargs[0];
+  struct stat *stats = (struct stat*)varargs[1];
+  // Invent some stats
+  debugString((char*)path);
+  return -1;
+}
+
+
+// Write
+int env____syscall4(int which, int *varargs) {
+  int fd = varargs[0];
+  unsigned char *buf = (unsigned char*)varargs[1];
+  int count = varargs[2];
+  debugString((char*)buf);
+  return count;
+}
 

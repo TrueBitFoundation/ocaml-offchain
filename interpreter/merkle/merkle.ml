@@ -316,7 +316,7 @@ let init_system mdle inst =
   try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
   with Not_found -> []
 
-let compile_test m func vs init =
+let compile_test m func vs init inst =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));
@@ -348,18 +348,23 @@ let compile_test m func vs init =
   let import_codes = List.map (fun im ->
      let mname = Utf8.encode im.module_name in
      let fname = Utf8.encode im.item_name in
-     trace ("importing " ^ mname ^ " from " ^ fname);
+     trace ("importing " ^ fname ^ " from " ^ mname);
      if mname = "env" && fname = "_inputName" then [INPUTNAME;RETURN] else
      if mname = "env" && fname = "_inputSize" then [INPUTSIZE;RETURN] else
      if mname = "env" && fname = "_inputData" then [INPUTDATA;RETURN] else
      if mname = "env" && fname = "_outputName" then [OUTPUTNAME;RETURN] else
      if mname = "env" && fname = "_outputSize" then [OUTPUTSIZE;RETURN] else
      if mname = "env" && fname = "_outputData" then [OUTPUTDATA;RETURN] else
+     (* invoke index, a1, a2*)
+     if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
+       let number = String.sub fname 7 (String.length fname - 7) in
+       [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then [EXIT] else
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
+     if mname = "env" && fname = "_debugRead" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      (* opening file *)
      if mname = "env" && fname = "___syscall5" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i (-1)); RETURN] else
      if mname = "env" && fname = "___syscall3" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else

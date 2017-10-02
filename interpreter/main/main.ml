@@ -54,13 +54,14 @@ let argspec = Arg.align
   "-error-step", Arg.Int (fun n -> Flags.checkerror := n), " for which step the intermediate state will be generated";
   "-final", Arg.Int (fun n -> Flags.checkfinal := n), " generate finality proof for the specified step";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
-  "-file", Arg.String (fun file -> Flags.input_files := file :: !Flags.input_files), " add a file to the VM file system";
   "-memory-size", Arg.Int (fun sz -> Flags.memory_size := sz), " how many pages the size of the memory should be. One page is 64kb";
   "-table-size", Arg.Int (fun sz -> Flags.table_size := sz), " how many elements should the call table have. Default 64";
   "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
   "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
   "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
-  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); Flags.run_wasm := true; add_arg "(invoke \"_main\")"), " run main function from this file"
+  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); Flags.run_wasm := true; add_arg "(invoke \"_main\")"), " run main function from this file";
+  "-file", Arg.String (fun file -> Flags.input_files := file :: !Flags.input_files), " add a file to the VM file system";
+  "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
 ]
 
 let () =
