@@ -29,7 +29,7 @@ type vm = {
 let inc_pc vm = vm.pc <- vm.pc+1
 
 let empty_input sz = {
-  file_name = Array.make sz "";
+  file_name = Array.make sz (String.make 1 (Char.chr 0));
   file_data = Array.make sz "";
   file_size = Array.make sz 0;
 }
@@ -478,7 +478,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    let b = vm.memory.(loc/8+1) in
    vm.stack.(vm.stack_ptr-1) <- load (I64 a) (I64 b) x.ty x.sz loc
  | STORE x ->
-   let open Byteutil in
    inc_pc vm;
    let loc = value_to_int vm.stack.(vm.stack_ptr-2) + Int32.to_int x.offset in
    let mem = get_memory vm.memory loc in
@@ -487,7 +486,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    let a, b = Byteutil.Decode.mini_memory mem in
    vm.memory.(loc/8) <- a;
    vm.memory.(loc/8+1) <- b;
-   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b)));
+   (* 
+   let open Byteutil in
+   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b))); *)
    vm.stack_ptr <- vm.stack_ptr - 2
  | DROP x ->
    inc_pc vm;
@@ -500,14 +501,16 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- i vm.input.file_size.(value_to_int vm.stack.(vm.stack_ptr-1))
  | INPUTNAME ->
+   inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_name.(s1).[s2]);
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_name.(s2).[s1]);
    vm.stack_ptr <- vm.stack_ptr - 1
  | INPUTDATA ->
+   inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s1).[s2]);
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s2).[s1]);
    vm.stack_ptr <- vm.stack_ptr - 1
  | SWAP x ->
    inc_pc vm;
