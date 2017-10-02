@@ -59,6 +59,7 @@ type in_code =
  | GlobalIn
  | StackIn0
  | StackIn1
+ | StackIn2
  | StackInReg
  | StackInReg2
  | ReadPc
@@ -103,6 +104,10 @@ type out_code =
  | GlobalOut
  | MemoryOut1 of Types.value_type * Memory.mem_size option
  | MemoryOut2 of Types.value_type * Memory.mem_size option
+ | InputSizeOut
+ | InputNameOut
+ | InputCreateOut
+ | InputDataOut
 
 type stack_ch =
  | StackRegSub
@@ -157,6 +162,7 @@ let read_register vm reg = function
  | GlobalIn -> vm.globals.(value_to_int reg.reg1)
  | StackIn0 -> vm.stack.(vm.stack_ptr-1)
  | StackIn1 -> vm.stack.(vm.stack_ptr-2)
+ | StackIn2 -> vm.stack.(vm.stack_ptr-3)
  | StackInReg -> vm.stack.(vm.stack_ptr-value_to_int reg.reg1)
  | StackInReg2 -> vm.stack.(vm.stack_ptr-value_to_int reg.reg2)
  | ReadPc -> i (vm.pc+1)
@@ -207,6 +213,23 @@ let write_register vm regs v = function
     trace ("pop to stack: " ^ string_of_value v);
     vm.stack.(vm.stack_ptr-2) <- v
  | StackOutReg1 -> vm.stack.(vm.stack_ptr-value_to_int regs.reg1) <- v
+ | InputSizeOut ->
+   let s1 = value_to_int regs.reg1 in
+   vm.input.file_size.(s1) <- value_to_int v
+ | InputCreateOut ->
+   let s1 = value_to_int regs.reg1 in
+   vm.input.file_data.(s1) <- Bytes.create (value_to_int v)
+ | InputNameOut ->
+   let s1 = value_to_int regs.reg1 in
+   let s2 = value_to_int regs.reg2 in
+   let str = vm.input.file_name.(s2) in
+   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   Bytes.set str s1 (Char.chr (value_to_int v));
+   vm.input.file_name.(s2) <- str
+ | InputDataOut ->
+   let s1 = value_to_int regs.reg1 in
+   let s2 = value_to_int regs.reg2 in
+   Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
 
 let setup_memory vm m instance =
   let open Ast in
@@ -336,6 +359,9 @@ let get_code = function
  | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
  | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputSizeIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
+ | OUTPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; write1 = (Reg2, InputSizeOut); write2 = (Reg2, InputCreateOut); stack_ch=StackDec2}
+ | OUTPUTNAME -> {noop with immed=i 2; read_reg1=StackIn2; read_reg2=StackIn1; read_reg3=StackIn0; write1 = (Reg3, InputNameOut); stack_ch=StackDecImmed}
+ | OUTPUTDATA -> {noop with immed=i 2; read_reg1=StackIn2; read_reg2=StackIn1; read_reg3=StackIn0; write1 = (Reg3, InputDataOut); stack_ch=StackDecImmed}
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | RETURN -> {noop with read_reg1=CallIn; call_ch=StackDec; pc_ch=StackReg}
  (* IReg + Reg1: memory address *)
@@ -512,6 +538,30 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s2).[s1]);
    vm.stack_ptr <- vm.stack_ptr - 1
+ | OUTPUTSIZE ->
+   inc_pc vm;
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   vm.input.file_size.(s2) <- s1;
+   vm.input.file_data.(s2) <- Bytes.create s1;
+   vm.stack_ptr <- vm.stack_ptr - 2
+ | OUTPUTNAME ->
+   inc_pc vm;
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   let s3 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   let str = vm.input.file_name.(s2) in
+   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   Bytes.set str s1 (Char.chr s3);
+   vm.stack_ptr <- vm.stack_ptr - 3;
+   vm.input.file_name.(s2) <- str
+ | OUTPUTDATA ->
+   inc_pc vm;
+   let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
+   let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   let s3 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   vm.stack_ptr <- vm.stack_ptr - 3;
+   Bytes.set vm.input.file_data.(s2) s1 (Char.chr s3)
  | SWAP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
@@ -614,6 +664,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | INPUTSIZE -> "INPUTSIZE"
  | INPUTNAME -> "INPUTNAME"
  | INPUTDATA -> "INPUTDATA"
+ | OUTPUTSIZE -> "OUTPUTSIZE"
+ | OUTPUTNAME -> "OUTPUTNAME"
+ | OUTPUTDATA -> "OUTPUTDATA"
  | JUMP x -> "JUMP"
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in

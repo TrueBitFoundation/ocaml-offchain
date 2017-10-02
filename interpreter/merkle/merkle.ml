@@ -40,9 +40,6 @@ type inst =
  | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
  | STOREGLOBAL of int
- | INPUTSIZE
- | INPUTNAME
- | INPUTDATA
  | CURMEM
  | GROW                     (* Grow memory *)
  | CALLI                    (* indirect call *)
@@ -54,6 +51,12 @@ type inst =
  | BIN of binop                   (* binary numeric operator *)
  | CONV of cvtop
  | STUB of string
+ | INPUTSIZE
+ | INPUTNAME
+ | INPUTDATA
+ | OUTPUTSIZE (* this will create the new file? *)
+ | OUTPUTNAME
+ | OUTPUTDATA
 
 type control = {
   target : int;
@@ -349,6 +352,9 @@ let compile_test m func vs init =
      if mname = "env" && fname = "_inputName" then [INPUTNAME;RETURN] else
      if mname = "env" && fname = "_inputSize" then [INPUTSIZE;RETURN] else
      if mname = "env" && fname = "_inputData" then [INPUTDATA;RETURN] else
+     if mname = "env" && fname = "_outputName" then [OUTPUTNAME;RETURN] else
+     if mname = "env" && fname = "_outputSize" then [OUTPUTSIZE;RETURN] else
+     if mname = "env" && fname = "_outputData" then [OUTPUTDATA;RETURN] else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else

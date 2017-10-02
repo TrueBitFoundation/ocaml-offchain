@@ -198,6 +198,7 @@ let in_code_byte = function
  | InputSizeIn -> 0x13
  | InputNameIn -> 0x14
  | InputDataIn -> 0x15
+ | StackIn2 -> 0x16
 
 let reg_byte = function
  | Reg1 -> 0x01
@@ -220,6 +221,10 @@ let out_code_byte = function
  | GlobalOut -> 0x08
  | StackOut2 -> 0x09
  | MemoryOut2 (ty, sz) -> 0xc0 lor (type_code ty lsl 3) lor out_sz_code sz
+ | InputSizeOut -> 0x0a
+ | InputNameOut -> 0x0b
+ | InputCreateOut -> 0x0c
+ | InputDataOut -> 0x0d
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00
