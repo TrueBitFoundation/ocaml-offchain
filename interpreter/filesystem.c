@@ -1,15 +1,33 @@
 
 #include <stdlib.h>
 
-unsigned char inputName(int, int);
 int inputSize(int);
+unsigned char inputName(int, int);
 unsigned char inputData(int, int);
+
+void outputSize(int, int);
+void outputName(int, int, unsigned char);
+void outputData(int, int, unsigned char);
+
+int debugString(char *dta);
+int debugSeek(int c);
+void debugRead(int c);
+int debugReadCount(int c);
+
+// Output to a linked list, not a linear block?
+struct piece {
+  unsigned char *data;
+  int size;
+  struct piece *prev;
+};
 
 struct system {
   int next_fd;
   int ptr[1024]; // Pointers to the data blocks for each fd
   int pos[1024]; // Location inside the block
   int closed[1024];
+
+  struct piece *file_output[1024];
   unsigned char *file_name[1024];
   unsigned char *file_data[1024];
   int file_size[1024];
@@ -17,8 +35,6 @@ struct system {
 
 // Global variable that will store our system
 struct system *sys;
-
-int debugString(char *dta);
 
 int getNameLength(int ptr) {
   int res = 0;
@@ -41,8 +57,25 @@ unsigned char *getData(int ptr) {
   return res;
 }
 
+unsigned char* copyBytes(unsigned char* bytes, int len) {
+  unsigned char* res = malloc(len);
+  for (int i = 0; i < len; i++) res[i] = bytes[i];
+  return res;
+}
+
+void addPiece(int idx, unsigned char *bytes, int len) {
+  struct piece *p = malloc(sizeof(struct piece));
+  p->prev = sys->file_output[idx];
+  p->data = copyBytes(bytes, len);
+  p->size = len;
+  sys->file_output[idx] = p;
+}
+
 void initSystem() {
   struct system *s = malloc(sizeof(struct system));
+  s->ptr[0] = -1;
+  s->ptr[1] = -2;
+  s->ptr[2] = -3;
   s->next_fd = 3; // 0:stdin, 1:stdout, 2:stderr
   // Actually we should here have a list of file names?
   // Read input byte by byte, it includes file names and data
@@ -50,6 +83,7 @@ void initSystem() {
   int index = 0;
   int nextLength = getNameLength(index);
   while (nextLength > 0) {
+     s->file_output[index] = 0;
      s->file_name[index] = getName(index);
      s->file_size[index] = inputSize(index);
      s->file_data[index] = getData(index);
@@ -58,6 +92,50 @@ void initSystem() {
   }
   s->file_name[index] = 0;
   sys = s;
+}
+
+void finalizeSystem() {
+  int index = 0;
+  while (sys->file_name[index]) {
+    // output name
+    unsigned char *name = sys->file_name[index];
+    int i = 0;
+    while (*name) {
+      outputName(index, i, *name);
+      name++;
+      i++;
+    }
+    // If there is no output, then output the linear block in case it was changed
+    if (!sys->file_output[index]) {
+      outputSize(index, sys->file_size[index]);
+      unsigned char *data = sys->file_data[index];
+      int i = 0;
+      while (*data) {
+        outputData(index, i, *data);
+        data++;
+        i++;
+      }
+    }
+    else {
+       // Calculate size
+       int sz = 0;
+       struct piece *p = sys->file_output[index];
+       while (p->prev) {
+         sz += p->size;
+         p = p->prev;
+       }
+       outputSize(index, sz);
+       p = sys->file_output[index];
+       while (p->prev) {
+         sz -= p->size;
+         for (int i = 0; i < p->size; i++) {
+           outputData(index, sz+i, p->data[i]);
+         }
+         p = p->prev;
+       }
+    }
+    index++;
+  }
 }
 
 int str_eq(unsigned char *s1, unsigned char *s2) {
@@ -94,8 +172,6 @@ int env____syscall5(int which, int *varargs) {
   return -1;
 }
 
-int debugSeek(int c);
-
 // Seeking
 int env____syscall140(int which, int *varargs) {
   int fd = varargs[0];
@@ -125,9 +201,6 @@ int env____syscall6(int which, int *varargs) {
   sys->closed[fd] = 1;
   return 0;
 }
-
-void debugRead(int c);
-int debugReadCount(int c);
 
 // Read
 int env____syscall3(int which, int *varargs) {
@@ -159,13 +232,14 @@ int env____syscall195(int which, int *varargs) {
   return -1;
 }
 
-
 // Write
 int env____syscall4(int which, int *varargs) {
   int fd = varargs[0];
   unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
   debugString((char*)buf);
+  if (sys->ptr[fd] < 0) return count;
+  addPiece(sys->ptr[fd], buf, count);
   return count;
 }
 
