@@ -95,10 +95,11 @@ void initSystem() {
 }
 
 void finalizeSystem() {
-  int index = 0;
+  int index = 0;  
   while (sys->file_name[index]) {
     // output name
     unsigned char *name = sys->file_name[index];
+    debugString((char*)name);
     int i = 0;
     while (*name) {
       outputName(index, i, *name);

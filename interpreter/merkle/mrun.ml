@@ -452,7 +452,7 @@ let vm_step vm = match vm.code.(vm.pc) with
  | NOP -> inc_pc vm
  | STUB "env . _debugString" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   print_string ("DEBUG: " ^ get_vm_string vm ptr ^ "\n");
+   prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
  | STUB "env . ___syscall5" ->
    let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
@@ -565,19 +565,19 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   let s3 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   let str = vm.input.file_name.(s2) in
+   let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
+   let str = vm.input.file_name.(s3) in
    let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
-   Bytes.set str s1 (Char.chr s3);
+   Bytes.set str s2 (Char.chr s1);
    vm.stack_ptr <- vm.stack_ptr - 3;
-   vm.input.file_name.(s2) <- str
+   vm.input.file_name.(s3) <- str
  | OUTPUTDATA ->
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   let s3 = value_to_int vm.stack.(vm.stack_ptr-2) in
+   let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
-   Bytes.set vm.input.file_data.(s2) s1 (Char.chr s3)
+   Bytes.set vm.input.file_data.(s3) s2 (Char.chr s1)
  | SWAP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
