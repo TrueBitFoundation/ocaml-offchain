@@ -362,7 +362,9 @@ let compile_test m func vs init inst =
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
-     if mname = "env" && fname = "_exit" then [EXIT] else
+     if mname = "env" && fname = "_exit" then
+       try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
+       with Not_found -> [EXIT] else
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
      if mname = "env" && fname = "_debugRead" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      (* opening file *)

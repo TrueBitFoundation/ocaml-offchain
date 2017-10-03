@@ -321,19 +321,26 @@ let add_input vm i fname =
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
 
 let setup_vm inst mdle func vs =
-  let init = if !Flags.run_wasm then Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments) else [] in
+(*  prerr_endline "Setting up"; *)
+  let open Merkle in
+  let open Values in
+  let init =
+    try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
+    with Not_found -> 
+      if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
   let init2 = Merkle.init_system mdle inst in
+(*  prerr_endline "Compiling"; *)
   let code, f_resolve = Merkle.compile_test mdle func vs (init2@init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve;
   List.iteri (add_input vm) !Flags.input_files;
+(*  prerr_endline "Initialized"; *)
   vm
 
 let run_test inst mdle func vs =
   let open Mrun in
-  if !Flags.run_wasm then trace (string_of_int (Merkle.find_function_index mdle inst (Utf8.decode "_malloc")));
   let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   if !task_number = !Flags.case && !Flags.init_vm then
@@ -347,7 +354,7 @@ let run_test inst mdle func vs =
         trace (stack_to_string vm);
         trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack))
       end;
-      trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      if !Flags.trace then trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
       if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
@@ -365,6 +372,7 @@ let run_test inst mdle func vs =
     raise (Failure "takes too long")
   end
   with VmTrap -> (* check stack pointer, get values *)
+(*    prerr_endline ("Steps: " ^ string_of_int !last_step); *)
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
