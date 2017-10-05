@@ -20,6 +20,7 @@ let add_arg source = args := !args @ [source]
 let quote s = "\"" ^ String.escaped s ^ "\""
 
 let merge_mode = ref false
+let globals_file = ref None
 
 let argspec = Arg.align
 [
@@ -40,6 +41,7 @@ let argspec = Arg.align
   "-v", Arg.Unit banner, " show version";
   
   "-merge", Arg.Set merge_mode, " merge files";
+  "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
@@ -71,10 +73,10 @@ let () =
     Arg.parse argspec
       (fun file -> add_arg ("(input " ^ quote file ^ ")")) usage;
     List.iter (fun arg -> if not (Run.run_string arg) then exit 1) !args;
+    let lst = ref [] in
+    Run.Map.iter (fun a b -> if a <> "" then lst := b :: !lst) !Run.modules;
     if !merge_mode then begin
       Run.trace ("Going to merge");
-      let lst = ref [] in
-      Run.Map.iter (fun a b -> if a <> "" then lst := b :: !lst) !Run.modules;
       match !lst with
       | a::b::_ ->
         Run.trace "found modules";
@@ -84,6 +86,12 @@ let () =
         else Run.create_binary_file "merge.wasm" () (fun () -> merged)
       | _ -> ()
     end;
+    ( match !globals_file, !lst with
+    | Some fn, m :: _ ->
+      let m = Addglobals.add_globals m fn in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "globals.wasm" () (fun () -> m)
+    | _ -> () );
     if !args = [] then Flags.interactive := true;
     if !Flags.interactive then begin
       Flags.print_sig := true;
