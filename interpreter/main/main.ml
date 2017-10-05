@@ -89,7 +89,7 @@ let () =
     ( match !globals_file, !lst with
     | Some fn, m :: _ ->
       let m = Addglobals.add_globals m fn in
-      Run.output_stdout (fun () -> m);
+      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "globals.wasm" () (fun () -> m)
     | _ -> () );
     if !args = [] then Flags.interactive := true;
