@@ -1,5 +1,6 @@
 
 #include <stdlib.h>
+#include <stdint.h>
 
 int inputSize(int);
 unsigned char inputName(int, int);
@@ -31,6 +32,8 @@ struct system {
   unsigned char *file_name[1024];
   unsigned char *file_data[1024];
   int file_size[1024];
+  
+  int call_record; // file descriptor for call record
 };
 
 // Global variable that will store our system
@@ -63,12 +66,42 @@ unsigned char* copyBytes(unsigned char* bytes, int len) {
   return res;
 }
 
+int str_eq(unsigned char *s1, unsigned char *s2) {
+   while (*s1 == *s2) {
+     if (!s1[0] && !s2[0]) return 1;
+     s1++;
+     s2++;
+   }
+   return 0;
+}
+
 void addPiece(int idx, unsigned char *bytes, int len) {
   struct piece *p = malloc(sizeof(struct piece));
   p->prev = sys->file_output[idx];
   p->data = copyBytes(bytes, len);
   p->size = len;
   sys->file_output[idx] = p;
+}
+
+int openFile(unsigned char *name) {
+  // No empty names allowed
+  if (!name || !name[0]) return -1;
+  debugString((char*)name);
+  int index = 0;
+  if (!sys) return -1;
+  while (sys->file_name[index]) {
+      if (str_eq(sys->file_name[index], name)) {
+              int fd = sys->next_fd;
+              sys->ptr[fd] = index;
+              sys->pos[fd] = 0;
+              sys->closed[fd] = 0;
+              sys->next_fd++;
+              return fd;
+      }
+      index++;
+  }
+  // No such file
+  return -1;
 }
 
 void initSystem() {
@@ -92,6 +125,19 @@ void initSystem() {
   }
   s->file_name[index] = 0;
   sys = s;
+  unsigned char name[12];
+  name[0] = 'r';
+  name[1] = 'e';
+  name[2] = 'c';
+  name[3] = 'o';
+  name[4] = 'r';
+  name[5] = 'd';
+  name[6] = '.';
+  name[7] = 'b';
+  name[8] = 'i';
+  name[9] = 'n';
+  name[10] = 0;
+  sys->call_record = openFile(name);
 }
 
 void finalizeSystem() {
@@ -139,13 +185,108 @@ void finalizeSystem() {
   }
 }
 
-int str_eq(unsigned char *s1, unsigned char *s2) {
-   while (*s1 == *s2) {
-     if (!s1[0] && !s2[0]) return 1;
-     s1++;
-     s2++;
-   }
-   return 0;
+// read one byte
+int read8(int fd) {
+  int idx = sys->ptr[fd];
+  int res = sys->file_data[idx][sys->pos[fd]];
+  sys->pos[fd]++;
+  return res;
+}
+
+int read16(int fd) {
+  return read8(fd) | (read8(fd) << 8);
+}
+
+long long read32(int fd) {
+  return read16(fd) | (read16(fd) << 16);
+}
+
+long long read64(int fd) {
+  return read32(fd) | (read32(fd) << 32);
+}
+
+// Ignore the call
+void skipCall() {
+  int fd = sys->call_record;
+  if (fd < 0) return;
+  // read args
+  int arg_len = read16(fd);
+  for (int i = 0; i < arg_len; i++) read64(fd);
+  // read returns
+  int ret_len = read16(fd);
+  for (int i = 0; i < ret_len; i++) read64(fd);
+  // read memory 8
+  int mem8_len = read32(fd);
+  for (int i = 0; i < mem8_len; i++) {
+    read32(fd);
+    read8(fd);
+  }
+  // read memory 16
+  int mem16_len = read32(fd);
+  for (int i = 0; i < mem16_len; i++) {
+    read32(fd);
+    read16(fd);
+  }
+  // read memory 32
+  int mem32_len = read32(fd);
+  for (int i = 0; i < mem32_len; i++) {
+    read32(fd);
+    read32(fd);
+  }
+  // Success, position at next system call
+}
+
+// Actual handling of calls: first have to drop from stack, so return the number of args
+int callArguments() {
+  int fd = sys->call_record;
+  if (fd < 0) return 0;
+  // read args
+  int arg_len = read16(fd);
+  for (int i = 0; i < arg_len; i++) read64(fd);
+  return arg_len;
+}
+
+int callReturns() {
+  int fd = sys->call_record;
+  if (fd < 0) return 0;
+  // read rets
+  return read16(fd);
+}
+
+long long getReturn() {
+  int fd = sys->call_record;
+  return read64(fd);
+}
+
+
+
+void callMemory() {
+  int fd = sys->call_record;
+  if (fd < 0) return;
+  // read memory 8
+  int mem8_len = read32(fd);
+  for (int i = 0; i < mem8_len; i++) {
+    int addr = read32(fd);
+    int v = read8(fd);
+    unsigned char *ptr = (unsigned char*)addr;
+    *ptr = (unsigned char)v;
+  }
+  // read memory 16
+  int mem16_len = read32(fd);
+  for (int i = 0; i < mem16_len; i++) {
+    int addr = read32(fd);
+    int16_t v = read16(fd);
+    int16_t *ptr = (int16_t*)addr;
+    *ptr = v;
+  }
+  // read memory 32
+  int mem32_len = read32(fd);
+  for (int i = 0; i < mem32_len; i++) {
+    int addr = read32(fd);
+    int v = read32(fd);
+    int *ptr = (int*)addr;
+    *ptr = v;
+  }
 }
 
 // Open file

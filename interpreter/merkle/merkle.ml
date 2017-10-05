@@ -316,6 +316,25 @@ let init_system mdle inst =
   try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
   with Not_found -> []
 
+let generic_stub m inst mname fname =
+  [STUB (mname ^ " . " ^ fname);
+   CALL (find_function_index m inst (Utf8.decode "_callArguments"));
+   DUP 1;
+   LABEL (-1);
+   JUMPI (-2);
+   DROP 1;
+   DUP 1;
+   PUSH (I32 (-1l));
+   BIN (I32 I32Op.Sub);
+   LABEL (-2);
+   DROP 1;
+   (* Just handle zero or one return values *)
+   CALL (find_function_index m inst (Utf8.decode "_callReturns"));
+   JUMPI (-3);
+   CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
+   LABEL (-3);
+   ]
+
 let compile_test m func vs init inst =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
