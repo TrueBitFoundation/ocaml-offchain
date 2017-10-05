@@ -7,9 +7,7 @@ let rec remap_func' map gmap ftmap = function
  | Block (ty, lst) -> Block (ty, List.map (remap_func map gmap ftmap) lst) 
  | Loop (ty, lst) -> Loop (ty, List.map (remap_func map gmap ftmap) lst)
  | If (ty, texp, fexp) -> If (ty, List.map (remap_func map gmap ftmap) texp, List.map (remap_func map gmap ftmap) fexp)
- | GetGlobal v ->
-(*   Run.trace ("global " ^ Int32.to_string v.it ^ " -> " ^ Int32.to_string (gmap v.it)); *)
-   GetGlobal {v with it = gmap v.it}
+ | GetGlobal v -> GetGlobal {v with it = gmap v.it}
  | SetGlobal v -> SetGlobal {v with it = gmap v.it}
  | Call v -> Call {v with it = map v.it}
  | CallIndirect v -> CallIndirect {v with it = ftmap v.it}
@@ -32,6 +30,10 @@ let remap_export map gmap ftmap conflict x =
   if Utf8.encode res.it.name = "runPostSets" then {res with it={res.it with name=Utf8.decode ("runPostSets" ^ conflict)}}
   else res
 
+let remap_global map gmap ftmap x =
+  let res = {x with it={x.it with value = {x.it.value with it=List.map (remap_func map gmap ftmap) x.it.value.it}}} in
+  res
+
 let drop_table exp = match exp.it.edesc.it with
  | TableExport _ -> false
  | _ -> true
@@ -40,10 +42,6 @@ let drop_table_import exp = match exp.it.idesc.it with
  | TableImport _ -> false
  | MemoryImport _ -> false
  | _ -> true
-
-let remap_global map gmap ftmap x =
-  let res = {x with it={x.it with value = {x.it.value with it=List.map (remap_func map gmap ftmap) x.it.value.it}}} in
-  res
 
 let remap_idesc ftmap = function
  | FuncImport v -> FuncImport (remap_var ftmap v)

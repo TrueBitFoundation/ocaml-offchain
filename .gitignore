@@ -6,5 +6,6 @@
 **/_output
 interpreter/merge.wasm
 interpreter/merge.wast
+interpreter/globals.*
 solidity/contracts
 solidity/node_modules
