@@ -49,6 +49,7 @@ let lookup name t =
   | "ABORT", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "memoryBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "tableBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
+  | "___dso_handle", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | _, ExternalFuncType t -> ExternalFunc (HostFunc (t, abort))
   | "memory", ExternalMemoryType (MemoryType {min;max}) -> ExternalMemory (Memory.create {min;max})
   | "table", ExternalTableType (TableType ({min;max}, t)) -> ExternalTable (Table.create t {min;max})

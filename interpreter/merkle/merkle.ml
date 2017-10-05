@@ -379,13 +379,14 @@ let compile_test m func vs init inst =
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
-  let rec build n acc = function
+  let rec build n acc l_acc = function
    | [] -> acc
    | fcode::tl ->
-     let sz = List.length acc in
-     Hashtbl.add f_resolve n sz;
-     build (n+1) (acc@resolve_to sz fcode) tl in
+     Hashtbl.add f_resolve n l_acc;
+     let x = resolve_to l_acc fcode in
+     build (n+1) (x::acc) (List.length x + l_acc) tl in
   let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
-  let flat_code = build 0 test_code (import_codes @ List.map snd module_codes) in
-  List.map (resolve_inst2 f_resolve) flat_code, f_resolve
+  let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
+  let flat_code = List.flatten (List.rev codes) in
+  List.rev (List.rev_map (resolve_inst2 f_resolve) flat_code), f_resolve
 
