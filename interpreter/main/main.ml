@@ -79,7 +79,7 @@ let () =
       | a::b::_ ->
         Run.trace "found modules";
         let merged = Merge.merge b a in
-(*        Run.output_stdout (fun () -> merged) *)
+        (* Run.output_stdout (fun () -> merged); *)
         if !Flags.trace then Run.output_stdout (fun () -> merged)
         else Run.create_binary_file "merge.wasm" () (fun () -> merged)
       | _ -> ()

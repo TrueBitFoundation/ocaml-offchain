@@ -89,6 +89,8 @@ let merge a b =
   let gmap2 = Hashtbl.create 10 in
   (* check from exports, if some imports should be linked *)
   let taken_imports = Hashtbl.create 10 in
+  let taken_imports_a = Hashtbl.create 10 in
+  let taken_imports_b = Hashtbl.create 10 in
   let taken_globals = Hashtbl.create 10 in
   (* function type remapping *)
   let ftmap1 x = x in
@@ -99,15 +101,17 @@ let merge a b =
     Hashtbl.add taken_imports name 0l in
   List.iter reserve_export a.it.exports;
   List.iter reserve_export b.it.exports;
-  let add_import taken imports map num imp =
+  let add_import taken taken_cur imports map num imp =
     (* check if import was already taken *)
     let name = "_" ^ Utf8.encode imp.it.module_name ^ "_" ^ Utf8.encode imp.it.item_name in
-    if not (Hashtbl.mem taken name) then begin
+    if not (Hashtbl.mem taken name) || Hashtbl.mem taken_cur name then begin
       let loc = Int32.of_int (List.length !imports) in
       Hashtbl.add map (Int32.of_int num) loc;
       imports := imp :: !imports;
       Run.trace ("Got import " ^ name ^ ", linked to " ^ Int32.to_string loc);
-      if name <> "_env__llvm_bswap_i64" then Hashtbl.add taken name loc
+(*      if name = "_env__llvm_bswap_i64" || (String.length name > 11 && String.sub name 0 11 = "_env_invoke") then () else *)
+      Hashtbl.add taken_cur name loc;
+      Hashtbl.add taken name loc
     end else begin
       let loc = Hashtbl.find taken name in
       Run.trace ("Dropping import " ^ name ^ ", linked to " ^ Int32.to_string loc);
@@ -116,15 +120,17 @@ let merge a b =
   (* first just have to calculate total number of imports *)
   let imports_a = List.map (remap_import ftmap1) (func_imports a) in
   let imports_b = List.map (remap_import ftmap2) (func_imports b) in
-  List.iteri (fun n x -> add_import taken_imports f_imports map1 n x) imports_a;
-  List.iteri (fun n x -> add_import taken_imports f_imports map2 n x) imports_b;
-  List.iteri (fun n x -> add_import taken_globals g_imports gmap1 n x) (global_imports a);
-  List.iteri (fun n x -> add_import taken_globals g_imports gmap2 n x) (global_imports b);
+  List.iteri (fun n x -> add_import taken_imports taken_imports_a f_imports map1 n x) imports_a;
+  List.iteri (fun n x -> add_import taken_imports taken_imports_b f_imports map2 n x) imports_b;
+  List.iteri (fun n x -> add_import taken_globals taken_imports_a g_imports gmap1 n x) (global_imports a);
+  List.iteri (fun n x -> add_import taken_globals taken_imports_b g_imports gmap2 n x) (global_imports b);
   let num_f = List.length !f_imports in
   let num_g = List.length !g_imports in
   Run.trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
   (* now can calculate the export positions *)
   let taken_imports = Hashtbl.create 10 in
+  let taken_imports_a = Hashtbl.create 10 in
+  let taken_imports_b = Hashtbl.create 10 in
   let reserve_export offset x =
     match x.it.edesc.it with
     | FuncExport v ->
@@ -143,8 +149,8 @@ let merge a b =
   List.iter (reserve_export (Int32.of_int offset_a)) a.it.exports;
   List.iter (reserve_export (Int32.of_int offset_b)) b.it.exports;
   f_imports := [];
-  List.iteri (fun n x -> add_import taken_imports f_imports map1 n x) imports_a;
-  List.iteri (fun n x -> add_import taken_imports f_imports map2 n x) imports_b;
+  List.iteri (fun n x -> add_import taken_imports taken_imports_a f_imports map1 n x) imports_a;
+  List.iteri (fun n x -> add_import taken_imports taken_imports_b f_imports map2 n x) imports_b;
   Run.trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
   Run.trace ("Functions A: " ^ string_of_int (List.length a.it.funcs) ^ "; Functions B: " ^ string_of_int (List.length b.it.funcs));
   (* add remapping for functions *)

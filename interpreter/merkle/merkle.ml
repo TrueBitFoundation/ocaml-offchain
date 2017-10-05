@@ -316,6 +316,25 @@ let init_system mdle inst =
   try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
   with Not_found -> []
 
+let generic_stub m inst mname fname =
+  [STUB (mname ^ " . " ^ fname);
+   CALL (find_function_index m inst (Utf8.decode "_callArguments"));
+   DUP 1;
+   LABEL (-1);
+   JUMPI (-2);
+   DROP 1;
+   DUP 1;
+   PUSH (I32 (-1l));
+   BIN (I32 I32Op.Sub);
+   LABEL (-2);
+   DROP 1;
+   (* Just handle zero or one return values *)
+   CALL (find_function_index m inst (Utf8.decode "_callReturns"));
+   JUMPI (-3);
+   CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
+   LABEL (-3);
+   ]
+
 let compile_test m func vs init inst =
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
@@ -379,13 +398,14 @@ let compile_test m func vs init inst =
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
-  let rec build n acc = function
+  let rec build n acc l_acc = function
    | [] -> acc
    | fcode::tl ->
-     let sz = List.length acc in
-     Hashtbl.add f_resolve n sz;
-     build (n+1) (acc@resolve_to sz fcode) tl in
+     Hashtbl.add f_resolve n l_acc;
+     let x = resolve_to l_acc fcode in
+     build (n+1) (x::acc) (List.length x + l_acc) tl in
   let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
-  let flat_code = build 0 test_code (import_codes @ List.map snd module_codes) in
-  List.map (resolve_inst2 f_resolve) flat_code, f_resolve
+  let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
+  let flat_code = List.flatten (List.rev codes) in
+  List.rev (List.rev_map (resolve_inst2 f_resolve) flat_code), f_resolve
 
