@@ -29,12 +29,22 @@ let do_it f x = {x with it=f x.it}
 
 let remap_elem_segments map gmap gmap2 ftmap el = do_it (fun (x:'a segment') -> {x with offset=do_it (List.map (remap_func map gmap gmap2 ftmap)) x.offset}) el
 
+let conv_to_int x =
+  if Char.code x.[0] = 34 then int_of_string (String.sub x 1 (String.length x - 2))
+  else int_of_string x
+
+let rec pairify = function
+ | a::b::tl -> (a,b) :: pairify tl
+ | _ -> []
 
 (* First load the json file *)
 let load_file fn =
   let open Yojson.Basic in
-  let lst = Util.to_assoc (from_channel (open_in fn)) in
-  List.map (fun (a,b) -> (a, int_of_string (to_string b))) lst
+  let data = from_channel (open_in fn) in
+  let lst = Util.to_assoc (Util.member "env" data) in
+  let globals = List.map (fun (a,b) -> (a, int_of_string (to_string b))) lst in
+  let mem = List.map (fun x -> conv_to_int (to_string x)) (Util.to_list (Util.member "mem" data)) in
+  globals, pairify mem
 
 let add_import taken special imports map map2 num imp =
     (* check if import was already taken *)
@@ -54,9 +64,26 @@ let add_import taken special imports map map2 num imp =
       Hashtbl.add map2 (Int32.of_int num) (Hashtbl.find special name)
     end
 
+let elem x = {it=x; at=no_region}
+
 let int_global i = GetGlobal {it=Int32.of_int i; at=no_region}
 
-let elem x = {it=x; at=no_region}
+let int_const y = Const (elem (Values.I32 (Int32.of_int y)))
+
+let int_binary i =
+  let res = Bytes.create 4 in
+  Bytes.set res 0 (Char.chr (i land 0xff));
+  Bytes.set res 1 (Char.chr ((i lsr 8) land 0xff));
+  Bytes.set res 2 (Char.chr ((i lsr 16) land 0xff));
+  Bytes.set res 3 (Char.chr ((i lsr 24) land 0xff));
+  res
+
+let generate_data (addr, i) : string segment =
+  elem {
+    offset=elem [elem (int_const (addr*4))];
+    index=elem 0l;
+    init=int_binary i;
+  }
 
 let add_globals m fn =
   let g_imports = ref [] in
@@ -64,7 +91,7 @@ let add_globals m fn =
   let gmap2 = Hashtbl.create 10 in
   let ftmap1 x = x in
   (* remove imports that were defined in the file *)
-  let globals = load_file fn in
+  let globals, mem = load_file fn in
   let taken_globals = Hashtbl.create 10 in
   let special_globals = Hashtbl.create 10 in
   
@@ -96,7 +123,8 @@ let add_globals m fn =
   let funcs_a = List.map (remap (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.funcs in
   (* table elements have to be remapped *)
   Run.trace ("Remapping globals");
-  {m with it={(m.it) with funcs = funcs_a;
+  let new_data = List.map generate_data mem in
+  {m with it={(m.it) with funcs = funcs_a; data=m.it.data@new_data;
      globals = List.map (remap_global (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.globals;
      imports = List.rev !g_imports @ func_imports m @ other_imports m;
      exports = exports_a;

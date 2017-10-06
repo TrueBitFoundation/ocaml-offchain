@@ -695,11 +695,16 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
- | LOAD x -> "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset
+ | LOAD x ->
+   let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
+   let a = vm.memory.(loc/8) in
+   let b = vm.memory.(loc/8+1) in
+   let v = load (I64 a) (I64 b) x.ty x.sz loc in
+   "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
  | DROP x -> "DROP" ^ string_of_int x
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
- | SWAP x -> "SWAP " ^ string_of_int x
+ | SWAP x -> "SWAP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x -> "LOADGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.globals.(x)
  | STOREGLOBAL x -> "STOREGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CURMEM -> "CURMEM"
