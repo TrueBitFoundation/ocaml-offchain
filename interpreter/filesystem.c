@@ -39,6 +39,10 @@ struct system {
 // Global variable that will store our system
 struct system *sys;
 
+float blaa() {
+   return (int)sys + 0.0f;
+}
+
 int getNameLength(int ptr) {
   int res = 0;
   while (inputName(ptr, res) != 0) res++;
@@ -384,4 +388,10 @@ int env____syscall4(int which, int *varargs) {
   addPiece(sys->ptr[fd], buf, count);
   return count;
 }
+
+// ioctl
+int env____syscall54(int which, int *varargs) {
+  return -1;
+}
+
 

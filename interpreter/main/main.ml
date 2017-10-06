@@ -1,3 +1,4 @@
+
 let name = "wasm"
 let version = "1.0"
 
@@ -100,8 +101,7 @@ let () =
     end
   with exn ->
     flush_all ();
-    prerr_endline
-      (Sys.argv.(0) ^ ": uncaught exception " ^ Printexc.to_string exn);
+    prerr_endline (Sys.argv.(0) ^ ": uncaught exception " ^ Printexc.to_string exn);
     Printexc.print_backtrace stderr;
     exit 2
 
