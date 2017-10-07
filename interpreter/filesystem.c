@@ -1,6 +1,9 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#if defined(UINT64_MAX)
+  #define HAS_U_INT64
+#endif
 
 int inputSize(int);
 unsigned char inputName(int, int);
@@ -141,6 +144,7 @@ void initSystem() {
   name[8] = 'i';
   name[9] = 'n';
   name[10] = 0;
+  name[11] = '\0';
   sys->call_record = openFile(name);
 }
 
@@ -190,24 +194,42 @@ void finalizeSystem() {
 }
 
 // read one byte
-int read8(int fd) {
+unsigned char read8(int fd) {
   int idx = sys->ptr[fd];
-  int res = sys->file_data[idx][sys->pos[fd]];
+  unsigned char res = sys->file_data[idx][sys->pos[fd]];
   sys->pos[fd]++;
   return res;
 }
 
-int read16(int fd) {
-  return read8(fd) | (read8(fd) << 8);
+uint16_t read16(int fd) {
+  uint16_t dummy = 0U;
+  dummy |= read8(fd) << 8U;
+  dummy |= read8(fd);
+  return dummy;
 }
 
-long long read32(int fd) {
-  return read16(fd) | (read16(fd) << 16);
+uint32_t read32(int fd) {
+  uint32_t dummy = 0U;
+  dummy |= read16(fd) << 16U;
+  dummy |= read16(fd);
+  return dummy;
 }
 
-long long read64(int fd) {
-  return read32(fd) | (read32(fd) << 32);
+#ifdef HAS_U_INT64
+uint64_t read64(int fd) {
+  uint64_t dummy = 0U;
+  dummy |= (uint64_t)read32(fd) << 32U;
+  dummy |= read32(fd);
+  return dummy;
 }
+#else
+uint32_t* read64(int fd) {
+  uint32_t* dummy;
+  dummy[0] = read32(fd);
+  dummy[1] = read32(fd);
+  return dummy;
+}
+#endif
 
 // Ignore the call
 void skipCall() {
