@@ -44,25 +44,26 @@ let load_file fn =
   let lst = Util.to_assoc (Util.member "env" data) in
   let globals = List.map (fun (a,b) -> (a, int_of_string (to_string b))) lst in
   let mem = List.map (fun x -> conv_to_int (to_string x)) (Util.to_list (Util.member "mem" data)) in
-  globals, pairify mem
+  let tmem = int_of_string (to_string (Util.member "total_memory" data)) in
+  globals, pairify mem, tmem
 
 let add_import taken special imports map map2 num imp =
-    (* check if import was already taken *)
-    let name = "_" ^ Utf8.encode imp.it.module_name ^ "_" ^ Utf8.encode imp.it.item_name in
-    if not (Hashtbl.mem taken name) then begin
-      let loc = Int32.of_int (List.length !imports) in
-      Hashtbl.add map (Int32.of_int num) loc;
-      imports := imp :: !imports;
-      Run.trace ("Got import " ^ name);
-      Hashtbl.add taken name loc
-    end else begin
-      let loc = Hashtbl.find taken name in
-      Run.trace ("Dropping import " ^ name);
-      Hashtbl.add map (Int32.of_int num) loc
-    end;
-    if Hashtbl.mem special name then begin
-      Hashtbl.add map2 (Int32.of_int num) (Hashtbl.find special name)
-    end
+  (* check if import was already taken *)
+  let name = "_" ^ Utf8.encode imp.it.module_name ^ "_" ^ Utf8.encode imp.it.item_name in
+  if not (Hashtbl.mem taken name) then begin
+    let loc = Int32.of_int (List.length !imports) in
+    Hashtbl.add map (Int32.of_int num) loc;
+    imports := imp :: !imports;
+    Run.trace ("Got import " ^ name);
+    Hashtbl.add taken name loc
+  end else begin
+    let loc = Hashtbl.find taken name in
+    Run.trace ("Dropping import " ^ name);
+    Hashtbl.add map (Int32.of_int num) loc
+  end;
+  if Hashtbl.mem special name then begin
+    Hashtbl.add map2 (Int32.of_int num) (Hashtbl.find special name)
+  end
 
 let elem x = {it=x; at=no_region}
 
@@ -85,13 +86,23 @@ let generate_data (addr, i) : string segment =
     init=int_binary i;
   }
 
+(* need to add a TOTAL_MEMORY global *)
+
+let add_total_memory m tmem =
+  let open Types in
+  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
+  do_it (fun m -> {m with
+    globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode "TOTAL_MEMORY"; edesc=elem (GlobalExport (elem idx))}]}) m
+
 let add_globals m fn =
+  let globals, mem, tmem = load_file fn in
+  let m = add_total_memory m tmem in
   let g_imports = ref [] in
   let gmap1 = Hashtbl.create 10 in
   let gmap2 = Hashtbl.create 10 in
   let ftmap1 x = x in
   (* remove imports that were defined in the file *)
-  let globals, mem = load_file fn in
   let taken_globals = Hashtbl.create 10 in
   let special_globals = Hashtbl.create 10 in
   
