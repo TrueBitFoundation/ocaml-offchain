@@ -1,9 +1,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#if defined(UINT64_MAX)
-  #define HAS_U_INT64
-#endif
 
 int inputSize(int);
 unsigned char inputName(int, int);
@@ -14,6 +11,7 @@ void outputName(int, int, unsigned char);
 void outputData(int, int, unsigned char);
 
 int debugString(char *dta);
+int debugInt(int c);
 int debugSeek(int c);
 void debugRead(int c);
 int debugReadCount(int c);
@@ -103,6 +101,7 @@ int openFile(unsigned char *name) {
               sys->pos[fd] = 0;
               sys->closed[fd] = 0;
               sys->next_fd++;
+              debugInt(fd);
               return fd;
       }
       index++;
@@ -144,7 +143,6 @@ void initSystem() {
   name[8] = 'i';
   name[9] = 'n';
   name[10] = 0;
-  name[11] = '\0';
   sys->call_record = openFile(name);
 }
 
@@ -194,42 +192,36 @@ void finalizeSystem() {
 }
 
 // read one byte
-unsigned char read8(int fd) {
+int read8(int fd) {
   int idx = sys->ptr[fd];
-  unsigned char res = sys->file_data[idx][sys->pos[fd]];
+  int res = sys->file_data[idx][sys->pos[fd]];
   sys->pos[fd]++;
+/*  debugString((char*)sys->file_name[idx]);
+  debugInt(sys->pos[fd]); */
   return res;
 }
 
 uint16_t read16(int fd) {
   uint16_t dummy = 0U;
-  dummy |= read8(fd) << 8U;
   dummy |= read8(fd);
+  dummy |= read8(fd) << 8U;
   return dummy;
 }
 
 uint32_t read32(int fd) {
   uint32_t dummy = 0U;
-  dummy |= read16(fd) << 16U;
   dummy |= read16(fd);
+  dummy |= read16(fd) << 16U;
   return dummy;
 }
 
-#ifdef HAS_U_INT64
-uint64_t read64(int fd) {
+uint32_t read64(int fd) {
   uint64_t dummy = 0U;
-  dummy |= (uint64_t)read32(fd) << 32U;
   dummy |= read32(fd);
+  read32(fd);
+  // dummy |= (uint64_t)read32(fd) << 32U;
   return dummy;
 }
-#else
-uint32_t* read64(int fd) {
-  uint32_t* dummy;
-  dummy[0] = read32(fd);
-  dummy[1] = read32(fd);
-  return dummy;
-}
-#endif
 
 // Ignore the call
 void skipCall() {
@@ -238,9 +230,6 @@ void skipCall() {
   // read args
   int arg_len = read16(fd);
   for (int i = 0; i < arg_len; i++) read64(fd);
-  // read returns
-  int ret_len = read16(fd);
-  for (int i = 0; i < ret_len; i++) read64(fd);
   // read memory 8
   int mem8_len = read32(fd);
   for (int i = 0; i < mem8_len; i++) {
@@ -259,6 +248,9 @@ void skipCall() {
     read32(fd);
     read32(fd);
   }
+  // read returns
+  int ret_len = read16(fd);
+  for (int i = 0; i < ret_len; i++) read64(fd);
   // Success, position at next system call
 }
 
@@ -268,29 +260,34 @@ int callArguments() {
   if (fd < 0) return 0;
   // read args
   int arg_len = read16(fd);
-  for (int i = 0; i < arg_len; i++) read64(fd);
-  return arg_len;
+  debugInt(arg_len);
+  for (int i = 0; i < arg_len; i++) debugInt(read64(fd));
+  return arg_len+1;
 }
 
 int callReturns() {
   int fd = sys->call_record;
   if (fd < 0) return 0;
   // read rets
-  return read16(fd);
+  int rets = read16(fd);
+  debugInt(rets);
+  return rets;
 }
 
-long long getReturn() {
+// uint64_t getReturn() {
+uint32_t getReturn() {
   int fd = sys->call_record;
-  return read64(fd);
+  uint32_t x = read64(fd);
+  debugInt(x);
+  return x;
 }
-
-
 
 void callMemory() {
   int fd = sys->call_record;
   if (fd < 0) return;
   // read memory 8
   int mem8_len = read32(fd);
+  debugInt(mem8_len);
   for (int i = 0; i < mem8_len; i++) {
     int addr = read32(fd);
     int v = read8(fd);
@@ -299,6 +296,7 @@ void callMemory() {
   }
   // read memory 16
   int mem16_len = read32(fd);
+  debugInt(mem16_len);
   for (int i = 0; i < mem16_len; i++) {
     int addr = read32(fd);
     int16_t v = read16(fd);
@@ -307,6 +305,7 @@ void callMemory() {
   }
   // read memory 32
   int mem32_len = read32(fd);
+  debugInt(mem32_len);
   for (int i = 0; i < mem32_len; i++) {
     int addr = read32(fd);
     int v = read32(fd);
@@ -412,8 +411,9 @@ int env____syscall4(int which, int *varargs) {
 }
 
 // ioctl
+/*
 int env____syscall54(int which, int *varargs) {
+  skipCall();
   return -1;
 }
-
-
+*/

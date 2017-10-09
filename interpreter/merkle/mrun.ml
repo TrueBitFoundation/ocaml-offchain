@@ -368,6 +368,7 @@ let get_code = function
  | LOAD x -> {noop with immed=I32 x.offset; read_reg1=StackIn0; read_reg2=MemoryIn1; read_reg3=MemoryIn2; alu_code=FixMemory (x.ty, x.sz); write1=(Reg1, StackOut1)}
  | STORE x -> {noop with immed=I32 x.offset; read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg2, MemoryOut1 (x.ty,x.sz)); write2=(Reg2, MemoryOut2 (x.ty,x.sz)); stack_ch=StackDec2}
  | DROP x -> {noop with immed=i x; read_reg1 = Immed; stack_ch=StackRegSub}
+ | DROP_N -> {noop with read_reg1 = StackIn0; stack_ch=StackRegSub}
  | DUP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackInReg; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}
  | LOADGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=GlobalIn; write1=(Reg2, StackOut0); stack_ch=StackInc}
@@ -454,6 +455,11 @@ let vm_step vm = match vm.code.(vm.pc) with
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
+ | STUB "env . _debugInt" ->
+   let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   prerr_endline ("DEBUG: " ^ string_of_int ptr);
+   inc_pc vm
+   (*
  | STUB "env . ___syscall5" ->
    let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("Opening file " ^ get_vm_string vm (get_memory_int vm varargs) ^
@@ -470,6 +476,19 @@ let vm_step vm = match vm.code.(vm.pc) with
           " ptr " ^ string_of_int ptr ^
           " count " ^ string_of_int count ^ 
           " data " ^ String.concat "" (List.map string_of_char (List.flatten lst)) );
+   inc_pc vm
+   *)
+ | STUB "env . ___syscall146" ->
+   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   let ptr = get_memory_int vm (varargs+4) in
+   let count = get_memory_int vm (varargs+8) in
+   let lst = get_datas vm ptr count in
+   let data_str = String.concat "" (List.map string_of_char (List.flatten lst)) in
+   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
+          " ptr " ^ string_of_int ptr ^
+          " count " ^ string_of_int count ^ 
+          " data " ^ data_str ^
+          " data length " ^ string_of_int (String.length data_str) );
    inc_pc vm
  | STUB "env . _debugRead" ->
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
@@ -535,6 +554,9 @@ let vm_step vm = match vm.code.(vm.pc) with
  | DROP x ->
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - x
+ | DROP_N ->
+   inc_pc vm;
+   vm.stack_ptr <- vm.stack_ptr - value_to_int vm.stack.(vm.stack_ptr-1)
  | DUP x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
@@ -703,6 +725,7 @@ let trace_step vm = match vm.code.(vm.pc) with
    "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
  | DROP x -> "DROP" ^ string_of_int x
+ | DROP_N -> "DROP_N " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
  | SWAP x -> "SWAP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x -> "LOADGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.globals.(x)
@@ -718,9 +741,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CALLI -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
 
-let stack_to_string vm = 
+let stack_to_string vm n =
   let res = ref "" in
-  for i = 0 to vm.stack_ptr - 1 do
+  for i = max 0 (vm.stack_ptr - n) to vm.stack_ptr - 1 do
     res := !res ^ " ; " ^ string_of_value vm.stack.(i)
   done;
   !res

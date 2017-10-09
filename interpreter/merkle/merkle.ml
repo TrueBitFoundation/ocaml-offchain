@@ -36,6 +36,7 @@ type inst =
  | LOAD of loadop
  | STORE of storeop
  | DROP of int
+ | DROP_N
  | DUP of int
  | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
@@ -317,23 +318,20 @@ let init_system mdle inst =
   with Not_found -> []
 
 let generic_stub m inst mname fname =
+  try
   [STUB (mname ^ " . " ^ fname);
    CALL (find_function_index m inst (Utf8.decode "_callArguments"));
-   DUP 1;
-   LABEL (-1);
-   JUMPI (-2);
-   DROP 1;
-   DUP 1;
-   PUSH (I32 (-1l));
-   BIN (I32 I32Op.Sub);
-   LABEL (-2);
-   DROP 1;
+   DROP_N;
+   CALL (find_function_index m inst (Utf8.decode "_callMemory"));
    (* Just handle zero or one return values *)
    CALL (find_function_index m inst (Utf8.decode "_callReturns"));
-   JUMPI (-3);
+   JUMPI (-2);
+   JUMP (-3);
+   LABEL (-2);
    CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
    LABEL (-3);
-   ]
+   RETURN]
+  with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
 let compile_test m func vs init inst =
   trace ("Function types: " ^ string_of_int (List.length m.types));
@@ -378,12 +376,16 @@ let compile_test m func vs init inst =
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
        [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
-(*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1024 * 64 * 8)); RETURN] else *)
-     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then
        try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
        with Not_found -> [EXIT] else
+     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
+     if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
+     if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     generic_stub m inst mname fname
+     (*
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
      if mname = "env" && fname = "_debugRead" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      (* opening file *)
@@ -393,7 +395,7 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "___syscall140" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
      (* writing to file descriptor *)
      if mname = "env" && fname = "___syscall146" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 1); RETURN] else
-     [STUB (mname ^ " . " ^ fname); RETURN]) f_imports in
+     [STUB (mname ^ " . " ^ fname); RETURN] *) ) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
