@@ -1,6 +1,7 @@
 
 open Ast
 open Source
+open Merkle
 
 (* remap function calls *)
 let rec remap_func' map gmap ftmap = function
@@ -50,28 +51,6 @@ let remap_idesc ftmap = function
 let remap_import ftmap x =
   let res = {x with it={x.it with idesc = {x.it.idesc with it=remap_idesc ftmap x.it.idesc.it}}} in
   res
-
-let func_imports m =
-  let rec do_get = function
-   | [] -> []
-   | ({it={idesc={it=FuncImport _;_};_};_} as el)::tl -> el :: do_get tl
-   | _::tl -> do_get tl in
-  do_get m.it.imports
-
-let global_imports m =
-  let rec do_get = function
-   | [] -> []
-   | ({it={idesc={it=GlobalImport _;_};_};_} as el)::tl -> el :: do_get tl
-   | _::tl -> do_get tl in
-  do_get m.it.imports
-
-let other_imports m =
-  let rec do_get = function
-   | [] -> []
-   | {it={idesc={it=FuncImport _;_};_};_}::tl -> do_get tl
-   | {it={idesc={it=GlobalImport _;_};_};_}::tl -> do_get tl
-   | el::tl -> el :: do_get tl in
-  do_get m.it.imports
 
 let do_it f x = {x with it=f x.it}
 

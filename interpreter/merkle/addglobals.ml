@@ -3,6 +3,7 @@
 open Merge
 open Ast
 open Source
+open Merkle
 
 (* remap function calls *)
 let rec remap_func' map gmap gmap2 ftmap = function
@@ -64,8 +65,6 @@ let add_import taken special imports map map2 num imp =
   if Hashtbl.mem special name then begin
     Hashtbl.add map2 (Int32.of_int num) (Hashtbl.find special name)
   end
-
-let elem x = {it=x; at=no_region}
 
 let int_global i = GetGlobal {it=Int32.of_int i; at=no_region}
 

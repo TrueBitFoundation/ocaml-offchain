@@ -271,6 +271,28 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
+let func_imports m =
+  let rec do_get = function
+   | [] -> []
+   | ({it={idesc={it=FuncImport _;_};_};_} as el)::tl -> el :: do_get tl
+   | _::tl -> do_get tl in
+  do_get m.it.imports
+
+let global_imports m =
+  let rec do_get = function
+   | [] -> []
+   | ({it={idesc={it=GlobalImport _;_};_};_} as el)::tl -> el :: do_get tl
+   | _::tl -> do_get tl in
+  do_get m.it.imports
+
+let other_imports m =
+  let rec do_get = function
+   | [] -> []
+   | {it={idesc={it=FuncImport _;_};_};_}::tl -> do_get tl
+   | {it={idesc={it=GlobalImport _;_};_};_}::tl -> do_get tl
+   | el::tl -> el :: do_get tl in
+  do_get m.it.imports
+
 let find_function m func =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
@@ -294,6 +316,16 @@ let find_function_index m inst name =
   ( match Instance.export inst name with
   | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> find_function m func
   | _ -> raise Not_found )
+
+let find_global_index m inst name =
+  let num_imports = 0l (* Int32.of_int (List.length (global_imports m)) *) in
+  let rec get_exports = function
+   | [] -> raise Not_found
+   | {it=im; _} :: tl ->
+     match im.edesc.it with
+     | GlobalExport tvar -> if im.name = name then Int32.add tvar.it num_imports else get_exports tl
+     | _ -> get_exports tl in
+  Int32.to_int (get_exports m.it.exports)
 
 let malloc_string mdle malloc str =
   let open Memory in
@@ -332,6 +364,8 @@ let generic_stub m inst mname fname =
    LABEL (-3);
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
+
+let elem x = {it=x; at=no_region}
 
 let compile_test m func vs init inst =
   trace ("Function types: " ^ string_of_int (List.length m.types));
@@ -380,7 +414,8 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_exit" then
        try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
        with Not_found -> [EXIT] else
-     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
+     if mname = "env" && fname = "getTotalMemory" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "TOTAL_MEMORY")); RETURN] else
+(*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else *)
      if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
