@@ -36,6 +36,7 @@ type inst =
  | LOAD of loadop
  | STORE of storeop
  | DROP of int
+ | DROP_N
  | DUP of int
  | SWAP of int              (* TODO: doesn't really swap, just pushes deep into stack. change the name *)
  | LOADGLOBAL of int
@@ -320,18 +321,13 @@ let generic_stub m inst mname fname =
   try
   [STUB (mname ^ " . " ^ fname);
    CALL (find_function_index m inst (Utf8.decode "_callArguments"));
-   DUP 1;
-   LABEL (-1);
-   JUMPI (-2);
-   DROP 1;
-   DUP 1;
-   PUSH (I32 (-1l));
-   BIN (I32 I32Op.Sub);
-   LABEL (-2);
-   DROP 1;
+   DROP_N;
+   CALL (find_function_index m inst (Utf8.decode "_callMemory"));
    (* Just handle zero or one return values *)
    CALL (find_function_index m inst (Utf8.decode "_callReturns"));
-   JUMPI (-3);
+   JUMPI (-2);
+   JUMP (-3);
+   LABEL (-2);
    CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
    LABEL (-3);
    RETURN]
@@ -385,6 +381,9 @@ let compile_test m func vs init inst =
        try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
        with Not_found -> [EXIT] else
      if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else
+     if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
+     if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
      generic_stub m inst mname fname
      (*
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
