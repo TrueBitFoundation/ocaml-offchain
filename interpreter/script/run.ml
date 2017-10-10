@@ -330,7 +330,8 @@ let setup_vm inst mdle func vs =
       if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
   let init2 = Merkle.init_system mdle inst in
 (*  prerr_endline "Compiling"; *)
-  let code, f_resolve = Merkle.compile_test mdle func vs (init2@init) inst in
+  let cxx_init = Merkle.make_cxx_init mdle inst in
+  let code, f_resolve = Merkle.compile_test mdle func vs (init2@init@cxx_init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_globals vm mdle inst;
@@ -349,7 +350,7 @@ let run_test inst mdle func vs =
   let last_step = ref 0 in
 (*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)
   try begin
-    for i = 0 to 100000000 do
+    for i = 0 to 1000000000 do
       if !Flags.trace_stack then begin
         trace (stack_to_string vm 10);
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
@@ -367,6 +368,7 @@ let run_test inst mdle func vs =
       else Mrun.vm_step vm;
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l) );
       last_step := i;
+      if i mod 10000000 = 0 then prerr_endline ".";
       test_errors vm
     done;
     raise (Failure "takes too long")
@@ -378,6 +380,11 @@ let run_test inst mdle func vs =
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
    | a -> (* Print error result *)
+    prerr_endline (stack_to_string vm 10);
+    prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
+    vm.pc <- vm.pc - 1;
+    prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
+    test_errors vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.u256 0)) (!last_step + 1);
    ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))

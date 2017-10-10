@@ -362,6 +362,16 @@ int env____syscall140(int which, int *varargs) {
   return 0;
 }
 
+unsigned int env__emscripten_memcpy_big(unsigned int dest, unsigned int src, int num) {
+  skipCall();
+  unsigned char *src_ptr = (unsigned char*)src;
+  unsigned char *dst_ptr = (unsigned char*)dest;
+  for (int i = 0; i < num; i++) {
+    dst_ptr[i] = src_ptr[i];
+  }
+  return dest;
+}
+
 // Close
 int env____syscall6(int which, int *varargs) {
   int fd = varargs[0];

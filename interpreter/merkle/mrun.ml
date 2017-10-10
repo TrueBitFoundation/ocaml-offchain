@@ -484,6 +484,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let count = get_memory_int vm (varargs+8) in
    let lst = get_datas vm ptr count in
    let data_str = String.concat "" (List.map string_of_char (List.flatten lst)) in
+   prerr_endline ("Output: " ^ data_str);
    trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
           " ptr " ^ string_of_int ptr ^
           " count " ^ string_of_int count ^ 
@@ -526,6 +527,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
+   (* prerr_endline ("call table from " ^ string_of_int addr ^ " got " ^ string_of_int vm.calltable.(addr)); *)
    vm.pc <- vm.calltable.(addr)
  | CHECKCALLI _ -> inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
@@ -667,7 +669,9 @@ let store_memory_limit addr (op:'a memop) =
   | Some sz -> x - 1 + size_size sz
 
 let test_errors vm = match vm.code.(vm.pc) with
- | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | PUSH _ | DUP _ ->
+   if vm.stack_ptr < 0 then raise (Eval.Exhaustion (Source.no_region, "stack underflow"))
+   else if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
@@ -685,8 +689,10 @@ let test_errors vm = match vm.code.(vm.pc) with
    end else
    if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | LOAD op ->
-    if load_memory_limit vm.stack.(vm.stack_ptr-1) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
-    else if value_to_int vm.stack.(vm.stack_ptr-1) >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    let loc = vm.stack.(vm.stack_ptr-1) in
+(*    let _ = prerr_endline (string_of_value loc) in *)
+    if load_memory_limit loc op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if value_to_int loc >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
     else if Int32.to_int op.offset < 0 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
  | STORE op ->
     if store_memory_limit vm.stack.(vm.stack_ptr-2) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
