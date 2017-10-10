@@ -368,7 +368,7 @@ let run_test inst mdle func vs =
       else Mrun.vm_step vm;
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l) );
       last_step := i;
-      if i mod 10000000 = 0 then prerr_endline ".";
+      (* if i mod 10000000 = 0 then prerr_endline "."; *)
       test_errors vm
     done;
     raise (Failure "takes too long")
