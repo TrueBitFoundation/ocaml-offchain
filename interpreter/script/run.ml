@@ -350,7 +350,8 @@ let run_test inst mdle func vs =
   let last_step = ref 0 in
 (*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)
   try begin
-    for i = 0 to 1000000000 do
+    while true do
+      let i = !last_step in
       if !Flags.trace_stack then begin
         trace (stack_to_string vm 10);
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
@@ -367,7 +368,7 @@ let run_test inst mdle func vs =
       end
       else Mrun.vm_step vm;
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l) );
-      last_step := i;
+      incr last_step;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
       test_errors vm
     done;

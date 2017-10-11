@@ -415,7 +415,7 @@ let compile_test m func vs init inst =
      (* invoke index, a1, a2*)
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
-       [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
+       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then
        try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
@@ -424,6 +424,7 @@ let compile_test m func vs init inst =
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else *)
      if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
      generic_stub m inst mname fname
      (*

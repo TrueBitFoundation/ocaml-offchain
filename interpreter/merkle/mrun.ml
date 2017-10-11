@@ -435,6 +435,14 @@ let get_vm_string vm loc =
   done;
   !res
 
+let get_vm_buffer vm loc len =
+  let res = ref "" in
+(*  let loc = ref (get_memory_int vm loc) in *)
+  for i = 0 to len - 1 do
+    res := !res ^ String.make 1 (get_memory_char vm (loc+i));
+  done;
+  !res
+
 let string_of_char byte = String.make 1 (Char.chr byte)
 
 let get_vm_bytes vm loc len =
@@ -455,41 +463,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
+ | STUB "env . _debugBuffer" ->
+   let ptr = value_to_int (vm.stack.(vm.stack_ptr - 2)) in
+   let len = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   prerr_endline ("DEBUG: " ^ get_vm_buffer vm ptr len);
+   inc_pc vm
  | STUB "env . _debugInt" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ string_of_int ptr);
-   inc_pc vm
-   (*
- | STUB "env . ___syscall5" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   trace ("Opening file " ^ get_vm_string vm (get_memory_int vm varargs) ^
-          " flags " ^ string_of_int (get_memory_int vm (varargs+4)) ^
-          " mode " ^ string_of_int (get_memory_int vm (varargs+8))
-          );
-   inc_pc vm
- | STUB "env . ___syscall146" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = get_memory_int vm (varargs+4) in
-   let count = get_memory_int vm (varargs+8) in
-   let lst = get_datas vm ptr count in
-   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
-          " ptr " ^ string_of_int ptr ^
-          " count " ^ string_of_int count ^ 
-          " data " ^ String.concat "" (List.map string_of_char (List.flatten lst)) );
-   inc_pc vm
-   *)
- | STUB "env . ___syscall146" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = get_memory_int vm (varargs+4) in
-   let count = get_memory_int vm (varargs+8) in
-   let lst = get_datas vm ptr count in
-   let data_str = String.concat "" (List.map string_of_char (List.flatten lst)) in
-   prerr_endline ("Output: " ^ data_str);
-   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
-          " ptr " ^ string_of_int ptr ^
-          " count " ^ string_of_int count ^ 
-          " data " ^ data_str ^
-          " data length " ^ string_of_int (String.length data_str) );
    inc_pc vm
  | STUB "env . _debugRead" ->
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
@@ -503,7 +484,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("seeking at " ^ string_of_int chr);
    inc_pc vm
- | STUB _ ->
+ | STUB str ->
+   prerr_endline ("STUB " ^ str);
    inc_pc vm
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
