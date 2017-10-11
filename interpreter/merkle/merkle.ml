@@ -309,7 +309,7 @@ let find_function m func =
   let num_imports = List.length (get_imports 0 m.imports) in
   let entry = ref (-1) in
   List.iteri (fun i f ->
-    if f = func then ( trace "found invoked function" ; entry := i + num_imports )) m.funcs;
+    if f = func then ( entry := i + num_imports )) m.funcs;
   !entry
 
 let find_function_index m inst name =
@@ -348,6 +348,12 @@ let make_args mdle inst lst =
 let init_system mdle inst =
   try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
   with Not_found -> []
+
+let simple_call mdle inst name =
+  try [CALL (find_function_index mdle inst (Utf8.decode name))]
+  with Not_found -> []
+
+let make_cxx_init mdle inst = simple_call mdle inst "__GLOBAL__I_000101" @ simple_call mdle inst "__GLOBAL__sub_I_iostream_cpp"
 
 let generic_stub m inst mname fname =
   try
@@ -409,7 +415,7 @@ let compile_test m func vs init inst =
      (* invoke index, a1, a2*)
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
-       [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
+       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then
        try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
@@ -418,6 +424,7 @@ let compile_test m func vs init inst =
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else *)
      if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
      generic_stub m inst mname fname
      (*
@@ -439,6 +446,7 @@ let compile_test m func vs init inst =
    | [] -> acc
    | fcode::tl ->
      Hashtbl.add f_resolve n l_acc;
+     trace ("Function " ^ string_of_int n ^ " at " ^ string_of_int l_acc);
      let x = resolve_to l_acc fcode in
      build (n+1) (x::acc) (List.length x + l_acc) tl in
   let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in

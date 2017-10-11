@@ -435,6 +435,14 @@ let get_vm_string vm loc =
   done;
   !res
 
+let get_vm_buffer vm loc len =
+  let res = ref "" in
+(*  let loc = ref (get_memory_int vm loc) in *)
+  for i = 0 to len - 1 do
+    res := !res ^ String.make 1 (get_memory_char vm (loc+i));
+  done;
+  !res
+
 let string_of_char byte = String.make 1 (Char.chr byte)
 
 let get_vm_bytes vm loc len =
@@ -450,45 +458,55 @@ let rec get_datas vm ptr count =
   (get_vm_bytes vm (get_memory_int vm ptr) len) :: get_datas vm (ptr+8) (count-1)
 
 let vm_step vm = match vm.code.(vm.pc) with
+ | BIN op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | CMP op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
+   vm.stack_ptr <- vm.stack_ptr - 1
  | NOP -> inc_pc vm
+ | JUMP x ->
+   vm.pc <- x
+ | JUMPI x ->
+   vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | DROP x ->
+   inc_pc vm;
+   vm.stack_ptr <- vm.stack_ptr - x
+ | DUP x ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
+   vm.stack_ptr <- vm.stack_ptr + 1
+ | SWAP x ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
+ | PUSH lit ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr) <- lit;
+   vm.stack_ptr <- vm.stack_ptr + 1
+ | CONV op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
+ | UNA op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
+ | TEST op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | STUB "env . _debugString" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
+ | STUB "env . _debugBuffer" ->
+   let ptr = value_to_int (vm.stack.(vm.stack_ptr - 2)) in
+   let len = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
+   prerr_endline ("DEBUG: " ^ get_vm_buffer vm ptr len);
+   inc_pc vm
  | STUB "env . _debugInt" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ string_of_int ptr);
-   inc_pc vm
-   (*
- | STUB "env . ___syscall5" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   trace ("Opening file " ^ get_vm_string vm (get_memory_int vm varargs) ^
-          " flags " ^ string_of_int (get_memory_int vm (varargs+4)) ^
-          " mode " ^ string_of_int (get_memory_int vm (varargs+8))
-          );
-   inc_pc vm
- | STUB "env . ___syscall146" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = get_memory_int vm (varargs+4) in
-   let count = get_memory_int vm (varargs+8) in
-   let lst = get_datas vm ptr count in
-   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
-          " ptr " ^ string_of_int ptr ^
-          " count " ^ string_of_int count ^ 
-          " data " ^ String.concat "" (List.map string_of_char (List.flatten lst)) );
-   inc_pc vm
-   *)
- | STUB "env . ___syscall146" ->
-   let varargs = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = get_memory_int vm (varargs+4) in
-   let count = get_memory_int vm (varargs+8) in
-   let lst = get_datas vm ptr count in
-   let data_str = String.concat "" (List.map string_of_char (List.flatten lst)) in
-   trace ("Writing to fd " ^ string_of_int (get_memory_int vm varargs) ^
-          " ptr " ^ string_of_int ptr ^
-          " count " ^ string_of_int count ^ 
-          " data " ^ data_str ^
-          " data length " ^ string_of_int (String.length data_str) );
    inc_pc vm
  | STUB "env . _debugRead" ->
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
@@ -502,15 +520,11 @@ let vm_step vm = match vm.code.(vm.pc) with
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("seeking at " ^ string_of_int chr);
    inc_pc vm
- | STUB _ ->
+ | STUB str ->
+   prerr_endline ("STUB " ^ str);
    inc_pc vm
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
- | JUMP x ->
-   vm.pc <- x
- | JUMPI x ->
-   vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
-   vm.stack_ptr <- vm.stack_ptr - 1
  | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
    let idx = if idx < 0 || idx >= x then x else idx in
@@ -526,6 +540,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
+   (* prerr_endline ("call table from " ^ string_of_int addr ^ " got " ^ string_of_int vm.calltable.(addr)); *)
    vm.pc <- vm.calltable.(addr)
  | CHECKCALLI _ -> inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
@@ -547,20 +562,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    let a, b = Byteutil.Decode.mini_memory mem in
    vm.memory.(loc/8) <- a;
    vm.memory.(loc/8+1) <- b;
-   (* 
-   let open Byteutil in
-   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b))); *)
    vm.stack_ptr <- vm.stack_ptr - 2
- | DROP x ->
-   inc_pc vm;
-   vm.stack_ptr <- vm.stack_ptr - x
  | DROP_N ->
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - value_to_int vm.stack.(vm.stack_ptr-1)
- | DUP x ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
-   vm.stack_ptr <- vm.stack_ptr + 1
  | INPUTSIZE ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- i vm.input.file_size.(value_to_int vm.stack.(vm.stack_ptr-1))
@@ -600,9 +605,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
    Bytes.set vm.input.file_data.(s3) s2 (Char.chr s1)
- | SWAP x ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.globals.(x);
@@ -618,27 +620,6 @@ let vm_step vm = match vm.code.(vm.pc) with
  | GROW ->
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
-   vm.stack_ptr <- vm.stack_ptr - 1
- | PUSH lit ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr) <- lit;
-   vm.stack_ptr <- vm.stack_ptr + 1
- | CONV op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
- | UNA op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
- | TEST op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
- | BIN op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
-   vm.stack_ptr <- vm.stack_ptr - 1
- | CMP op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
    vm.stack_ptr <- vm.stack_ptr - 1
 
 open Types
@@ -667,12 +648,13 @@ let store_memory_limit addr (op:'a memop) =
   | Some sz -> x - 1 + size_size sz
 
 let test_errors vm = match vm.code.(vm.pc) with
- | PUSH _ | DUP _ -> if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
+ | PUSH _ | DUP _ ->
+   if vm.stack_ptr < 0 then raise (Eval.Exhaustion (Source.no_region, "stack underflow"))
+   else if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CALL _ -> if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    let len = Array.length vm.calltable in
-   trace ("Call table length " ^ string_of_int len);
    if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
    if addr < 0 then raise (Eval.Trap (Source.no_region, "undefined element")) else
 (*   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "uninitialized element " ^ string_of_int addr)) else *)
@@ -685,8 +667,10 @@ let test_errors vm = match vm.code.(vm.pc) with
    end else
    if Array.length vm.call_stack <= vm.call_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))
  | LOAD op ->
-    if load_memory_limit vm.stack.(vm.stack_ptr-1) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
-    else if value_to_int vm.stack.(vm.stack_ptr-1) >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    let loc = vm.stack.(vm.stack_ptr-1) in
+(*    let _ = prerr_endline (string_of_value loc) in *)
+    if load_memory_limit loc op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
+    else if value_to_int loc >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
     else if Int32.to_int op.offset < 0 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
  | STORE op ->
     if store_memory_limit vm.stack.(vm.stack_ptr-2) op >= vm.memsize*64*1024 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
@@ -724,6 +708,9 @@ let trace_step vm = match vm.code.(vm.pc) with
    let v = load (I64 a) (I64 b) x.ty x.sz loc in
    "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
+   (* 
+   let open Byteutil in
+   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b))); *)
  | DROP x -> "DROP" ^ string_of_int x
  | DROP_N -> "DROP_N " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)

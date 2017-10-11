@@ -11,6 +11,7 @@ void outputName(int, int, unsigned char);
 void outputData(int, int, unsigned char);
 
 int debugString(char *dta);
+int debugBuffer(char *dta, int len);
 int debugInt(int c);
 int debugSeek(int c);
 void debugRead(int c);
@@ -321,7 +322,6 @@ int env____syscall5(int which, int *varargs) {
   int mode = varargs[2];
   // No empty names allowed
   if (!name || !name[0]) return -1;
-  debugString((char*)name);
   int index = 0;
   if (!sys) return -1;
   while (sys->file_name[index]) {
@@ -362,6 +362,16 @@ int env____syscall140(int which, int *varargs) {
   return 0;
 }
 
+unsigned int env__emscripten_memcpy_big(unsigned int dest, unsigned int src, int num) {
+  // skipCall();
+  unsigned char *src_ptr = (unsigned char*)src;
+  unsigned char *dst_ptr = (unsigned char*)dest;
+  for (int i = 0; i < num; i++) {
+    dst_ptr[i] = src_ptr[i];
+  }
+  return dest;
+}
+
 // Close
 int env____syscall6(int which, int *varargs) {
   int fd = varargs[0];
@@ -397,6 +407,24 @@ int env____syscall195(int which, int *varargs) {
   // Invent some stats
   debugString((char*)path);
   return -1;
+}
+
+// Write
+int env____syscall146(int which, int *varargs) {
+  int fd = varargs[0];
+  unsigned char *buf = (unsigned char*)varargs[1];
+  unsigned int *iov = (unsigned int*)varargs[1];
+  int iovcnt = varargs[2];
+  int ret = 0;
+  for (int i = 0; i < iovcnt; i++) {
+    unsigned char *buf = (unsigned char*)iov[i*2];
+    int len = (int)iov[i*2 + 1];
+    debugBuffer((char*)buf, len);
+    ret += len;
+    if (sys->ptr[fd] < 0) continue;
+    addPiece(sys->ptr[fd], buf, len);
+  }
+  return ret;
 }
 
 // Write
