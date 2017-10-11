@@ -225,6 +225,8 @@ let out_code_byte = function
  | InputNameOut -> 0x0b
  | InputCreateOut -> 0x0c
  | InputDataOut -> 0x0d
+ | CallTableOut -> 0x0e
+ | CallTypeOut -> 0x0f
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00

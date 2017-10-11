@@ -21,6 +21,11 @@ let value_to_int = function
  | I64 i -> Int64.to_int i
  | _ -> 0
 
+let value_to_int64 = function
+ | I32 i -> Int64.of_int32 i
+ | I64 i -> i
+ | _ -> 0L
+
 let i x = I32 (Int32.of_int x)
 
 type inst =
@@ -58,6 +63,8 @@ type inst =
  | OUTPUTSIZE (* this will create the new file? *)
  | OUTPUTNAME
  | OUTPUTDATA
+ | INITCALLTABLE of int
+ | INITCALLTYPE of int
 
 type control = {
   target : int;

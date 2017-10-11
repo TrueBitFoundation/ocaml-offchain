@@ -108,6 +108,8 @@ type out_code =
  | InputNameOut
  | InputCreateOut
  | InputDataOut
+ | CallTableOut
+ | CallTypeOut
 
 type stack_ch =
  | StackRegSub
@@ -192,6 +194,8 @@ let write_register vm regs v = function
  | NoOut -> ()
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
  | CallOut -> vm.call_stack.(vm.call_ptr) <- value_to_int v
+ | CallTableOut -> vm.calltable.(value_to_int regs.ireg) <- value_to_int v
+ | CallTypeOut -> vm.calltable_types.(value_to_int regs.ireg) <- value_to_int64 v
  | MemoryOut1 (_,sz) ->
     let loc = value_to_int regs.reg1+value_to_int regs.ireg in
     let mem = get_memory vm.memory loc in
@@ -283,19 +287,30 @@ let init_memory m instance =
   List.iter init m.data;
   List.rev !res
 
+let init_calltable m instance =
+  let open Ast in
+  let open Source in
+  let init (dta:var list Ast.segment) = List.flatten (List.map (fun _ -> [NOP;NOP;NOP;NOP]) dta.it.init) in
+  List.flatten (List.map init m.elems)
+
+(* cannot compile function before the size of this segment is known *)
 let setup_calltable vm m instance f_resolve =
   let open Ast in
   let open Source in
   let ftab, ttab = make_tables m in
+  let pos = ref 0 in
   let init (dta:var list Ast.segment) =
     let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
-    List.iteri (fun i el ->
+    List.iteri (fun idx el ->
       let f_num = Int32.to_int el.it in
-      vm.calltable.(offset+i) <- Hashtbl.find f_resolve f_num;
+      vm.code.(!pos) <- PUSH (i (Hashtbl.find f_resolve f_num)); incr pos;
+      vm.code.(!pos) <- INITCALLTABLE (offset+idx); incr pos;
       trace ("Table element " ^ Int32.to_string el.it);
       let func = Byteutil.ftype_hash (Hashtbl.find ftab el.it) in
-      trace ("Call table at " ^ string_of_int (offset+i) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
-      vm.calltable_types.(offset+i) <- func) dta.it.init in
+      trace ("Call table at " ^ string_of_int (offset+idx) ^ ": function " ^ string_of_int f_num ^ " type " ^ Int64.to_string func);
+      vm.code.(!pos) <- PUSH (I64 func); incr pos;
+      vm.code.(!pos) <- INITCALLTYPE (offset+idx); incr pos;
+      ()) dta.it.init in
   List.iter init m.elems
 
 let find_global a b t =
@@ -404,6 +419,8 @@ let get_code = function
  | SWAP x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, StackOutReg1)}
  | LOADGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=GlobalIn; write1=(Reg2, StackOut0); stack_ch=StackInc}
  | STOREGLOBAL x -> {noop with immed=i x; read_reg1=Immed; read_reg2=StackIn0; write1=(Reg2, GlobalOut); stack_ch=StackDec}
+ | INITCALLTABLE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTableOut); stack_ch=StackDec}
+ | INITCALLTYPE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTypeOut); stack_ch=StackDec}
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
  | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
  | PUSH lit -> {noop with immed=lit; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
@@ -554,6 +571,14 @@ let vm_step vm = match vm.code.(vm.pc) with
  | STUB str ->
    prerr_endline ("STUB " ^ str);
    inc_pc vm
+ | INITCALLTABLE x ->
+   inc_pc vm;
+   vm.calltable.(x) <- value_to_int vm.stack.(vm.stack_ptr-1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | INITCALLTYPE x ->
+   inc_pc vm;
+   vm.calltable_types.(x) <- value_to_int64 vm.stack.(vm.stack_ptr-1);
+   vm.stack_ptr <- vm.stack_ptr - 1
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMPFORWARD x ->
@@ -748,6 +773,8 @@ let trace_step vm = match vm.code.(vm.pc) with
  | SWAP x -> "SWAP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x -> "LOADGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.globals.(x)
  | STOREGLOBAL x -> "STOREGLOBAL " ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | INITCALLTABLE x -> "INITCALLTABLE " ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | INITCALLTYPE x -> "INITCALLTYPE " ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CURMEM -> "CURMEM"
  | GROW -> "GROW"
  | PUSH lit -> "PUSH " ^ string_of_value lit
