@@ -458,7 +458,43 @@ let rec get_datas vm ptr count =
   (get_vm_bytes vm (get_memory_int vm ptr) len) :: get_datas vm (ptr+8) (count-1)
 
 let vm_step vm = match vm.code.(vm.pc) with
+ | BIN op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | CMP op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
+   vm.stack_ptr <- vm.stack_ptr - 1
  | NOP -> inc_pc vm
+ | JUMP x ->
+   vm.pc <- x
+ | JUMPI x ->
+   vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | DROP x ->
+   inc_pc vm;
+   vm.stack_ptr <- vm.stack_ptr - x
+ | DUP x ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
+   vm.stack_ptr <- vm.stack_ptr + 1
+ | SWAP x ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
+ | PUSH lit ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr) <- lit;
+   vm.stack_ptr <- vm.stack_ptr + 1
+ | CONV op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
+ | UNA op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
+ | TEST op ->
+   inc_pc vm;
+   vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | STUB "env . _debugString" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
@@ -489,11 +525,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm
  | EXIT -> raise VmTrap
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
- | JUMP x ->
-   vm.pc <- x
- | JUMPI x ->
-   vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
-   vm.stack_ptr <- vm.stack_ptr - 1
  | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
    let idx = if idx < 0 || idx >= x then x else idx in
@@ -531,20 +562,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    let a, b = Byteutil.Decode.mini_memory mem in
    vm.memory.(loc/8) <- a;
    vm.memory.(loc/8+1) <- b;
-   (* 
-   let open Byteutil in
-   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b))); *)
    vm.stack_ptr <- vm.stack_ptr - 2
- | DROP x ->
-   inc_pc vm;
-   vm.stack_ptr <- vm.stack_ptr - x
  | DROP_N ->
    inc_pc vm;
    vm.stack_ptr <- vm.stack_ptr - value_to_int vm.stack.(vm.stack_ptr-1)
- | DUP x ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr) <- vm.stack.(vm.stack_ptr-x);
-   vm.stack_ptr <- vm.stack_ptr + 1
  | INPUTSIZE ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- i vm.input.file_size.(value_to_int vm.stack.(vm.stack_ptr-1))
@@ -584,9 +605,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
    Bytes.set vm.input.file_data.(s3) s2 (Char.chr s1)
- | SWAP x ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-x) <- vm.stack.(vm.stack_ptr-1)
  | LOADGLOBAL x ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr) <- vm.globals.(x);
@@ -602,27 +620,6 @@ let vm_step vm = match vm.code.(vm.pc) with
  | GROW ->
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
-   vm.stack_ptr <- vm.stack_ptr - 1
- | PUSH lit ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr) <- lit;
-   vm.stack_ptr <- vm.stack_ptr + 1
- | CONV op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
- | UNA op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
- | TEST op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
- | BIN op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-2) <- Eval_numeric.eval_binop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1);
-   vm.stack_ptr <- vm.stack_ptr - 1
- | CMP op ->
-   inc_pc vm;
-   vm.stack.(vm.stack_ptr-2) <- value_of_bool (Eval_numeric.eval_relop op vm.stack.(vm.stack_ptr-2) vm.stack.(vm.stack_ptr-1));
    vm.stack_ptr <- vm.stack_ptr - 1
 
 open Types
@@ -658,7 +655,6 @@ let test_errors vm = match vm.code.(vm.pc) with
  | CHECKCALLI x ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    let len = Array.length vm.calltable in
-   trace ("Call table length " ^ string_of_int len);
    if addr > len then raise (Eval.Trap (Source.no_region, "undefined element")) else
    if addr < 0 then raise (Eval.Trap (Source.no_region, "undefined element")) else
 (*   if vm.calltable.(addr) = -1 then raise (Eval.Trap (Source.no_region, "uninitialized element " ^ string_of_int addr)) else *)
@@ -712,6 +708,9 @@ let trace_step vm = match vm.code.(vm.pc) with
    let v = load (I64 a) (I64 b) x.ty x.sz loc in
    "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
+   (* 
+   let open Byteutil in
+   trace ("STORING " ^ Byteutil.w256_to_string (get_value (I64 a)) ^ " & " ^ Byteutil.w256_to_string (get_value (I64 b))); *)
  | DROP x -> "DROP" ^ string_of_int x
  | DROP_N -> "DROP_N " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | DUP x -> "DUP" ^ string_of_int x ^ ": " ^ string_of_value vm.stack.(vm.stack_ptr-x)
