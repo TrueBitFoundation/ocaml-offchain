@@ -328,13 +328,15 @@ let setup_vm inst mdle func vs =
     try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
     with Not_found -> 
       if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
+  let table_init = Mrun.init_calltable mdle inst in
   let init2 = Merkle.init_system mdle inst in
 (*  prerr_endline "Compiling"; *)
   let cxx_init = Merkle.make_cxx_init mdle inst in
-  let code, f_resolve = Merkle.compile_test mdle func vs (init2@init@cxx_init) inst in
+  let g_init = Mrun.setup_globals mdle inst in
+  let mem_init = Mrun.init_memory mdle inst in
+  let code, f_resolve = Merkle.compile_test mdle func vs (table_init@mem_init@g_init@init2@init@cxx_init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
-  Mrun.setup_globals vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve;
   List.iteri (add_input vm) !Flags.input_files;
 (*  prerr_endline "Initialized"; *)
@@ -344,8 +346,7 @@ let run_test inst mdle func vs =
   let open Mrun in
   let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
-  if !task_number = !Flags.case && !Flags.init_vm then
-    Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
+  if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   incr task_number;
   let last_step = ref 0 in
 (*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)

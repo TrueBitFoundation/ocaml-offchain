@@ -73,6 +73,8 @@ let write_position vm regs = function
  | StackOut2 -> vm.stack_ptr-2
  | InputSizeOut -> value_to_int regs.reg1
  | InputCreateOut -> value_to_int regs.reg1
+ | CallTableOut -> value_to_int regs.ireg
+ | CallTypeOut -> value_to_int regs.ireg
  | _ -> 0
 
 let loc_proof loc arr = (loc, location_proof arr loc)
@@ -118,6 +120,8 @@ let get_write_location m loc =
  | MemoryOut2 _ -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
  | CallOut -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
  | GlobalOut -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
+ | CallTypeOut -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
+ | CallTableOut -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
  | InputSizeOut -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
  | InputCreateOut -> LocationProof (loc_proof pos (Array.map string_to_root vm.input.file_data))
  | InputNameOut ->
@@ -306,6 +310,8 @@ let write_position_bin vm regs = function
  | StackOut2 -> vm.bin_stack_ptr-2
  | InputSizeOut -> value_to_int regs.reg1
  | InputCreateOut -> value_to_int regs.reg1
+ | CallTableOut -> value_to_int regs.ireg
+ | CallTypeOut -> value_to_int regs.ireg
  | _ -> 0
 
 let read_root_bin vm = function
@@ -333,6 +339,8 @@ let write_root_bin vm = function
  | StackOut2 -> vm.bin_stack
  | InputSizeOut -> vm.bin_input_size
  | InputCreateOut -> vm.bin_input_data
+ | CallTableOut -> vm.bin_calltable
+ | CallTypeOut -> vm.bin_calltable_types
  | _ -> assert false
 
 let check_read_proof regs vm proof = function
@@ -475,6 +483,8 @@ let write_register_bin proof vm regs v = function
  | StackOut1 -> {vm with bin_stack=merkle_change v proof}
  | StackOut2 -> {vm with bin_stack=merkle_change v proof}
  | InputSizeOut -> {vm with bin_input_size=merkle_change v proof}
+ | CallTableOut -> {vm with bin_calltable=merkle_change v proof}
+ | CallTypeOut -> {vm with bin_calltable_types=merkle_change v proof}
  | InputCreateOut -> {vm with bin_input_data=merkle_change (make_root (Int64.to_int (Decode.word v)) (u256 0)) proof}
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
