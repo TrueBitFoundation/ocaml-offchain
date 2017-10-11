@@ -231,6 +231,7 @@ let write_register vm regs v = function
    let s2 = value_to_int regs.reg2 in
    Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
 
+(*
 let setup_memory vm m instance =
   let open Ast in
   let open Types in
@@ -253,6 +254,34 @@ let setup_memory vm m instance =
       set_byte (offset+i) (I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))))
     done in 
   List.iter init m.data
+*)
+
+let setup_memory vm m instance =
+  let open Ast in
+  let open Types in
+  let open Source in
+  List.iter (function MemoryType {min; _} ->
+    trace ("Memory size " ^ Int32.to_string min);
+    vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
+  if !Flags.run_wasm then vm.memsize <- 1000000
+
+let init_memory m instance =
+  let open Ast in
+  let open Types in
+  let open Source in
+  trace ("Segments: " ^ string_of_int (List.length m.data));
+  let res = ref [] in
+  let init (dta:bytes Ast.segment) =
+    let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
+    let sz = Bytes.length dta.it.init in
+    for i = 0 to sz-1 do
+      let v = I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))) in
+      res :=
+        [STORE {ty=I32Type; align=0; offset=0l; sz=Some Memory.Mem8};
+          PUSH v; PUSH (I32 (Int32.of_int (offset+i)))] @ !res
+    done in
+  List.iter init m.data;
+  List.rev !res
 
 let setup_calltable vm m instance f_resolve =
   let open Ast in
@@ -276,25 +305,27 @@ let find_global a b t =
  | "global" -> Global.lookup b (ExternalGlobalType t)
  | _ -> assert false
 
-let setup_globals (vm:vm) (m:Ast.module_') instance =
+let setup_globals (m:Ast.module_') instance =
   trace "Initializing globals";
   let open Source in
   let open Ast in
+  let res = ref [] in
   let rec get_imports i = function
    | [] -> []
    | {it=im; _} :: tl ->
      match im.idesc.it with
      | GlobalImport t ->
        ( match find_global im.module_name im.item_name t with
-       | Instance.ExternalGlobal x -> vm.globals.(i) <- x
+       | Instance.ExternalGlobal x -> res := [STOREGLOBAL i; PUSH x] @ !res
        | _ -> () );
        im :: get_imports (i+1) tl
      | _ -> get_imports i tl in
   let num_imports = List.length (get_imports 0 m.imports) in
   let init i (dta:Ast.global) =
     let v = Eval.eval_const instance dta.it.value in
-    vm.globals.(i+num_imports) <- v in
-  List.iteri init m.globals
+    res := [STOREGLOBAL (i+num_imports); PUSH v] @ !res in
+  List.iteri init m.globals;
+  List.rev !res
 
 let handle_ptr regs ptr = function
  | StackRegSub -> ptr - value_to_int regs.reg1
