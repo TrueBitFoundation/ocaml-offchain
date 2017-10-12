@@ -326,8 +326,7 @@ let setup_vm inst mdle func vs =
   let open Values in
   let init =
     try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
-    with Not_found -> 
-      if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
+    with Not_found -> if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
   let table_init = Mrun.init_calltable mdle inst in
   let init2 = Merkle.init_system mdle inst in
 (*  prerr_endline "Compiling"; *)
@@ -358,7 +357,11 @@ let run_test inst mdle func vs =
         trace (stack_to_string vm 10);
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
       end;
-      if !Flags.trace then trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      (* if i > 560019251 then begin  Flags.trace := true end; *)
+      if !Flags.trace (* || i mod 1000000 = 0 *) then begin
+        (* trace (string_of_int vm.pc ^ ": " ^ trace_step vm); *)
+        Printf.printf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
+      end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
       if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
@@ -419,21 +422,19 @@ let run_action act =
     trace ("Invoking function \"" ^ Ast.string_of_name name ^ "\"...");
     if !Flags.microstep then begin
       let inst = lookup_instance x_opt act.at in
-      (match Instance.export inst name with
+      ( match Instance.export inst name with
       | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
         run_test_micro inst inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
       | Some _ -> Assert.error act.at "export is not a function"
-      | None -> Assert.error act.at "undefined export"
-      )
+      | None -> Assert.error act.at "undefined export" )
     end else
     if !Flags.merkle then begin
       let inst = lookup_instance x_opt act.at in
-      (match Instance.export inst name with
+      ( match Instance.export inst name with
       | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
         run_test inst inst.Instance.module_.it func (List.map (fun v -> v.it) vs)
       | Some _ -> Assert.error act.at "export is not a function"
-      | None -> Assert.error act.at "undefined export"
-      )
+      | None -> Assert.error act.at "undefined export" )
     end else
     begin
       let inst = lookup_instance x_opt act.at in

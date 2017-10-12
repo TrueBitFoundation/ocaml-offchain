@@ -176,8 +176,8 @@ let read_register vm reg = function
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
  | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
  | InputSizeIn -> i vm.input.file_size.(value_to_int reg.reg1)
- | InputNameIn -> i (Char.code vm.input.file_name.(value_to_int reg.reg1).[value_to_int reg.reg2])
- | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg1).[value_to_int reg.reg2])
+ | InputNameIn -> i (Char.code vm.input.file_name.(value_to_int reg.reg2).[value_to_int reg.reg1])
+ | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg2).[value_to_int reg.reg1])
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -403,7 +403,7 @@ let get_code = function
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
  | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
  | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
- | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputSizeIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
+ | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputNameIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | OUTPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; write1 = (Reg2, InputSizeOut); write2 = (Reg2, InputCreateOut); stack_ch=StackDec2}
  | OUTPUTNAME -> {noop with immed=i 2; read_reg1=StackIn2; read_reg2=StackIn1; read_reg3=StackIn0; write1 = (Reg3, InputNameOut); stack_ch=StackDecImmed}
@@ -608,6 +608,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
+   if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
    vm.stack.(vm.stack_ptr-1) <- load (I64 a) (I64 b) x.ty x.sz loc
  | STORE x ->
    inc_pc vm;

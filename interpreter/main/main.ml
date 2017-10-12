@@ -22,6 +22,7 @@ let quote s = "\"" ^ String.escaped s ^ "\""
 
 let merge_mode = ref false
 let globals_file = ref None
+let init_code = ref None
 
 let argspec = Arg.align
 [
@@ -43,6 +44,7 @@ let argspec = Arg.align
   
   "-merge", Arg.Set merge_mode, " merge files";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
+  "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
@@ -92,6 +94,22 @@ let () =
       let m = Addglobals.add_globals m fn in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "globals.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !init_code, !lst with
+    | Some fn, m :: _ ->
+      let open Source in
+      let open Mrun in
+      let inst = Run.lookup_instance None no_region in
+      ( match Instance.export inst (Utf8.decode "_main") with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
+        let vm = Run.setup_vm inst inst.Instance.module_.it func [] in
+        let oc = open_out_bin "decoded.bin" in
+        for i = 0 to Array.length vm.code - 1 do
+          let inst = vm.code.(i) in
+          output_bytes oc (Mbinary.microp_word (get_code inst))
+        done;
+        close_out oc
+      | _ -> () )
     | _ -> () );
     if !args = [] then Flags.interactive := true;
     if !Flags.interactive then begin
