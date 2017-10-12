@@ -608,6 +608,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
+   if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
    vm.stack.(vm.stack_ptr-1) <- load (I64 a) (I64 b) x.ty x.sz loc
  | STORE x ->
    inc_pc vm;
