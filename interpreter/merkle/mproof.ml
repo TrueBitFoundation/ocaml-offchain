@@ -103,9 +103,9 @@ let get_read_location m loc =
  | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
  | InputSizeIn -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
  | InputNameIn ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_name)
  | InputDataIn ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
+   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
 
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
@@ -352,16 +352,16 @@ let check_read_proof regs vm proof = function
  | InputNameIn ->
     ( match proof with
     | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       value_to_int regs.reg1 = loc1 &&
-       value_to_int regs.reg2 = loc2 &&
+       value_to_int regs.reg2 = loc1 &&
+       value_to_int regs.reg1 = loc2 &&
        vm.bin_input_name = get_root loc1 lst1 &&
        get_leaf loc1 lst1 = get_root loc2 lst2
     | _ -> false )
  | InputDataIn ->
     ( match proof with
     | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       value_to_int regs.reg1 = loc1 &&
-       value_to_int regs.reg2 = loc2 &&
+       value_to_int regs.reg2 = loc1 &&
+       value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
        get_leaf loc1 lst1 = get_root loc2 lst2
     | _ -> false )
@@ -491,8 +491,8 @@ let write_register_bin proof vm regs v = function
  | InputNameOut ->
    ( match proof with
    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       assert (value_to_int regs.reg1 = loc1 &&
-               value_to_int regs.reg2 = loc2 &&
+       assert (value_to_int regs.reg2 = loc1 &&
+               value_to_int regs.reg1 = loc2 &&
                vm.bin_input_name = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
        let lst2 = set_leaf loc2 v lst2 in
@@ -502,8 +502,8 @@ let write_register_bin proof vm regs v = function
  | InputDataOut ->
    ( match proof with
    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       assert (value_to_int regs.reg1 = loc1 &&
-               value_to_int regs.reg2 = loc2 &&
+       assert (value_to_int regs.reg2 = loc1 &&
+               value_to_int regs.reg1 = loc2 &&
                vm.bin_input_data = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
        let lst2 = set_leaf loc2 v lst2 in

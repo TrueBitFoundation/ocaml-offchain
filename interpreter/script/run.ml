@@ -357,7 +357,10 @@ let run_test inst mdle func vs =
         trace (stack_to_string vm 10);
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
       end;
-      if !Flags.trace then trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      if !Flags.trace then begin
+        trace (string_of_int vm.pc ^ ": " ^ trace_step vm);
+        Printf.printf "step %d, stack ptr %d\n" i vm.stack_ptr
+      end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
       if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
