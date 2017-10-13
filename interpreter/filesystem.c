@@ -25,17 +25,20 @@ struct piece {
 };
 
 struct system {
-  int next_fd;
-  int ptr[1024]; // Pointers to the data blocks for each fd
-  int pos[1024]; // Location inside the block
-  int closed[1024];
+  int next_fd;      // the file descriptor for the next file
+  int ptr[1024];    /* Pointers to the data blocks for each file descriptor.
+    For example if sys->ptr[fd] == 10, then the file data is at sys->file_data[10]
+  */
+  int pos[1024];    // Location of the file descriptor inside the block
+  int closed[1024]; // Keeps track if the file descriptor has been closed
 
-  struct piece *file_output[1024];
-  unsigned char *file_name[1024];
-  unsigned char *file_data[1024];
-  int file_size[1024];
+  // These include the input block copied into memory
+  struct piece *file_output[1024]; // Linked list of contents of a file, used for output
+  unsigned char *file_name[1024];  // File names
+  unsigned char *file_data[1024];  // File contents
+  int file_size[1024];             // File sizes. Names probably should have some maximum size
   
-  int call_record; // file descriptor for call record
+  int call_record; // File descriptor for call record. Used for generic system calls
 };
 
 // Global variable that will store our system
