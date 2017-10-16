@@ -321,11 +321,16 @@ let add_input vm i fname =
   vm.input.file_data.(i) <- dta;
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
 
+let string_from_bytes bs =
+  let rec aux n = 
+    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
+  aux 0
+
 let output_files vm =
   let open Mrun in
   for i = 0 to Array.length vm.input.file_name - 1 do
     if vm.input.file_size.(i) > 0 then begin
-      let ch = open_out_bin (vm.input.file_name.(i) ^ ".out") in
+      let ch = open_out_bin (string_from_bytes vm.input.file_name.(i) ^ ".out") in
       output ch vm.input.file_data.(i) 0 vm.input.file_size.(i);
       close_out ch
     end
