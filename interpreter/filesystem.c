@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+// just a temp defintion
+#define EINVAL 1
+
 int inputSize(int);
 unsigned char inputName(int, int);
 unsigned char inputData(int, int);
@@ -36,6 +39,11 @@ struct system {
   int file_size[1024];
   
   int call_record; // file descriptor for call record
+};
+
+struct iovec {
+  void* iov_base;
+  int iov_len;
 };
 
 // Global variable that will store our system
@@ -79,6 +87,12 @@ int str_eq(unsigned char *s1, unsigned char *s2) {
      s2++;
    }
    return 0;
+}
+
+void copyChunk(unsigned char* _source, unsigned char* _destination, int size, int offset) {
+  for (int i = 0; i < size; ++i) {
+    _destination[i] = _source[offset + i];
+  }
 }
 
 void addPiece(int idx, unsigned char *bytes, int len) {
@@ -445,3 +459,148 @@ int env____syscall54(int which, int *varargs) {
   return -1;
 }
 */
+
+// dup
+// do we need to check for fd validity?
+int env____syscall41(int which, int* varargs) {
+  int oldfd = varargs[0];
+  if (oldfd > 1023 || oldfd < 0) {
+    return -1;
+  }
+  int i = 0;
+  for (i = 0; i < 1024; ++i) {
+    if (sys->closed[i]) {
+      //copy fd
+      sys->ptr[i] = sys->ptr[oldfd];
+      sys->pos[i] = sys->ptr[oldfd];
+      sys->closed[i] = sys->closed[oldfd];
+      sys->file_size[i] = sys->file_size[oldfd];
+
+      for (int j = 0; j < sys->file_size[oldfd]; ++j) {
+        sys->file_data[i][j] = sys->file_data[oldfd][j];
+        sys->file_name[i][j] = sys->file_name[oldfd][j];
+      }
+    }
+  }
+
+  // this means there were no free file descriptors
+  if (1023 == i) {
+    return -1;
+  }
+  return 0;
+}
+
+// dup2
+// we don't have interrupts so atomicity of dup2 is of no concern
+int env____syscall63(int which, int* varargs) {
+  int oldfd = varargs[0];
+  int newfd = varargs[1];
+  if (oldfd == newfd) {
+    return newfd;
+  }
+  int* varargs_new = &newfd;
+  env____syscall41(which, varargs_new);
+  return 0;
+}
+
+// dup3
+int env____syscall330(int which, int* varargs) {
+  int oldfd = varargs[0];
+  int newfd = varargs[1];
+  int flags = varargs[2];
+  if (oldfd == newfd) return EINVAL;
+  int varargs_new[2];
+  varargs_new[0] = oldfd;
+  varargs_new[1] = newfd;
+  env____syscall63(which, varargs_new);
+  return 0;
+}
+
+// readv
+int env____syscall145(int which, int* varargs) {
+  int fd = varargs[0];
+  struct iovec *iov = (struct iovec*)varargs[1];
+  int iovcnt = (int)varargs[2];
+  int total_length = 0;
+  for (int i = 0; i < iovcnt; ++i) {
+    int len = iov[i].iov_len;
+    total_length += len;
+    if (total_length < sys->file_size[fd]) {
+      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+    } else {
+      len = total_length - sys->file_size[fd];
+      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+      return total_length;
+    }
+  }
+  return total_length;
+}
+
+// preadv
+int env____syscall333(int which, int* varargs) {
+  int fd = varargs[0];
+  struct iovec *iov = (struct iovec*)varargs[1];
+  int iovcnt = varargs[2];
+  int offset = varargs[3];
+  int total_length = offset;
+  for (int i = 0; i < iovcnt; ++i) {
+    int len = iov[i].iov_len;
+    total_length += len;
+    if (total_length + offset < sys->file_size[fd]) {
+      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+    } else {
+      len = total_length - sys->file_size[fd];
+      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+      return total_length;
+    }
+  }
+  return total_length;
+}
+
+// pwritev
+int env____syscall334(int which, int* varargs) {
+  return 0;
+}
+
+// pread64
+int env____syscall180(int which, int* varargs) {
+  int fd = varargs[0];
+  unsigned char* buf = (unsigned char*)varargs[1];
+  int count = varargs[2];
+  int offset = varargs[3];
+
+  int i = 0;
+  if (offset + count > sys->file_size[fd]) count = offset + count - sys->file_size[fd];
+  for (i = 0; i < count; ++i) {
+    buf[i] = sys->file_data[sys->ptr[fd]][offset + i];
+  }
+
+  return i + 1;
+}
+
+// pwirite64
+int env____syscall181(int which, int* varargs) {
+  int fd = varargs[0];
+  unsigned char* buf = (unsigned char*)varargs[1];
+  int count = varargs[2];
+  int offset = varargs[3];
+
+  int i = 0;
+  for (i = 0; i < count; ++i) {
+    sys->file_data[sys->ptr[fd]][offset + i] = buf[i];
+  }
+
+  return i + 1;
+}
+
+// openat
+int env____syscall295(int which, int* varargs) {
+  unsigned char* name = (unsigned char*)varargs[0];
+  int dirfd = varargs[1];
+  const char* pathname = (const char*)varargs[2];
+  int flags = varargs[3];
+  int mode = varargs[4];
+  // No such file
+  return -1;
+}
+
