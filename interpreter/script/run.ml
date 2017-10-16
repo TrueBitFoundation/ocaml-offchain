@@ -392,6 +392,7 @@ let run_test inst mdle func vs =
   end
   with VmTrap -> (* check stack pointer, get values *)
     (* prerr_endline ("Steps: " ^ string_of_int !last_step); *)
+    if !Flags.run_wasm then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
