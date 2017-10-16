@@ -317,8 +317,19 @@ let add_input vm i fname =
   vm.input.file_size.(i) <- sz;
   let dta = Bytes.create sz in
   really_input ch dta 0 sz;
+  close_in ch;
   vm.input.file_data.(i) <- dta;
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+
+let output_files vm =
+  let open Mrun in
+  for i = 0 to Array.length vm.input.file_name - 1 do
+    if vm.input.file_size.(i) > 0 then begin
+      let ch = open_out_bin (vm.input.file_name.(i) ^ ".out") in
+      output ch vm.input.file_data.(i) 0 vm.input.file_size.(i);
+      close_out ch
+    end
+  done
 
 let setup_vm inst mdle func vs =
 (*  prerr_endline "Setting up"; *)
