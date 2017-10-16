@@ -31,11 +31,12 @@ let alu_byte = function
  | Exit -> op 0x06
  | CheckDynamicCall -> op 0x07
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
-    op (0xc0 lor (type_code ty lsl 4) lor size_code sz);
-      | Test (I32 I32Op.Eqz) -> op 0x45
-      | Test (I64 I64Op.Eqz) -> op 0x50
-      | Test (F32 _) -> assert false
-      | Test (F64 _) -> assert false
+    op (0xc0 lor (type_code ty lsl 4) lor size_code sz)
+    
+ | Test (I32 I32Op.Eqz) -> op 0x45
+ | Test (I64 I64Op.Eqz) -> op 0x50
+ | Test (F32 _) -> assert false
+ | Test (F64 _) -> assert false
 
       | Compare (I32 I32Op.Eq) -> op 0x46
       | Compare (I32 I32Op.Ne) -> op 0x47

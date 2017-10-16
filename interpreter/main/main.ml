@@ -23,6 +23,8 @@ let quote s = "\"" ^ String.escaped s ^ "\""
 let merge_mode = ref false
 let globals_file = ref None
 let init_code = ref None
+let print_imports = ref false
+let do_compile = ref false
 
 let argspec = Arg.align
 [
@@ -41,10 +43,12 @@ let argspec = Arg.align
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
   "-v", Arg.Unit banner, " show version";
-  
+
   "-merge", Arg.Set merge_mode, " merge files";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
+  "-imports", Arg.Set print_imports, " print imports from the wasm file";
+  "-compile", Arg.Set do_compile, "Compiles wasm file to C";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
@@ -110,6 +114,25 @@ let () =
         done;
         close_out oc
       | _ -> () )
+    | _ -> () );
+    ( match !do_compile, !lst with
+    | true, m :: _ ->
+      let open Source in
+      let open Mrun in
+      let inst = Run.lookup_instance None no_region in
+      ( match Instance.export inst (Utf8.decode "_main") with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
+        let vm = Run.setup_vm inst inst.Instance.module_.it func [] in
+        print_string (Compiler.compile_all vm.code)
+      | _ -> () )
+    | _ -> () );
+    ( match !print_imports, !lst with
+    | true, m :: _ ->
+      let open Source in
+      let open Ast in
+      let lst = Merkle.func_imports m in
+      let import_name n = "[\"" ^ Utf8.encode n.it.module_name ^ "\",\"" ^ Utf8.encode n.it.item_name ^ "\"]" in
+      Printf.printf "[%s]\n" (String.concat ", " (List.map import_name lst))
     | _ -> () );
     if !args = [] then Flags.interactive := true;
     if !Flags.interactive then begin
