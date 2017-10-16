@@ -409,6 +409,9 @@ let compile_test m func vs init inst =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   (* perhaps could do something with the function type *)
   (* one idea would be to use a debugging message *)
+  let exit_code =
+    try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
+    with Not_found -> [EXIT] in
   let import_codes = List.map (fun im ->
      let mname = Utf8.encode im.module_name in
      let fname = Utf8.encode im.item_name in
@@ -424,9 +427,7 @@ let compile_test m func vs init inst =
        let number = String.sub fname 7 (String.length fname - 7) in
        [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
-     if mname = "env" && fname = "_exit" then
-       try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
-       with Not_found -> [EXIT] else
+     if mname = "env" && fname = "_exit" then exit_code else
      if mname = "env" && fname = "getTotalMemory" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "TOTAL_MEMORY")); RETURN] else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else *)
      if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
@@ -456,7 +457,7 @@ let compile_test m func vs init inst =
      trace ("Function " ^ string_of_int n ^ " at " ^ string_of_int l_acc);
      let x = resolve_to l_acc fcode in
      build (n+1) (x::acc) (List.length x + l_acc) tl in
-  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry; EXIT] in
+  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry] @ exit_code in
   let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
   let flat_code = List.flatten (List.rev codes) in
   List.rev (List.rev_map (resolve_inst2 f_resolve) flat_code), f_resolve
