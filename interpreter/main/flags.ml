@@ -35,3 +35,6 @@ let location = ref (-1)
 let input_files : string list ref = ref []
 let arguments : string list ref = ref []
 
+let input_file_proof : string option ref = ref None
+let output_file_proof : string option ref = ref None
+

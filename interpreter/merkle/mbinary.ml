@@ -428,6 +428,11 @@ let hash_vm_bin vm =
   trace ("hash vm bin " ^ w256_to_string res);
   res
 
+let string_from_bytes bs =
+  let rec aux n = 
+    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
+  aux 0
+
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
   bin_memory = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory);

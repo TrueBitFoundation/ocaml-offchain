@@ -321,16 +321,11 @@ let add_input vm i fname =
   vm.input.file_data.(i) <- dta;
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
 
-let string_from_bytes bs =
-  let rec aux n = 
-    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
-  aux 0
-
 let output_files vm =
   let open Mrun in
   for i = 0 to Array.length vm.input.file_name - 1 do
     if vm.input.file_size.(i) > 0 then begin
-      let ch = open_out_bin (string_from_bytes vm.input.file_name.(i) ^ ".out") in
+      let ch = open_out_bin (Mbinary.string_from_bytes vm.input.file_name.(i) ^ ".out") in
       output ch vm.input.file_data.(i) 0 vm.input.file_size.(i);
       close_out ch
     end
@@ -362,6 +357,11 @@ let run_test inst mdle func vs =
   let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
+  ( if !task_number = !Flags.case then match !Flags.input_file_proof with
+  | Some x ->
+    let loc = Mproof.find_file vm x in
+    Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
+  | None -> () );
   incr task_number;
   let last_step = ref 0 in
 (*  if !Flags.trace then Printf.printf "%s\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)); *)
@@ -397,6 +397,11 @@ let run_test inst mdle func vs =
   end
   with VmTrap -> (* check stack pointer, get values *)
     (* prerr_endline ("Steps: " ^ string_of_int !last_step); *)
+    ( if !task_number - 1 = !Flags.case then match !Flags.output_file_proof with
+    | Some x ->
+       let loc = Mproof.find_file vm x in
+       Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
+    | None -> () );
     if !Flags.run_wasm then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);

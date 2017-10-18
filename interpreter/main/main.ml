@@ -68,9 +68,15 @@ let argspec = Arg.align
   "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
   "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
   "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
-  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); Flags.run_wasm := true; add_arg "(invoke \"_main\")"), " run main function from this file";
+  "-wasm", Arg.String (fun file ->
+    add_arg ("(input " ^ quote file ^ ")");
+    Flags.run_wasm := true;
+    Flags.case := 0;
+    add_arg "(invoke \"_main\")"), " run main function from this file";
   "-file", Arg.String (fun file -> Flags.input_files := file :: !Flags.input_files), " add a file to the VM file system";
   "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
+  "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
+  "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
 ]
 
 let () =
