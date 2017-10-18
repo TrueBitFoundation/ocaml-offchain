@@ -20,6 +20,22 @@ struct linux_dirent {
 #define SYS_STRUCT_ADDITIONS
 #undef SYS_STRUCT_ADDITIONS
 
+void make_dd_dir(struct dir* cwd) {
+}
+
+void init_dir_system(void) {
+  struct dir* dir_head = NULL;
+  struct dir* dir_tail = NULL;
+  dir_head = malloc(sizeof(struct dir));
+  dir_head->dirfd = DEFAULT_DIRFD;
+  dir_head->dir_name = "home";
+  dir_head = NULL;
+  dir_tail = dir_head;
+}
+
+void init_file_system(void) {
+}
+
 // literally copying the old file wouldnt do it.
 // the question is how to do it given our current sys struct?
 // we could add a flag or something plus a pointer of an fd that

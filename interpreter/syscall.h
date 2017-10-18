@@ -38,9 +38,8 @@ struct file {
 extern struct file* file_head;
 extern struct file* file_tail;
 
-// dirfd of the default directory we would be in when we start
-// basically what you would get when you called pwd in an imaginary shell
-#define default_dirfd 10000
+// dirfd of the default directory we would be in when the interpreter starts
+#define DEFAULT_DIRFD 10000
 
 struct dir {
   int dirfd; // directory fd
@@ -61,6 +60,7 @@ extern struct dir* dir_tail;
 struct soft_cache {
   int next_free_fd;
   int next_free_dirfd;
+  struct dir* cwd;
 };
 
 extern struct soft_cache fs_cache; 
