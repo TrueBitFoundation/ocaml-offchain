@@ -23,6 +23,8 @@ let quote s = "\"" ^ String.escaped s ^ "\""
 let merge_mode = ref false
 let globals_file = ref None
 let init_code = ref None
+let print_imports = ref false
+let do_compile = ref false
 
 let argspec = Arg.align
 [
@@ -41,10 +43,12 @@ let argspec = Arg.align
   "-d", Arg.Set Flags.dry, " dry, do not run program";
   "-t", Arg.Set Flags.trace, " trace execution";
   "-v", Arg.Unit banner, " show version";
-  
+
   "-merge", Arg.Set merge_mode, " merge files";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
+  "-imports", Arg.Set print_imports, " print imports from the wasm file";
+  "-compile", Arg.Set do_compile, "Compiles wasm file to C";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
@@ -64,9 +68,15 @@ let argspec = Arg.align
   "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
   "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
   "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
-  "-wasm", Arg.String (fun file -> add_arg ("(input " ^ quote file ^ ")"); Flags.run_wasm := true; add_arg "(invoke \"_main\")"), " run main function from this file";
+  "-wasm", Arg.String (fun file ->
+    add_arg ("(input " ^ quote file ^ ")");
+    Flags.run_wasm := true;
+    Flags.case := 0;
+    add_arg "(invoke \"_main\")"), " run main function from this file";
   "-file", Arg.String (fun file -> Flags.input_files := file :: !Flags.input_files), " add a file to the VM file system";
   "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
+  "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
+  "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
 ]
 
 let () =
@@ -110,6 +120,25 @@ let () =
         done;
         close_out oc
       | _ -> () )
+    | _ -> () );
+    ( match !do_compile, !lst with
+    | true, m :: _ ->
+      let open Source in
+      let open Mrun in
+      let inst = Run.lookup_instance None no_region in
+      ( match Instance.export inst (Utf8.decode "_main") with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) ->
+        let vm = Run.setup_vm inst inst.Instance.module_.it func [] in
+        print_string (Compiler.compile_all vm.code)
+      | _ -> () )
+    | _ -> () );
+    ( match !print_imports, !lst with
+    | true, m :: _ ->
+      let open Source in
+      let open Ast in
+      let lst = Merkle.func_imports m in
+      let import_name n = "[\"" ^ Utf8.encode n.it.module_name ^ "\",\"" ^ Utf8.encode n.it.item_name ^ "\"]" in
+      Printf.printf "[%s]\n" (String.concat ", " (List.map import_name lst))
     | _ -> () );
     if !args = [] then Flags.interactive := true;
     if !Flags.interactive then begin

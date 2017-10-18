@@ -107,6 +107,14 @@ let get_read_location m loc =
  | InputDataIn ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
 
+let find_file vm name =
+  let res = ref SimpleProof in
+  let arr = Array.map string_to_root vm.input.file_data in
+  for i = 0 to Array.length arr - 1 do
+    if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i arr)
+  done;
+  !res
+
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
  let vm = m.m_vm in

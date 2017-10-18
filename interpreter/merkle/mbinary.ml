@@ -31,11 +31,12 @@ let alu_byte = function
  | Exit -> op 0x06
  | CheckDynamicCall -> op 0x07
  | FixMemory (ty, sz) -> (* type, sz, ext : 4 * 3 * 2 = 24 *)
-    op (0xc0 lor (type_code ty lsl 4) lor size_code sz);
-      | Test (I32 I32Op.Eqz) -> op 0x45
-      | Test (I64 I64Op.Eqz) -> op 0x50
-      | Test (F32 _) -> assert false
-      | Test (F64 _) -> assert false
+    op (0xc0 lor (type_code ty lsl 4) lor size_code sz)
+    
+ | Test (I32 I32Op.Eqz) -> op 0x45
+ | Test (I64 I64Op.Eqz) -> op 0x50
+ | Test (F32 _) -> assert false
+ | Test (F64 _) -> assert false
 
       | Compare (I32 I32Op.Eq) -> op 0x46
       | Compare (I32 I32Op.Ne) -> op 0x47
@@ -426,6 +427,11 @@ let hash_vm_bin vm =
   let res = hash#result in
   trace ("hash vm bin " ^ w256_to_string res);
   res
+
+let string_from_bytes bs =
+  let rec aux n = 
+    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
+  aux 0
 
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
