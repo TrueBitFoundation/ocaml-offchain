@@ -317,8 +317,24 @@ let add_input vm i fname =
   vm.input.file_size.(i) <- sz;
   let dta = Bytes.create sz in
   really_input ch dta 0 sz;
+  close_in ch;
   vm.input.file_data.(i) <- dta;
   trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+
+let string_from_bytes bs =
+  let rec aux n = 
+    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
+  aux 0
+
+let output_files vm =
+  let open Mrun in
+  for i = 0 to Array.length vm.input.file_name - 1 do
+    if vm.input.file_size.(i) > 0 then begin
+      let ch = open_out_bin (string_from_bytes vm.input.file_name.(i) ^ ".out") in
+      output ch vm.input.file_data.(i) 0 vm.input.file_size.(i);
+      close_out ch
+    end
+  done
 
 let setup_vm inst mdle func vs =
 (*  prerr_endline "Setting up"; *)
@@ -381,6 +397,7 @@ let run_test inst mdle func vs =
   end
   with VmTrap -> (* check stack pointer, get values *)
     (* prerr_endline ("Steps: " ^ string_of_int !last_step); *)
+    if !Flags.run_wasm then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
