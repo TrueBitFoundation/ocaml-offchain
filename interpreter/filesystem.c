@@ -1,4 +1,5 @@
 
+#include "syscall.h"
 #include <stdlib.h>
 #include <stdint.h>
 
@@ -27,27 +28,10 @@ struct piece {
   struct piece *prev;
 };
 
-struct system {
-  int next_fd;
-  int ptr[1024]; // Pointers to the data blocks for each fd
-  int pos[1024]; // Location inside the block
-  int closed[1024];
-
-  struct piece *file_output[1024];
-  unsigned char *file_name[1024];
-  unsigned char *file_data[1024];
-  int file_size[1024];
-  
-  int call_record; // file descriptor for call record
-};
-
 struct iovec {
   void* iov_base;
   int iov_len;
 };
-
-// Global variable that will store our system
-struct system *sys;
 
 float blaa() {
    return (int)sys + 0.0f;
