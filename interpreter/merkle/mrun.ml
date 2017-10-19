@@ -643,7 +643,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    vm.input.file_size.(s2) <- s1;
-   vm.input.file_data.(s2) <- Bytes.create s1;
+   vm.input.file_data.(s2) <- Bytes.make s1 (Char.chr 0);
    vm.stack_ptr <- vm.stack_ptr - 2
  | OUTPUTNAME ->
    inc_pc vm;
