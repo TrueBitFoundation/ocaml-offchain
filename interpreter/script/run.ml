@@ -355,11 +355,13 @@ let setup_vm inst mdle func vs =
 let run_test inst mdle func vs =
   let open Mrun in
   let vm = setup_vm inst mdle func vs in
-  let vm_bin = Mbinary.vm_to_bin vm in
-  if !task_number = !Flags.case && !Flags.init then Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin));
+  if !task_number = !Flags.case && !Flags.init then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->
+    let vm_bin = Mbinary.vm_to_bin vm in
     let loc = Mproof.find_file vm x in
     Printf.printf "{\"hash\": %s, \"vm\": %s, \"loc\": %s}\n" (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) (Mproof.vm_to_string vm_bin) (Mproof.loc_to_string loc)
   | None -> () );
