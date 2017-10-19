@@ -4,6 +4,17 @@
 #define SYS_CALL_H
 /**************************************************************************************************/
 #define LIMIT_NUM_DIR
+#define PTR_SZ sizeof(void*)
+#define INT_SZ sizeof(int)
+
+typedef int bool;
+#define true 1
+#define false 0
+
+// dirfd of the default directory we would be in when the interpreter starts
+#define DEFAULT_DIRFD 10000
+#define DEFAULT_DIR_FD 1000
+#define DEFAULT_FILE_FD 1000
 /**************************************************************************************************/
 struct system {
   int next_fd;
@@ -18,9 +29,6 @@ struct system {
   
   int call_record; // file descriptor for call record
 };
-
-// Global variable that will store our system
-extern struct system *sys;
 /**************************************************************************************************/
 /*FIXME-use map instead of linked-list*/
 struct file {
@@ -30,31 +38,19 @@ struct file {
   int file_size;
   struct dir* parent_dir;
 
-
   struct file* next;
 };
-
-// file head & tail
-extern struct file* file_head;
-extern struct file* file_tail;
-
-// dirfd of the default directory we would be in when the interpreter starts
-#define DEFAULT_DIRFD 10000
 
 struct dir {
   int dirfd; // directory fd
   char* dir_name; // the directory name
-  int* fds; // the fds under this dir
+  struct file* fds; // the fds under this dir
   int* dir_fds; // the dirfds under this dir
   // in simple terms, this is a pointer to ..
-  struct dir* prev_dirfd; // pointer to the parent dir
+  struct dir* parent_dirfd; // pointer to the parent dir
   // pionter to the next dir struct
   struct dir* next;
 };
-
-// directory head & tail
-extern struct dir* dir_head;
-extern struct dir* dir_tail;
 
 // just a measure to mitigate the fds growing without bounds
 struct soft_cache {
@@ -62,8 +58,21 @@ struct soft_cache {
   int next_free_dirfd;
   struct dir* cwd;
 };
+/**************************************************************************************************/
+// directory head & tail
+extern struct dir* dir_head;
+extern struct dir* dir_tail;
+extern struct soft_cache fs_cache;
 
-extern struct soft_cache fs_cache; 
+// file head & tail
+extern struct file* file_head;
+extern struct file* file_tail;
+
+extern const int sizeof_ptr;
+extern const int sizeof_int;
+
+// Global variable that will store our system
+extern struct system *sys;
 /**************************************************************************************************/
 #endif
 

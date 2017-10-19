@@ -1,12 +1,19 @@
 
+/**************************************************************************************************/
 #ifndef DIRECTORY_C
 #define DIRECTORY_C
+/**************************************************************************************************/
 #include "syscall.h"
 #include <stdlib.h>
 #include <stdint.h>
-
+#include <stdio.h>
+/************************************************************************************************/
 #define mode_t int
-
+#define MAKE_NEW_DIR_NODE(_x1) struct dir* (_x1) = malloc(sizeof(struct dir))
+#define MAKE_NEW_FILE_NODE(_x1) struct file* (_x1) = malloc(sizeof(struct file))
+#define uintptr_t varag_ptr;
+#define IS_RELATIVE(_x1) (('.' == (_x1[0])) ? true : false)
+/**************************************************************************************************/
 struct linux_dirent {
   unsigned long d_ino;
   unsigned long d_off;
@@ -16,24 +23,45 @@ struct linux_dirent {
   char d_type;
 };
 
+struct dir* dir_head = NULL;
+struct dir* dir_tail = NULL;
 
-#define SYS_STRUCT_ADDITIONS
-#undef SYS_STRUCT_ADDITIONS
+const int sizeof_int = INT_SZ;
+const int sizeof_ptr = PTR_SZ;
+
+struct soft_cache fs_cache = {DEFAULT_DIR_FD, DEFAULT_FILE_FD, NULL};
+/**************************************************************************************************/
+bool is_relative(const char* pathname) {
+  if (pathname[0] == '.') return true;
+  else return false;
+}
 
 void make_dd_dir(struct dir* cwd) {
+  MAKE_NEW_DIR_NODE(dd);
 }
 
 void init_dir_system(void) {
-  struct dir* dir_head = NULL;
-  struct dir* dir_tail = NULL;
   dir_head = malloc(sizeof(struct dir));
+  struct dir* dir_tail = NULL;
   dir_head->dirfd = DEFAULT_DIRFD;
-  dir_head->dir_name = "home";
-  dir_head = NULL;
+  // should be mapped to the pwd of the task
+  dir_head->dir_name = "placeholder";
+  dir_head->next = NULL;
   dir_tail = dir_head;
 }
 
 void init_file_system(void) {
+}
+
+void init_system(void) {
+  init_dir_system();
+  init_file_system();
+
+  int sizeof_ptr = PTR_SZ;
+  int sizeof_int = INT_SZ;
+}
+
+void shut_down(void) {
 }
 
 // literally copying the old file wouldnt do it.
@@ -74,6 +102,7 @@ int env____syscall38(int which, int* varargs) {
 int env____syscall39(int which, int* varargs) {
   const char* pathname = (const char*)varargs[0];
   mode_t mode = varargs[1];
+  bool isrelative = IS_RELATIVE(pathname);
   return 0;
 }
 
@@ -152,5 +181,7 @@ int env____syscall304(int which, int* varargs) {
 
   return 0;
 }
+/**************************************************************************************************/
 #endif
+/**************************************************************************************************/
 

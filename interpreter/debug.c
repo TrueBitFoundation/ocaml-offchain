@@ -1,26 +1,23 @@
 
-// test file to check the direcotory and filesystem sys calls
+/**************************************************************************************************/
+#ifndef DEBUG_C
+#define DEBUG_C
 /**************************************************************************************************/
 #include "syscall.h"
 #include "directory.c"
 #include "syscallstubs.c"
-#include "debug.c"
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 /**************************************************************************************************/
-void print_target_info(void) {
-  int ptr_size = PTR_SZ;
-  printf("native pointer size:%d\n", ptr_size);
-  int int_size = INT_SZ;
-  printf("native int size:%d\n", int_size);
+void dump_all_dirs(void) {
+  struct dir* current = dir_head;
+  while(current != NULL) {
+    printf("%d\n", current->dirfd);
+    current = current->next;
+  }
 }
 /**************************************************************************************************/
-int main(int argc, char** argv) {
-  print_target_info();
-  init_system();
-  dump_all_dirs();
-  shut_down();
-  return 123;
-}
+#endif
 /**************************************************************************************************/
 
