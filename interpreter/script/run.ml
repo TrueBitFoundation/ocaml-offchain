@@ -355,12 +355,15 @@ let setup_vm inst mdle func vs =
 let run_test inst mdle func vs =
   let open Mrun in
   let vm = setup_vm inst mdle func vs in
-  if !task_number = !Flags.case && !Flags.init then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+  if !task_number = !Flags.case && !Flags.init then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->
+    let vm_bin = Mbinary.vm_to_bin vm in
     let loc = Mproof.find_file vm x in
-    Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
+    Printf.printf "{\"hash\": %s, \"vm\": %s, \"loc\": %s}\n" (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) (Mproof.vm_to_string vm_bin) (Mproof.loc_to_string loc)
   | None -> () );
   incr task_number;
   let last_step = ref 0 in
@@ -402,7 +405,7 @@ let run_test inst mdle func vs =
        let loc = Mproof.find_file vm x in
        Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
     | None -> () );
-    if !Flags.run_wasm then output_files vm;
+    if  !task_number - 1 = !Flags.case then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)

@@ -433,6 +433,8 @@ let string_from_bytes bs =
     if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
   aux 0
 
+let code_hash arr = get_hash (Array.map (fun v -> microp_word (get_code v)) arr)
+
 let vm_to_bin vm = {
   bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
   bin_memory = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory);
