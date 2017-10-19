@@ -402,7 +402,7 @@ let run_test inst mdle func vs =
        let loc = Mproof.find_file vm x in
        Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
     | None -> () );
-    if !Flags.run_wasm then output_files vm;
+    if  !task_number - 1 = !Flags.case then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
