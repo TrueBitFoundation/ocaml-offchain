@@ -1,8 +1,10 @@
 
-/**************************************************************************************************/
+/***********************************************************************************************/
 #ifndef SYS_CALL_H
 #define SYS_CALL_H
-/**************************************************************************************************/
+/***********************************************************************************************/
+#define LIMIT_DIR_DEPTH 32U
+#define LIMIT_CHAR_NUMBER 100U
 #define LIMIT_NUM_DIR
 #define PTR_SZ sizeof(void*)
 #define INT_SZ sizeof(int)
@@ -15,7 +17,13 @@ typedef int bool;
 #define DEFAULT_DIRFD 10000
 #define DEFAULT_DIR_FD 1000
 #define DEFAULT_FILE_FD 1000
-/**************************************************************************************************/
+
+#define ERR_ABS_PATH "absolute paths are not allowed. you should only use relative paths."
+#define ERR_DBL_PARENTS "file or directory has two parents."
+/***********************************************************************************************/
+// denotes whether we are moving up or down the directory tree
+enum direction_t {up, down, none};
+
 struct system {
   int next_fd;
   int ptr[1024]; // Pointers to the data blocks for each fd
@@ -29,7 +37,7 @@ struct system {
   
   int call_record; // file descriptor for call record
 };
-/**************************************************************************************************/
+/***********************************************************************************************/
 /*FIXME-use map instead of linked-list*/
 struct file {
   int fd;
@@ -46,8 +54,8 @@ struct dir {
   char* dir_name; // the directory name
   struct file* fds; // the fds under this dir
   int* dir_fds; // the dirfds under this dir
-  // in simple terms, this is a pointer to ..
-  struct dir* parent_dirfd; // pointer to the parent dir
+  // in simple terms, this is ..
+  struct dir* parent_dir; // pointer to the parent dir
   // pionter to the next dir struct
   struct dir* next;
 };
@@ -58,7 +66,7 @@ struct soft_cache {
   int next_free_dirfd;
   struct dir* cwd;
 };
-/**************************************************************************************************/
+/***********************************************************************************************/
 // directory head & tail
 extern struct dir* dir_head;
 extern struct dir* dir_tail;
@@ -73,6 +81,6 @@ extern const int sizeof_int;
 
 // Global variable that will store our system
 extern struct system *sys;
-/**************************************************************************************************/
+/***********************************************************************************************/
 #endif
 
