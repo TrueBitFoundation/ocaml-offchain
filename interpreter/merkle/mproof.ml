@@ -482,6 +482,15 @@ let rec make_root v zero =
   if v > 1 then make_root v (keccak zero zero)
   else zero
 
+let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
+
+let loc_to_string = function
+ | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
+ | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+ | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+    "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
+    " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
+
 let write_register_bin proof vm regs v = function
  | NoOut -> vm
  | GlobalOut -> {vm with bin_globals=merkle_change v proof}
@@ -497,10 +506,11 @@ let write_register_bin proof vm regs v = function
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
  | InputNameOut ->
+   prerr_endline (loc_to_string proof);
    ( match proof with
    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       assert (value_to_int regs.reg2 = loc1 &&
-               value_to_int regs.reg1 = loc2 &&
+       assert (value_to_int regs.reg1 = loc1 &&
+               value_to_int regs.reg2 = loc2 &&
                vm.bin_input_name = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
        let lst2 = set_leaf loc2 v lst2 in
@@ -510,8 +520,8 @@ let write_register_bin proof vm regs v = function
  | InputDataOut ->
    ( match proof with
    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-       assert (value_to_int regs.reg2 = loc1 &&
-               value_to_int regs.reg1 = loc2 &&
+       assert (value_to_int regs.reg1 = loc1 &&
+               value_to_int regs.reg2 = loc2 &&
                vm.bin_input_data = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
        let lst2 = set_leaf loc2 v lst2 in
@@ -579,15 +589,6 @@ let vm_to_string vm =
   " \"call_ptr\": " ^ string_of_int vm.bin_call_ptr ^ "," ^
   " \"memsize\": " ^ string_of_int vm.bin_memsize ^ " " ^
   "}"
-
-let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
-
-let loc_to_string = function
- | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
- | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
- | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
-    "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
-    " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
 
 let proof3_to_string (m, vm, loc) =
   "{ \"vm\": " ^ vm_to_string vm ^ ", \"machine\": " ^ machine_to_string m ^ ", \"merkle\": " ^ loc_to_string loc ^ " }"

@@ -224,15 +224,15 @@ let write_register vm regs v = function
    let s1 = value_to_int regs.reg1 in
    vm.input.file_data.(s1) <- Bytes.create (value_to_int v)
  | InputNameOut ->
-   let s1 = value_to_int regs.reg1 in
-   let s2 = value_to_int regs.reg2 in
+   let s2 = value_to_int regs.reg1 in
+   let s1 = value_to_int regs.reg2 in
    let str = vm.input.file_name.(s2) in
    let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
  | InputDataOut ->
-   let s1 = value_to_int regs.reg1 in
-   let s2 = value_to_int regs.reg2 in
+   let s2 = value_to_int regs.reg1 in
+   let s1 = value_to_int regs.reg2 in
    Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
 
 (*
@@ -650,10 +650,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
+   vm.stack_ptr <- vm.stack_ptr - 3;
    let str = vm.input.file_name.(s3) in
    let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
    Bytes.set str s2 (Char.chr s1);
-   vm.stack_ptr <- vm.stack_ptr - 3;
    vm.input.file_name.(s3) <- str
  | OUTPUTDATA ->
    inc_pc vm;
