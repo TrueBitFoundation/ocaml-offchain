@@ -22,7 +22,7 @@ typedef int bool;
 #define ERR_DBL_PARENTS "file or directory has two parents."
 /***********************************************************************************************/
 // denotes whether we are moving up or down the directory tree
-enum direction_t {up, down, none};
+enum direction_t {up = 0, down = 1, none = 2};
 
 struct system {
   int next_fd;

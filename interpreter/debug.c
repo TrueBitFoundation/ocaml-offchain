@@ -14,7 +14,7 @@ void dump_all_dirs(void) {
   struct dir* current = dir_head;
   while(current != NULL) {
     printf("dir : %d : ", current->dirfd);
-    printf("%s\n", current->dir_name);
+    if (current->dir_name) printf("%s\n", current->dir_name);
     current = current->next;
   }
 }

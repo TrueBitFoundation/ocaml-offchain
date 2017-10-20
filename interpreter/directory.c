@@ -107,6 +107,7 @@ const char* getname_fromfd_dir(int fd) {
 struct dir* newdir_fd(int fd) {
   struct dir* dummy = malloc(sizeof(struct dir));
   dummy->dirfd = fd;
+  dummy->next = NULL;
   dir_tail->next = dummy;
   dir_tail = dummy;
   return dummy;
@@ -115,6 +116,7 @@ struct dir* newdir_fd(int fd) {
 struct file* newfile_fd(int fd) {
   struct file* dummy = malloc(sizeof(struct file));
   dummy->fd = fd;
+  dummy->next = NULL;
   file_tail->next = dummy;
   file_tail = dummy;
   return dummy;
@@ -170,10 +172,9 @@ void illuminate_path(struct dir* cwd, const char* dissected_path) {
   struct dir* new;
   if (path[0] == '.') {
     if (path[1] == '.') direction = down;
-    else {
-      direction = up;
-    }
+    else direction = up;
   }
+  printf("direction: %d\n", direction);
   bool match = false;
   for (int i = 1; i < LIMIT_DIR_DEPTH; ++i) {
     path = read_dissected_path(dissected_path, i);
@@ -182,6 +183,7 @@ void illuminate_path(struct dir* cwd, const char* dissected_path) {
         if (walking->parent_dir) {
           walking = walking->parent_dir;
         } else {
+          printf("illuminate making new directory.\n");
           new = newdir_fd(fs_cache.next_free_dirfd);
           walking->parent_dir = new;
           walking = walking->parent_dir;
@@ -189,13 +191,16 @@ void illuminate_path(struct dir* cwd, const char* dissected_path) {
         }
       } else {
         while (current->next != NULL) {
+          printf("stuck\n");
           if (current->dir_name == path && current->parent_dir->dirfd == walking->dirfd) {
               walking = current;
               match = true;
             }
+            printf("%d\n", current->dirfd);
           current = current->next;
         }
         if (!match) {
+          printf("illuminate making new directory.\n");
           new = newdir_fd(fs_cache.next_free_dirfd);
           new->parent_dir = walking;
           walking = new;
@@ -213,7 +218,7 @@ void make_dd_dir(struct dir* cwd) {
 void init_dir_system(void) {
   dir_head = malloc(sizeof(struct dir));
   dir_tail = malloc(sizeof(struct dir));
-  struct dir* dir_tail = NULL;
+  //struct dir* dir_tail = NULL;
   dir_head->dirfd = DEFAULT_DIRFD;
   // should be mapped to the pwd of the task
   dir_head->dir_name = "placeholder";
