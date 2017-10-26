@@ -25,6 +25,7 @@ let globals_file = ref None
 let init_code = ref None
 let print_imports = ref false
 let do_compile = ref false
+let run_inited = ref None
 
 let argspec = Arg.align
 [
@@ -68,6 +69,7 @@ let argspec = Arg.align
   "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
   "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
   "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
+  "-run-inited", Arg.String (fun file -> run_inited := Some file), "run pre-initialized code from a file.";
   "-wasm", Arg.String (fun file ->
     add_arg ("(input " ^ quote file ^ ")");
     Flags.run_wasm := true;
@@ -121,6 +123,14 @@ let () =
         close_out oc
       | _ -> () )
     | _ -> () );
+    ( match !run_inited with
+    | Some file ->
+       let ic = open_in file in
+       let len = in_channel_length ic in
+       let str = really_input_string ic len in
+       (* blah, cannot actually execute it *)
+       ()
+    | None -> () );
     ( match !do_compile, !lst with
     | true, m :: _ ->
       let open Source in

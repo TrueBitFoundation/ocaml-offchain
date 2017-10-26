@@ -95,5 +95,9 @@ let (>>=) f g mem =
 
 end
 
+(* Using the proofs *)
+
+
+(* Analysis: how to make it more realistic *)
 
 
