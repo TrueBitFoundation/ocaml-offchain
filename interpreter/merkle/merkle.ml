@@ -428,7 +428,9 @@ let compile_test m func vs init inst =
        [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then exit_code else
-     if mname = "env" && fname = "getTotalMemory" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "TOTAL_MEMORY")); RETURN] else
+     if mname = "env" && fname = "getTotalMemory" then
+        try [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "TOTAL_MEMORY")); RETURN]
+        with Not_found -> ( prerr_endline "Warning, cannot find global variable TOTAL_MEMORY"; [PUSH (i (1024*1024*1024)); RETURN] ) else
 (*     if mname = "env" && fname = "getTotalMemory" then [PUSH (i (1668509029)); RETURN] else *)
      if mname = "env" && fname = "setTempRet0" then [RETURN] else (* hopefully this is enough *)
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
