@@ -9,3 +9,4 @@ interpreter/merge.wast
 interpreter/globals.*
 solidity/contracts
 solidity/node_modules
+*.cmi
