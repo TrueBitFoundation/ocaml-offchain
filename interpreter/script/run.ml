@@ -344,10 +344,10 @@ let setup_vm inst mdle func vs =
   let cxx_init = Merkle.make_cxx_init mdle inst in
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
-  let code, f_resolve = Merkle.compile_test mdle func vs (table_init@mem_init@g_init@init2@init@cxx_init) inst in
+  let code, f_resolve = Merkle.compile_test mdle func vs (vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve;
+  Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init ()));
   List.iteri (add_input vm) !Flags.input_files;
 (*  prerr_endline "Initialized"; *)
   vm
@@ -358,6 +358,9 @@ let run_test inst mdle func vs =
   if !task_number = !Flags.case && !Flags.init then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
+  if !task_number = !Flags.case && !Flags.input_proof then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) );
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->
@@ -389,9 +392,8 @@ let run_test inst mdle func vs =
            if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
-      end
-      else Mrun.vm_step vm;
-      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then vm.stack.(Array.length vm.stack - 1) <- Values.I32 (-1l) );
+      end else Mrun.vm_step vm;
+      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 0 10 (Values.I32 1l) );
       incr last_step;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
       test_errors vm
@@ -407,6 +409,9 @@ let run_test inst mdle func vs =
     | None -> () );
     if  !task_number - 1 = !Flags.case then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
+    if !task_number = !Flags.case + 1 && !Flags.output_proof then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) !last_step );
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr

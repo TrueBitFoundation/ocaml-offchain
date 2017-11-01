@@ -65,6 +65,11 @@ type inst =
  | OUTPUTDATA
  | INITCALLTABLE of int
  | INITCALLTYPE of int
+ | SETSTACK of int
+ | SETCALLSTACK of int
+ | SETTABLE of int
+ | SETGLOBALS of int
+ | SETMEMORY of int
 
 type control = {
   target : int;
@@ -377,6 +382,13 @@ let generic_stub m inst mname fname =
    LABEL (-3);
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
+
+let vm_init () =
+  [ SETSTACK !Flags.stack_size;
+    SETMEMORY !Flags.memory_size;
+    SETCALLSTACK !Flags.call_size;
+    SETGLOBALS !Flags.globals_size;
+    SETTABLE !Flags.table_size ]
 
 let elem x = {it=x; at=no_region}
 

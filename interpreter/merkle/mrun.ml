@@ -13,13 +13,15 @@ type input = {
 
 type vm = {
   code : inst array;
-  stack : value array;
-  memory : Int64.t array;
   input : input;
-  call_stack : int array;
-  globals : value array;
-  calltable : int array;
-  calltable_types : Int64.t array;
+
+  mutable stack : value array;
+  mutable memory : Int64.t array;
+  mutable call_stack : int array;
+  mutable globals : value array;
+  mutable calltable : int array;
+  mutable calltable_types : Int64.t array;
+
   mutable pc : int;
   mutable stack_ptr : int;
   mutable call_ptr : int;
@@ -50,6 +52,8 @@ let create_vm code = {
   memsize = 0;
   call_ptr = 0;
 }
+
+let rec pow2 n = if n = 0 then 1 else 2 * pow2 (n-1)
 
 (* microcode *)
 
@@ -110,6 +114,12 @@ type out_code =
  | InputDataOut
  | CallTableOut
  | CallTypeOut
+ | SetStack
+ | SetCallStack
+ | SetTable
+ | SetTableTypes
+ | SetMemory
+ | SetGlobals
 
 type stack_ch =
  | StackRegSub
@@ -190,6 +200,13 @@ let memop mem v addr = function
  | None -> Memory.store mem addr 0l v
  | Some sz -> Memory.store_packed sz mem addr 0l v
 
+let set_input_name vm s2 s1 v =
+   let str = vm.input.file_name.(s2) in
+   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   Bytes.set str s1 (Char.chr (value_to_int v));
+   vm.input.file_name.(s2) <- str
+
+
 let write_register vm regs v = function
  | NoOut -> ()
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
@@ -226,39 +243,29 @@ let write_register vm regs v = function
  | InputNameOut ->
    let s2 = value_to_int regs.reg1 in
    let s1 = value_to_int regs.reg2 in
-   let str = vm.input.file_name.(s2) in
-   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
-   Bytes.set str s1 (Char.chr (value_to_int v));
-   vm.input.file_name.(s2) <- str
+   set_input_name vm s2 s1 v
  | InputDataOut ->
    let s2 = value_to_int regs.reg1 in
    let s1 = value_to_int regs.reg2 in
    Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
-
-(*
-let setup_memory vm m instance =
-  let open Ast in
-  let open Types in
-  let open Source in
-  List.iter (function MemoryType {min; _} ->
-    trace ("Memory size " ^ Int32.to_string min);
-    vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
-  if !Flags.run_wasm then vm.memsize <- 1000000;
-  trace ("Segments: " ^ string_of_int (List.length m.data));
-  let set_byte loc v =
-    let mem = get_memory vm.memory loc in
-    memop mem v (Int64.of_int (loc-(loc/8)*8)) (Some Memory.Mem8);
-    let a, b = Byteutil.Decode.mini_memory mem in
-    vm.memory.(loc/8) <- a;
-    vm.memory.(loc/8+1) <- b in
-  let init (dta:bytes Ast.segment) =
-    let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
-    let sz = Bytes.length dta.it.init in
-    for i = 0 to sz-1 do
-      set_byte (offset+i) (I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))))
-    done in 
-  List.iter init m.data
-*)
+ | SetStack ->
+   let sz = pow2 (value_to_int v) in
+   vm.stack <- Array.make sz (i 0)
+ | SetCallStack ->
+   let sz = pow2 (value_to_int v) in
+   vm.call_stack <- Array.make sz 0
+ | SetTable ->
+   let sz = pow2 (value_to_int v) in
+   vm.calltable <- Array.make sz (-1)
+ | SetTableTypes ->
+   let sz = pow2 (value_to_int v) in
+   vm.calltable_types <- Array.make sz 0L
+ | SetMemory ->
+   let sz = pow2 (value_to_int v) in
+   vm.memory <- Array.make sz 0L
+ | SetGlobals ->
+   let sz = pow2 (value_to_int v) in
+   vm.globals <- Array.make sz (i 0)
 
 let setup_memory vm m instance =
   let open Ast in
@@ -294,11 +301,11 @@ let init_calltable m instance =
   List.flatten (List.map init m.elems)
 
 (* cannot compile function before the size of this segment is known *)
-let setup_calltable vm m instance f_resolve =
+let setup_calltable vm m instance f_resolve code_offset =
   let open Ast in
   let open Source in
   let ftab, ttab = make_tables m in
-  let pos = ref 0 in
+  let pos = ref code_offset in
   let init (dta:var list Ast.segment) =
     let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
     List.iteri (fun idx el ->
@@ -429,6 +436,11 @@ let get_code = function
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
  | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Binary op; stack_ch=StackDec}
  | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Compare op; stack_ch=StackDec}
+ | SETSTACK x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetStack)}
+ | SETCALLSTACK x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetCallStack)}
+ | SETGLOBALS x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetGlobals)}
+ | SETMEMORY x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetMemory)}
+ | SETTABLE x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetTableTypes); write2=(Reg1,SetTable)}
 
 let micro_step vm =
   let open Values in
@@ -678,6 +690,27 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
+ | SETSTACK v ->
+   let sz = pow2 v in
+   vm.stack <- Array.make sz (i 0);
+   inc_pc vm
+ | SETCALLSTACK v ->
+   let sz = pow2 v in
+   vm.call_stack <- Array.make sz 0;
+   inc_pc vm
+ | SETTABLE v ->
+   let sz = pow2 v in
+   vm.calltable <- Array.make sz (-1);
+   vm.calltable_types <- Array.make sz 0L;
+   inc_pc vm
+ | SETMEMORY v ->
+   let sz = pow2 v in
+   vm.memory <- Array.make sz 0L;
+   inc_pc vm
+ | SETGLOBALS v ->
+   let sz = pow2 v in
+   vm.globals <- Array.make sz (i 0);
+   inc_pc vm
 
 open Types
 
@@ -786,6 +819,11 @@ let trace_step vm = match vm.code.(vm.pc) with
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALLI -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
+ | SETSTACK v -> "SETSTACK"
+ | SETCALLSTACK v -> "SETCALLSTACK"
+ | SETTABLE v -> "SETTABLE"
+ | SETMEMORY v -> "SETMEMORY"
+ | SETGLOBALS v -> "SETGLOBALS"
 
 let stack_to_string vm n =
   let res = ref "" in

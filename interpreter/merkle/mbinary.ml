@@ -228,6 +228,12 @@ let out_code_byte = function
  | InputDataOut -> 0x0d
  | CallTableOut -> 0x0e
  | CallTypeOut -> 0x0f
+ | SetStack -> 0x10
+ | SetCallStack -> 0x11
+ | SetGlobals -> 0x12
+ | SetTable -> 0x13
+ | SetTableTypes -> 0x14
+ | SetMemory -> 0x15
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00
@@ -426,6 +432,15 @@ let hash_vm_bin vm =
   hash#add_string (u256 vm.bin_memsize);
   let res = hash#result in
   trace ("hash vm bin " ^ w256_to_string res);
+  res
+
+let hash_io_bin vm =
+  let hash = Hash.keccak 256 in
+  hash#add_string vm.bin_input_size;
+  hash#add_string vm.bin_input_name;
+  hash#add_string vm.bin_input_data;
+  let res = hash#result in
+  trace ("hash io bin " ^ w256_to_string res);
   res
 
 let string_from_bytes bs =

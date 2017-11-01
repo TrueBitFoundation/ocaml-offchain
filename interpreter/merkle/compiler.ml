@@ -254,6 +254,7 @@ let compile labels = function
     mkop bin32 bin64 op ^
     "vm.stack[vm.stack_ptr-2] = r3;" ^
     "vm.stack_ptr--;"
+ | _ -> assert false
 
 let compile_with_label labels loc inst =
 (*  ( if inst = NOP || Hashtbl.mem labels loc then "label_" ^ string_of_int loc ^ ": " else "") ^  *)

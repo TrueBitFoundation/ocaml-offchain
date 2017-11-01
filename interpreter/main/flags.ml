@@ -21,11 +21,19 @@ let init = ref false
 let init_vm = ref false
 let result = ref false
 
+(*
 let memory_size = ref 2
 let table_size = ref 64
 let globals_size = ref 64
 let stack_size = ref (16*1024)
 let call_size = ref 1024
+*)
+
+let memory_size = ref 16
+let table_size = ref 8
+let globals_size = ref 8
+let stack_size = ref 14
+let call_size = ref 10
 
 let run_wasm = ref false
 
@@ -37,4 +45,7 @@ let arguments : string list ref = ref []
 
 let input_file_proof : string option ref = ref None
 let output_file_proof : string option ref = ref None
+
+let input_proof = ref false
+let output_proof = ref false
 
