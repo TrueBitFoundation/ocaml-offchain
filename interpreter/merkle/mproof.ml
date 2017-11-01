@@ -35,8 +35,7 @@ type pointer =
 
 let make_fetch_code vm =
   trace ("microp word " ^ to_hex (microp_word (get_code vm.code.(vm.pc))));
-  let code = Array.map (fun v -> microp_word (get_code v)) vm.code in
-  let loc_proof = location_proof code vm.pc in
+  let loc_proof = map_location_proof (fun v -> microp_word (get_code v)) vm.code vm.pc in
   (vm_to_bin vm, get_code vm.code.(vm.pc), loc_proof)
 
 let read_position vm regs = function
@@ -77,7 +76,7 @@ let write_position vm regs = function
  | CallTypeOut -> value_to_int regs.ireg
  | _ -> 0
 
-let loc_proof loc arr = (loc, location_proof arr loc)
+let loc_proof loc f arr = (loc, map_location_proof f arr loc)
 
 let loc_proof2 loc1 loc2 arr = (loc1, loc2, location_proof2 arr loc1 loc2)
 
@@ -90,18 +89,18 @@ let get_read_location m loc =
  | ReadPc -> SimpleProof
  | ReadStackPtr -> SimpleProof
  | MemsizeIn -> SimpleProof
- | GlobalIn -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
- | StackIn0 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackIn1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackIn2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackInReg -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackInReg2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | MemoryIn1 -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
- | MemoryIn2 -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
- | TableIn -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
- | TableTypeIn -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
- | CallIn -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
- | InputSizeIn -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
+ | GlobalIn -> LocationProof (loc_proof pos get_value vm.globals)
+ | StackIn0 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackIn1 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackIn2 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackInReg -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackInReg2 -> LocationProof (loc_proof pos get_value vm.stack)
+ | MemoryIn1 -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
+ | MemoryIn2 -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
+ | TableIn -> LocationProof (loc_proof pos u256 vm.calltable)
+ | TableTypeIn -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types)
+ | CallIn -> LocationProof (loc_proof pos u256 vm.call_stack)
+ | InputSizeIn -> LocationProof (loc_proof pos u256 vm.input.file_size)
  | InputNameIn ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_name)
  | InputDataIn ->
@@ -109,9 +108,8 @@ let get_read_location m loc =
 
 let find_file vm name =
   let res = ref SimpleProof in
-  let arr = Array.map string_to_root vm.input.file_data in
-  for i = 0 to Array.length arr - 1 do
-    if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i arr)
+  for i = 0 to Array.length vm.input.file_data - 1 do
+    if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i string_to_root vm.input.file_data)
   done;
   !res
 
@@ -126,18 +124,18 @@ let get_write_location m loc =
  | SetMemory -> SimpleProof
  | SetTableTypes -> SimpleProof
  | SetGlobals -> SimpleProof
- | StackOutReg1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackOut0 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackOut1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | StackOut2 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
- | MemoryOut1 _ -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
- | MemoryOut2 _ -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.memory))
- | CallOut -> LocationProof (loc_proof pos (Array.map u256 vm.call_stack))
- | GlobalOut -> LocationProof (loc_proof pos (Array.map get_value vm.globals))
- | CallTypeOut -> LocationProof (loc_proof pos (Array.map (fun i -> get_value (I64 i)) vm.calltable_types))
- | CallTableOut -> LocationProof (loc_proof pos (Array.map u256 vm.calltable))
- | InputSizeOut -> LocationProof (loc_proof pos (Array.map u256 vm.input.file_size))
- | InputCreateOut -> LocationProof (loc_proof pos (Array.map string_to_root vm.input.file_data))
+ | StackOutReg1 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackOut0 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackOut1 -> LocationProof (loc_proof pos get_value vm.stack)
+ | StackOut2 -> LocationProof (loc_proof pos get_value vm.stack)
+ | MemoryOut1 _ -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
+ | MemoryOut2 _ -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
+ | CallOut -> LocationProof (loc_proof pos u256 vm.call_stack)
+ | GlobalOut -> LocationProof (loc_proof pos get_value vm.globals)
+ | CallTypeOut -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types)
+ | CallTableOut -> LocationProof (loc_proof pos u256 vm.calltable)
+ | InputSizeOut -> LocationProof (loc_proof pos u256 vm.input.file_size)
+ | InputCreateOut -> LocationProof (loc_proof pos string_to_root vm.input.file_data)
  | InputNameOut ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
  | InputDataOut ->
