@@ -120,6 +120,12 @@ let get_write_location m loc =
  let vm = m.m_vm in
  match loc with
  | NoOut -> SimpleProof
+ | SetStack -> SimpleProof
+ | SetCallStack -> SimpleProof
+ | SetTable -> SimpleProof
+ | SetMemory -> SimpleProof
+ | SetTableTypes -> SimpleProof
+ | SetGlobals -> SimpleProof
  | StackOutReg1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackOut0 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
  | StackOut1 -> LocationProof (loc_proof pos (Array.map get_value vm.stack))
@@ -491,8 +497,21 @@ let loc_to_string = function
     "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
 
+let rec make_zero n =
+  if n = 0 then u256 0 else
+  let z = make_zero (n-1) in
+  keccak z z
+
+let build_root v = make_zero (Int64.to_int (Decode.word v))
+
 let write_register_bin proof vm regs v = function
  | NoOut -> vm
+ | SetStack -> {vm with bin_stack=build_root v}
+ | SetCallStack -> {vm with bin_call_stack=build_root v}
+ | SetTable -> {vm with bin_calltable=build_root v}
+ | SetTableTypes -> {vm with bin_calltable_types=build_root v}
+ | SetMemory -> {vm with bin_memory=build_root v}
+ | SetGlobals -> {vm with bin_globals=build_root v}
  | GlobalOut -> {vm with bin_globals=merkle_change v proof}
  | CallOut -> {vm with bin_call_stack=merkle_change v proof}
  | StackOutReg1 -> {vm with bin_stack=merkle_change v proof}

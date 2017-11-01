@@ -228,6 +228,12 @@ let out_code_byte = function
  | InputDataOut -> 0x0d
  | CallTableOut -> 0x0e
  | CallTypeOut -> 0x0f
+ | SetStack -> 0x10
+ | SetCallStack -> 0x11
+ | SetGlobals -> 0x12
+ | SetTable -> 0x13
+ | SetTableTypes -> 0x14
+ | SetMemory -> 0x15
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00

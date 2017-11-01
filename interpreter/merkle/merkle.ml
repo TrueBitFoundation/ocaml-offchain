@@ -65,6 +65,11 @@ type inst =
  | OUTPUTDATA
  | INITCALLTABLE of int
  | INITCALLTYPE of int
+ | SETSTACK of int
+ | SETCALLSTACK of int
+ | SETTABLE of int
+ | SETGLOBALS of int
+ | SETMEMORY of int
 
 type control = {
   target : int;
