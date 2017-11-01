@@ -190,6 +190,13 @@ let memop mem v addr = function
  | None -> Memory.store mem addr 0l v
  | Some sz -> Memory.store_packed sz mem addr 0l v
 
+let set_input_name vm s2 s1 v =
+   let str = vm.input.file_name.(s2) in
+   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   Bytes.set str s1 (Char.chr (value_to_int v));
+   vm.input.file_name.(s2) <- str
+
+
 let write_register vm regs v = function
  | NoOut -> ()
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
@@ -226,10 +233,7 @@ let write_register vm regs v = function
  | InputNameOut ->
    let s2 = value_to_int regs.reg1 in
    let s1 = value_to_int regs.reg2 in
-   let str = vm.input.file_name.(s2) in
-   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
-   Bytes.set str s1 (Char.chr (value_to_int v));
-   vm.input.file_name.(s2) <- str
+   set_input_name vm s2 s1 v
  | InputDataOut ->
    let s2 = value_to_int regs.reg1 in
    let s1 = value_to_int regs.reg2 in
