@@ -347,7 +347,7 @@ let setup_vm inst mdle func vs =
   let code, f_resolve = Merkle.compile_test mdle func vs (vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve;
+  Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init ()));
   List.iteri (add_input vm) !Flags.input_files;
 (*  prerr_endline "Initialized"; *)
   vm

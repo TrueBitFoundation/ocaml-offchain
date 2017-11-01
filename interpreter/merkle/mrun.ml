@@ -256,7 +256,7 @@ let write_register vm regs v = function
    vm.call_stack <- Array.make sz 0
  | SetTable ->
    let sz = pow2 (value_to_int v) in
-   vm.calltable <- Array.make sz 0
+   vm.calltable <- Array.make sz (-1)
  | SetTableTypes ->
    let sz = pow2 (value_to_int v) in
    vm.calltable_types <- Array.make sz 0L
@@ -301,11 +301,11 @@ let init_calltable m instance =
   List.flatten (List.map init m.elems)
 
 (* cannot compile function before the size of this segment is known *)
-let setup_calltable vm m instance f_resolve =
+let setup_calltable vm m instance f_resolve code_offset =
   let open Ast in
   let open Source in
   let ftab, ttab = make_tables m in
-  let pos = ref 0 in
+  let pos = ref code_offset in
   let init (dta:var list Ast.segment) =
     let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
     List.iteri (fun idx el ->
@@ -700,7 +700,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm
  | SETTABLE v ->
    let sz = pow2 v in
-   vm.calltable <- Array.make sz 0;
+   vm.calltable <- Array.make sz (-1);
    vm.calltable_types <- Array.make sz 0L;
    inc_pc vm
  | SETMEMORY v ->
