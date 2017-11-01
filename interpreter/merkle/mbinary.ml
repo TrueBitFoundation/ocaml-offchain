@@ -436,6 +436,7 @@ let hash_vm_bin vm =
 
 let hash_io_bin vm =
   let hash = Hash.keccak 256 in
+  hash#add_string vm.bin_code;
   hash#add_string vm.bin_input_size;
   hash#add_string vm.bin_input_name;
   hash#add_string vm.bin_input_data;
