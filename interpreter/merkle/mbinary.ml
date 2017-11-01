@@ -332,6 +332,7 @@ let make_levels arr =
 
 exception EmptyArray
 
+(*
 let rec get_levels loc = function
  | [] -> raise EmptyArray
  | [a] -> []
@@ -343,6 +344,7 @@ let location_proof arr loc =
   (* base level *)
   | base :: tl ->
     base.(2*(loc/2)) :: base.(2*(loc/2)+1) :: get_levels (loc/2) tl
+*)
 
 let rec construct_root loc acc = function
  | [] -> acc
@@ -360,7 +362,44 @@ let set_leaf loc v = function
   | a::b::tl -> if loc mod 2 = 0 then v::b::tl else a::v::tl
   | _ -> raise EmptyArray
 
+(*
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
+*)
+
+let rec makeMerkle arr idx level =
+   if level = 0 then ( if idx < Array.length arr then arr.(idx) else zeroword )
+   else keccak (makeMerkle arr idx (level-1)) (makeMerkle arr (idx+pow2 (level-1)) (level-1))
+
+let rec mapMerkle f arr idx level =
+   if level = 0 then ( if idx < Array.length arr then f arr.(idx) else zeroword )
+   else keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1))
+
+let rec depth x = if x = 1 then 0 else 1 + depth (x/2)
+
+let get_hash arr = makeMerkle arr 0 (depth (Array.length arr*2-1))
+
+let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
+
+let rec get_levels loc = function
+ | [] -> raise EmptyArray
+ | [a] -> []
+ | a::tl -> (if loc mod 2 = 0 then a.(loc+1) else a.(loc-1)) :: get_levels (loc/2) tl
+
+let rec get_location_proof arr idx loc level =
+  if level = 1 then [arr.(idx+1); arr.(idx)] else
+  let sz = pow2 (level-1) in
+  if idx + sz > loc then makeMerkle arr (idx+pow2 (level-1)) (level-1) :: get_location_proof arr idx loc (level-1)
+  else makeMerkle arr idx (level-1) :: get_location_proof arr (idx+pow2 (level-1)) loc (level-1)
+
+let rec get_map_location_proof f arr idx loc level =
+  if level = 1 then [f arr.(idx+1); f arr.(idx)] else
+  let sz = pow2 (level-1) in
+  if idx + sz > loc then mapMerkle f arr (idx+pow2 (level-1)) (level-1) :: get_map_location_proof f arr idx loc (level-1)
+  else mapMerkle f arr idx (level-1) :: get_map_location_proof f arr (idx+pow2 (level-1)) loc (level-1)
+
+let map_location_proof f arr loc = List.rev (get_map_location_proof f arr 0 loc (depth (Array.length arr*2-1)))
+
+let location_proof arr loc = List.rev (get_location_proof arr 0 loc (depth (Array.length arr*2-1)))
 
 let u256 i = get_value (I32 (Int32.of_int i))
 
@@ -383,7 +422,7 @@ let string_to_root str = get_hash (string_to_array str)
 (* probably most simple to just generate two proofs *)
 let location_proof2 arr loc1 loc2 =
   (* first make the first level proof *)
-  let proof1 = location_proof (Array.map string_to_root arr) loc1 in
+  let proof1 = map_location_proof string_to_root arr loc1 in
   let proof2 = location_proof (string_to_array arr.(loc1)) loc2 in
   (proof1, proof2)
 
@@ -436,6 +475,7 @@ let hash_vm_bin vm =
 
 let hash_io_bin vm =
   let hash = Hash.keccak 256 in
+  hash#add_string vm.bin_code;
   hash#add_string vm.bin_input_size;
   hash#add_string vm.bin_input_name;
   hash#add_string vm.bin_input_data;
@@ -451,16 +491,16 @@ let string_from_bytes bs =
 let code_hash arr = get_hash (Array.map (fun v -> microp_word (get_code v)) arr)
 
 let vm_to_bin vm = {
-  bin_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code);
-  bin_memory = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory);
-  bin_input_size = get_hash (Array.map u256 vm.input.file_size);
-  bin_input_name = get_hash (Array.map string_to_root vm.input.file_name);
-  bin_input_data = get_hash (Array.map string_to_root vm.input.file_data);
-  bin_stack = get_hash (Array.map (fun v -> get_value v) vm.stack);
-  bin_globals = get_hash (Array.map (fun v -> get_value v) vm.globals);
-  bin_call_stack = get_hash (Array.map (fun v -> u256 v) vm.call_stack);
-  bin_calltable = get_hash (Array.map (fun v -> u256 v) vm.calltable);
-  bin_calltable_types = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types);
+  bin_code = map_hash (fun v -> microp_word (get_code v)) vm.code;
+  bin_memory = map_hash (fun v -> get_value (I64 v)) vm.memory;
+  bin_input_size = map_hash u256 vm.input.file_size;
+  bin_input_name = map_hash string_to_root vm.input.file_name;
+  bin_input_data = map_hash string_to_root vm.input.file_data;
+  bin_stack = map_hash (fun v -> get_value v) vm.stack;
+  bin_globals = map_hash (fun v -> get_value v) vm.globals;
+  bin_call_stack = map_hash (fun v -> u256 v) vm.call_stack;
+  bin_calltable = map_hash (fun v -> u256 v) vm.calltable;
+  bin_calltable_types = map_hash (fun v -> get_value (I64 v)) vm.calltable_types;
   bin_pc = vm.pc;
   bin_stack_ptr = vm.stack_ptr;
   bin_call_ptr = vm.call_ptr;
@@ -468,13 +508,13 @@ let vm_to_bin vm = {
 }
 
 let hash_vm vm =
-  let hash_code = get_hash (Array.map (fun v -> microp_word (get_code v)) vm.code) in
-  let hash_mem = get_hash (Array.map (fun v -> get_value (I64 v)) vm.memory) in
-  let hash_stack = get_hash (Array.map (fun v -> get_value v) vm.stack) in
-  let hash_global = get_hash (Array.map (fun v -> get_value v) vm.globals) in
-  let hash_call = get_hash (Array.map (fun v -> u256 v) vm.call_stack) in
-  let hash_table = get_hash (Array.map (fun v -> u256 v) vm.calltable) in
-  let hash_ttable = get_hash (Array.map (fun v -> get_value (I64 v)) vm.calltable_types) in
+  let hash_code = map_hash (fun v -> microp_word (get_code v)) vm.code in
+  let hash_mem = map_hash (fun v -> get_value (I64 v)) vm.memory in
+  let hash_stack = map_hash get_value vm.stack in
+  let hash_global = map_hash (fun v -> get_value v) vm.globals in
+  let hash_call = map_hash (fun v -> u256 v) vm.call_stack in
+  let hash_table = map_hash (fun v -> u256 v) vm.calltable in
+  let hash_ttable = map_hash (fun v -> get_value (I64 v)) vm.calltable_types in
   let hash = Hash.keccak 256 in
   hash#add_string hash_code;
   hash#add_string hash_mem;
@@ -483,9 +523,9 @@ let hash_vm vm =
   hash#add_string hash_call;
   hash#add_string hash_table;
   hash#add_string hash_ttable;
-  hash#add_string (get_hash (Array.map u256 vm.input.file_size));
-  hash#add_string (get_hash (Array.map string_to_root vm.input.file_name));
-  hash#add_string (get_hash (Array.map string_to_root vm.input.file_data));
+  hash#add_string (map_hash u256 vm.input.file_size);
+  hash#add_string (map_hash string_to_root vm.input.file_name);
+  hash#add_string (map_hash string_to_root vm.input.file_data);
   hash#add_string (u256 vm.pc);
   hash#add_string (u256 vm.stack_ptr);
   hash#add_string (u256 vm.call_ptr);
