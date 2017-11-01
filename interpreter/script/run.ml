@@ -344,7 +344,7 @@ let setup_vm inst mdle func vs =
   let cxx_init = Merkle.make_cxx_init mdle inst in
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
-  let code, f_resolve = Merkle.compile_test mdle func vs (table_init@mem_init@g_init@init2@init@cxx_init) inst in
+  let code, f_resolve = Merkle.compile_test mdle func vs (vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init) inst in
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve;

@@ -383,6 +383,13 @@ let generic_stub m inst mname fname =
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
+let vm_init () =
+  [ SETSTACK !Flags.stack_size;
+    SETMEMORY !Flags.memory_size;
+    SETCALLSTACK !Flags.call_size;
+    SETGLOBALS !Flags.globals_size;
+    SETTABLE !Flags.table_size ]
+
 let elem x = {it=x; at=no_region}
 
 let compile_test m func vs init inst =

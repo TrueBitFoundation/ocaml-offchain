@@ -692,20 +692,25 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr - 1
  | SETSTACK v ->
    let sz = pow2 v in
-   vm.stack <- Array.make sz (i 0)
+   vm.stack <- Array.make sz (i 0);
+   inc_pc vm
  | SETCALLSTACK v ->
    let sz = pow2 v in
-   vm.call_stack <- Array.make sz 0
+   vm.call_stack <- Array.make sz 0;
+   inc_pc vm
  | SETTABLE v ->
    let sz = pow2 v in
    vm.calltable <- Array.make sz 0;
-   vm.calltable_types <- Array.make sz 0L
+   vm.calltable_types <- Array.make sz 0L;
+   inc_pc vm
  | SETMEMORY v ->
    let sz = pow2 v in
-   vm.memory <- Array.make sz 0L
+   vm.memory <- Array.make sz 0L;
+   inc_pc vm
  | SETGLOBALS v ->
    let sz = pow2 v in
-   vm.globals <- Array.make sz (i 0)
+   vm.globals <- Array.make sz (i 0);
+   inc_pc vm
 
 open Types
 
