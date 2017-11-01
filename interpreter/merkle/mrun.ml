@@ -235,31 +235,6 @@ let write_register vm regs v = function
    let s1 = value_to_int regs.reg2 in
    Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
 
-(*
-let setup_memory vm m instance =
-  let open Ast in
-  let open Types in
-  let open Source in
-  List.iter (function MemoryType {min; _} ->
-    trace ("Memory size " ^ Int32.to_string min);
-    vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
-  if !Flags.run_wasm then vm.memsize <- 1000000;
-  trace ("Segments: " ^ string_of_int (List.length m.data));
-  let set_byte loc v =
-    let mem = get_memory vm.memory loc in
-    memop mem v (Int64.of_int (loc-(loc/8)*8)) (Some Memory.Mem8);
-    let a, b = Byteutil.Decode.mini_memory mem in
-    vm.memory.(loc/8) <- a;
-    vm.memory.(loc/8+1) <- b in
-  let init (dta:bytes Ast.segment) =
-    let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
-    let sz = Bytes.length dta.it.init in
-    for i = 0 to sz-1 do
-      set_byte (offset+i) (I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))))
-    done in 
-  List.iter init m.data
-*)
-
 let setup_memory vm m instance =
   let open Ast in
   let open Types in

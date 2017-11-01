@@ -79,6 +79,8 @@ let argspec = Arg.align
   "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
   "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
+  "-input", Arg.Set Flags.input_proof, " output information about input";
+  "-output", Arg.Set Flags.output_proof, " output information about output";
 ]
 
 let () =

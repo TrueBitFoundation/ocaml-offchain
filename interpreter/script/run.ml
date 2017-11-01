@@ -358,6 +358,9 @@ let run_test inst mdle func vs =
   if !task_number = !Flags.case && !Flags.init then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
+  if !task_number = !Flags.case && !Flags.input_proof then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) );
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->
@@ -407,6 +410,9 @@ let run_test inst mdle func vs =
     | None -> () );
     if  !task_number - 1 = !Flags.case then output_files vm;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
+    if !task_number = !Flags.case + 1 && !Flags.output_proof then
+    ( let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) !last_step );
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
