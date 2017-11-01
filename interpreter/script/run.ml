@@ -303,7 +303,7 @@ let values_from_arr arr start len =
 let task_number = ref 0
 
 let terminate str =
-  let res = String.make (String.length str + 1) (Char.chr 0) in
+  let res = String.make 256 (Char.chr 0) in
   for i = 0 to String.length str-1 do
     Bytes.set res i str.[i]
   done;
