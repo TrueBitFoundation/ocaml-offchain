@@ -316,7 +316,7 @@ void callMemory() {
   int mem16_len = read32(fd);
   debugInt(mem16_len);
   for (int i = 0; i < mem16_len; i++) {
-    int addr = read32(fd);
+    int addr = read32(fd)*2;
     int16_t v = read16(fd);
     int16_t *ptr = (int16_t*)addr;
     *ptr = v;
@@ -325,7 +325,7 @@ void callMemory() {
   int mem32_len = read32(fd);
   debugInt(mem32_len);
   for (int i = 0; i < mem32_len; i++) {
-    int addr = read32(fd);
+    int addr = read32(fd)*4;
     int v = read32(fd);
     int *ptr = (int*)addr;
     *ptr = v;
@@ -581,7 +581,7 @@ int env____syscall180(int which, int* varargs) {
   return i + 1;
 }
 
-// pwirite64
+// pwrite64
 int env____syscall181(int which, int* varargs) {
   int fd = varargs[0];
   unsigned char* buf = (unsigned char*)varargs[1];
