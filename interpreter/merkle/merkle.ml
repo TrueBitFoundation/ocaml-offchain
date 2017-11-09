@@ -434,6 +434,21 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_outputName" then [OUTPUTNAME;RETURN] else
      if mname = "env" && fname = "_outputSize" then [OUTPUTSIZE;RETURN] else
      if mname = "env" && fname = "_outputData" then [OUTPUTDATA;RETURN] else
+     if mname = "env" && fname = "_sbrk" then
+       [STUB "sbrk";
+        LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
+        LOAD {ty=I32Type; align=0; offset=0l; sz=None};
+        DUP 1;
+        DUP 3;
+        BIN (I32 I32Op.Add);
+        LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
+        DUP 3;
+        STORE {ty=I32Type; align=0; offset=0l; sz=None};
+        DUP 2;
+        SWAP 4;
+        DROP 3;
+        RETURN]
+       else
      (* invoke index, a1, a2*)
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
