@@ -416,7 +416,8 @@ let run_test inst mdle func vs =
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
    | a -> (* Print error result *)
-    (* prerr_endline (stack_to_string vm 10);
+   (*
+    prerr_endline (stack_to_string vm 10);
     prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
     vm.pc <- vm.pc - 1;
     prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);

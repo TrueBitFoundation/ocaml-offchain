@@ -87,16 +87,32 @@ let generate_data (addr, i) : string segment =
 
 (* need to add a TOTAL_MEMORY global *)
 
+let add_i32_global m name tmem =
+  let open Types in
+  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
+  do_it (fun m -> {m with
+    globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
+
+(*
 let add_total_memory m tmem =
   let open Types in
   let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
   do_it (fun m -> {m with
     globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
     exports=m.exports@[elem {name=Utf8.decode "TOTAL_MEMORY"; edesc=elem (GlobalExport (elem idx))}]}) m
+*)
+
+let has_import m name =
+  List.exists (fun im -> Utf8.encode im.it.item_name = name) m.it.imports
 
 let add_globals m fn =
   let globals, mem, tmem = load_file fn in
-  let m = add_total_memory m tmem in
+  let m = add_i32_global m "TOTAL_MEMORY" tmem in
+  (* Can easily add new globals *)
+  let m = if has_import m "DYNAMICTOP_PTR" then m else
+    try add_i32_global m "DYNAMICTOP_PTR" (List.assoc "DYNAMICTOP_PTR" globals)
+    with Not_found -> m in
   let g_imports = ref [] in
   let gmap1 = Hashtbl.create 10 in
   let gmap2 = Hashtbl.create 10 in
@@ -104,7 +120,6 @@ let add_globals m fn =
   (* remove imports that were defined in the file *)
   let taken_globals = Hashtbl.create 10 in
   let special_globals = Hashtbl.create 10 in
-  
   let reserve_export i (x,y) =
     let name = "_env_" ^ x in
     let inst = Const (elem (Values.I32 (Int32.of_int y))) in
@@ -116,10 +131,10 @@ let add_globals m fn =
   (* add the usual globals to gmap1 *)
 
   let num_ga = List.length (global_imports m) in
-  
+
   let num_g = List.length !g_imports in
   let offset_ga = num_g - num_ga in
-  
+
   List.iteri (fun i _ ->
     Run.trace ("global " ^ string_of_int (i+num_ga) ^ " -> " ^ string_of_int (i + num_ga + offset_ga));
     Hashtbl.add gmap1 (Int32.of_int (i + num_ga)) (Int32.of_int (i + num_ga + offset_ga))) m.it.globals;
