@@ -793,7 +793,6 @@ let trace_step vm = match vm.code.(vm.pc) with
  | RETURN -> "RETURN"
  | LOAD x ->
    let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
-   prerr_endline ("load location " ^ string_of_int loc);
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
    let v = load (I64 a) (I64 b) x.ty x.sz loc in
