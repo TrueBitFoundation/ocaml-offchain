@@ -442,7 +442,7 @@ let compile_test m func vs init inst =
         DUP 3;
         BIN (I32 I32Op.Add);
         LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
-        DUP 3;
+        DUP 2;
         STORE {ty=I32Type; align=0; offset=0l; sz=None};
         DUP 2;
         SWAP 4;
