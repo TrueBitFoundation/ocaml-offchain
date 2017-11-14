@@ -393,7 +393,7 @@ let run_test inst mdle func vs =
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end else Mrun.vm_step vm;
-      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 0 10 (Values.I32 1l) );
+      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 0 10 (Values.I32 1l) ); 
       incr last_step;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
       test_errors vm
