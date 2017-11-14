@@ -27,6 +27,7 @@ let print_imports = ref false
 let do_compile = ref false
 let run_inited : string option ref = ref None
 let underscore_mode = ref false
+let counter_mode = ref false
 
 let argspec = Arg.align
 [
@@ -48,6 +49,7 @@ let argspec = Arg.align
 
   "-merge", Arg.Set merge_mode, " merge files";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
+  "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
@@ -116,6 +118,12 @@ let () =
       let m = Underscore.process m in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "underscore.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !counter_mode, !lst with
+    | true, m :: _ ->
+      let m = Counter.process m in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "counter.wasm" () (fun () -> m)
     | _ -> () );
     ( match !init_code, !lst with
     | Some fn, m :: _ ->
