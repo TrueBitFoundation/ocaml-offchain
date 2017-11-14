@@ -14,6 +14,7 @@ let rec process_inst stepper inst = match inst.it with
  | If (ty, l1, l2) -> [it (If (ty, List.flatten (List.map (process_inst stepper) l1), List.flatten (List.map (process_inst stepper) l2)))]
  | a -> List.map it [a; GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper]
 
+
 let process_function stepper f =
   do_it f (fun f -> {f with body=List.flatten (List.map (process_inst stepper) f.body)})
 
