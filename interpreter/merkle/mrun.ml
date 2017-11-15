@@ -360,7 +360,7 @@ let handle_ptr regs ptr = function
  | StackNop -> ptr
  | StackDecImmed -> ptr - 1 - value_to_int regs.ireg
 
-let load r2 r3 ty sz loc =
+let mem_load r2 r3 ty sz loc =
   let open Byteutil in
   let mem = mini_memory_v r2 r3 in
 (*  trace ("LOADING " ^ w256_to_string (get_value r2) ^ " & " ^ Byteutil.w256_to_string (get_value r3));
@@ -371,7 +371,7 @@ let load r2 r3 ty sz loc =
   | Some (sz, ext) -> Memory.load_packed sz ext mem addr 0l ty )
 
 let handle_alu r1 r2 r3 ireg = function
- | FixMemory (ty, sz) -> load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
+ | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
  | Min ->
    let v = min (value_to_int r1) (value_to_int r2) in
    trace ("min " ^ string_of_int v);
@@ -474,14 +474,14 @@ let micro_step vm =
 let get_memory_int vm loc =
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
-   let res = value_to_int (load (I64 a) (I64 b) Types.I32Type None loc) in
+   let res = value_to_int (mem_load (I64 a) (I64 b) Types.I32Type None loc) in
 (*   trace ("load int " ^ string_of_int res ^ " from " ^ string_of_int loc); *)
    res
 
 let get_memory_char vm loc =
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
-   let res = value_to_int (load (I64 a) (I64 b) Types.I32Type (Some (Memory.Mem8, Memory.ZX)) loc) in
+   let res = value_to_int (mem_load (I64 a) (I64 b) Types.I32Type (Some (Memory.Mem8, Memory.ZX)) loc) in
 (*   trace ("load byte " ^ string_of_int res ^ " from " ^ string_of_int loc); *)
    Char.chr res
 
@@ -618,19 +618,63 @@ let vm_step vm = match vm.code.(vm.pc) with
  | LOAD x ->
    inc_pc vm;
    let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
-   let a = vm.memory.(loc/8) in
-   let b = vm.memory.(loc/8+1) in
-   if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
-   vm.stack.(vm.stack_ptr-1) <- load (I64 a) (I64 b) x.ty x.sz loc
+   ( match x.ty, x.sz with
+   | Types.I32Type, None ->
+     let idx = loc land 0x07 in
+     ( match idx with
+     | 0 -> vm.stack.(vm.stack_ptr-1) <- I32 (Int64.to_int32 vm.memory.(loc lsr 3))
+     | 4 -> vm.stack.(vm.stack_ptr-1) <- I32 (Int64.to_int32 (Int64.shift_right vm.memory.(loc lsr 3) 32))
+     | _ ->
+       let a = vm.memory.(loc/8) in
+       let b = vm.memory.(loc/8+1) in
+       if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
+       vm.stack.(vm.stack_ptr-1) <- mem_load (I64 a) (I64 b) x.ty x.sz loc )
+   | Types.I32Type, Some (Memory.Mem8, Memory.ZX) ->
+     let idx = loc mod 8 in
+     vm.stack.(vm.stack_ptr-1) <- I32 (Int64.to_int32 (Int64.logand (Int64.shift_right vm.memory.(loc/8) (8*idx)) 0xffL))
+   | _ ->
+     let a = vm.memory.(loc/8) in
+     let b = vm.memory.(loc/8+1) in
+     if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
+     vm.stack.(vm.stack_ptr-1) <- mem_load (I64 a) (I64 b) x.ty x.sz loc )
  | STORE x ->
    inc_pc vm;
    let loc = value_to_int vm.stack.(vm.stack_ptr-2) + Int32.to_int x.offset in
-   let mem = get_memory vm.memory loc in
-   let v = vm.stack.(vm.stack_ptr-1) in
-   memop mem v (Int64.of_int (loc-(loc/8)*8)) x.sz;
-   let a, b = Byteutil.Decode.mini_memory mem in
-   vm.memory.(loc/8) <- a;
-   vm.memory.(loc/8+1) <- b;
+   ( match x.ty, x.sz with
+   | Types.I32Type, None ->
+     let idx = loc mod 8 in
+     ( match idx with
+     | 0 ->
+       let oldv = vm.memory.(loc lsr 3) in
+       let v2 = match vm.stack.(vm.stack_ptr-1) with I32 v -> Int64.logand (Int64.of_int32 v) 0xffffffffL | _ -> 0L in
+       vm.memory.(loc lsr 3) <- Int64.logor v2 (Int64.logand oldv 0xffffffff00000000L)
+     | 4 ->
+       let oldv = vm.memory.(loc lsr 3) in
+       let v2 = match vm.stack.(vm.stack_ptr-1) with I32 v -> Int64.shift_left (Int64.of_int32 v) 32 | _ -> 0L in
+       vm.memory.(loc lsr 3) <- Int64.logor v2 (Int64.logand oldv 0xffffffffL)
+(*       
+       let check = Int64.logor v2 (Int64.logand oldv 0xffffffff00000000L) in
+       let mem = get_memory vm.memory loc in
+       let v = vm.stack.(vm.stack_ptr-1) in
+       memop mem v (Int64.of_int (loc-(loc/8)*8)) x.sz;
+       let a, b = Byteutil.Decode.mini_memory mem in
+       if check <> a then Printf.printf "What? got %Lx should be %Lx, value %Lx, old %Lx\n" check a v2 oldv;
+       vm.memory.(loc/8) <- a;
+       vm.memory.(loc/8+1) <- b *)
+     | _ ->
+      let mem = get_memory vm.memory loc in
+      let v = vm.stack.(vm.stack_ptr-1) in
+      memop mem v (Int64.of_int (loc-(loc/8)*8)) x.sz;
+      let a, b = Byteutil.Decode.mini_memory mem in
+      vm.memory.(loc/8) <- a;
+      vm.memory.(loc/8+1) <- b )
+   | _ ->
+      let mem = get_memory vm.memory loc in
+      let v = vm.stack.(vm.stack_ptr-1) in
+      memop mem v (Int64.of_int (loc-(loc/8)*8)) x.sz;
+      let a, b = Byteutil.Decode.mini_memory mem in
+      vm.memory.(loc/8) <- a;
+      vm.memory.(loc/8+1) <- b );
    vm.stack_ptr <- vm.stack_ptr - 2
  | DROP_N ->
    inc_pc vm;
@@ -768,6 +812,29 @@ let test_errors vm = match vm.code.(vm.pc) with
     else if Int32.to_int op.offset < 0 then raise (Eval.Trap (Source.no_region, "out of bounds memory access"))
  | _ -> ()
 
+let pack_label a =
+  let open Memory in
+  match a with
+  | SX -> "S"
+  | ZX -> "U"
+
+let size_label a =
+  let open Memory in
+  match a with
+  | Mem8 -> "8"
+  | Mem16 -> "16"
+  | Mem32 -> "32"
+
+let load_label op =
+  ( match op.ty with
+  | I32Type -> "32"
+  | I64Type -> "64"
+  | F32Type -> "F32"
+  | F64Type -> "F64" ) ^
+  ( match op.sz with
+  | Some (sz, pack) -> "_" ^ pack_label pack ^ size_label sz
+  | None -> "" )
+
 let trace_step vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | STUB str -> "STUB " ^ str
@@ -795,8 +862,8 @@ let trace_step vm = match vm.code.(vm.pc) with
    let loc = value_to_int vm.stack.(vm.stack_ptr-1) + Int32.to_int x.offset in
    let a = vm.memory.(loc/8) in
    let b = vm.memory.(loc/8+1) in
-   let v = load (I64 a) (I64 b) x.ty x.sz loc in
-   "LOAD from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
+   let v = mem_load (I64 a) (I64 b) x.ty x.sz loc in
+   "LOAD" ^ load_label x ^ " from " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " offset " ^ Int32.to_string x.offset ^ " got " ^ string_of_value v
  | STORE x -> "STORE " ^ string_of_value vm.stack.(vm.stack_ptr-1) ^ " to " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " offset " ^ Int32.to_string x.offset
    (* 
    let open Byteutil in
