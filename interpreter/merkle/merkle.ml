@@ -453,6 +453,12 @@ let compile_test m func vs init inst =
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
        [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
+     if mname = "env" && String.length fname > 8 && String.sub fname 0 8 = "_invoke_" then
+       let number = String.sub fname 8 (String.length fname - 8) in
+       try [CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number))); RETURN]
+       with Not_found ->
+         prerr_endline ("Warning: cannot find dynamic call number " ^ number);
+         [RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then exit_code else
      if mname = "env" && fname = "getTotalMemory" then
@@ -465,6 +471,8 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
+     if mname = "env" && fname = "_getSystem" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
+     if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
      generic_stub m inst mname fname
      (*
      if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
