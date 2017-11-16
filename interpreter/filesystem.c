@@ -50,11 +50,10 @@ struct iovec {
 };
 
 // Global variable that will store our system
-struct system *sys;
+struct system *system_ptr;
 
-float blaa() {
-   return (int)sys + 0.0f;
-}
+struct system *getSystem();
+void setSystem(struct system *s);
 
 int getNameLength(int ptr) {
   int res = 0;
@@ -100,10 +99,11 @@ void copyChunk(unsigned char* _source, unsigned char* _destination, int size, in
 
 void addPiece(int idx, unsigned char *bytes, int len) {
   struct piece *p = malloc(sizeof(struct piece));
-  p->prev = sys->file_output[idx];
+  struct system *s = getSystem();
+  p->prev = s->file_output[idx];
   p->data = copyBytes(bytes, len);
   p->size = len;
-  sys->file_output[idx] = p;
+  s->file_output[idx] = p;
 }
 
 int openFile(unsigned char *name) {
@@ -111,14 +111,15 @@ int openFile(unsigned char *name) {
   if (!name || !name[0]) return -1;
   debugString((char*)name);
   int index = 0;
-  if (!sys) return -1;
-  while (sys->file_name[index]) {
-      if (str_eq(sys->file_name[index], name)) {
-              int fd = sys->next_fd;
-              sys->ptr[fd] = index;
-              sys->pos[fd] = 0;
-              sys->closed[fd] = 0;
-              sys->next_fd++;
+  struct system *s = getSystem();
+  if (!s) return -1;
+  while (s->file_name[index]) {
+      if (str_eq(s->file_name[index], name)) {
+              int fd = s->next_fd;
+              s->ptr[fd] = index;
+              s->pos[fd] = 0;
+              s->closed[fd] = 0;
+              s->next_fd++;
               debugInt(fd);
               return fd;
       }
@@ -148,7 +149,8 @@ void initSystem() {
      nextLength = getNameLength(index);
   }
   s->file_name[index] = 0;
-  sys = s;
+  setSystem(s);
+  // sys = s;
   unsigned char name[12];
   name[0] = 'r';
   name[1] = 'e';
@@ -161,14 +163,15 @@ void initSystem() {
   name[8] = 'i';
   name[9] = 'n';
   name[10] = 0;
-  sys->call_record = openFile(name);
+  s->call_record = openFile(name);
 }
 
 void finalizeSystem() {
-  int index = 0;  
-  while (sys->file_name[index]) {
+  struct system *s = getSystem();
+  int index = 0;
+  while (s->file_name[index]) {
     // output name
-    unsigned char *name = sys->file_name[index];
+    unsigned char *name = s->file_name[index];
     debugString((char*)name);
     int i = 0;
     while (*name) {
@@ -177,9 +180,9 @@ void finalizeSystem() {
       i++;
     }
     // If there is no output, then output the linear block in case it was changed
-    if (!sys->file_output[index]) {
-      outputSize(index, sys->file_size[index]);
-      unsigned char *data = sys->file_data[index];
+    if (!s->file_output[index]) {
+      outputSize(index, s->file_size[index]);
+      unsigned char *data = s->file_data[index];
       int i = 0;
       while (*data) {
         outputData(index, i, *data);
@@ -190,13 +193,13 @@ void finalizeSystem() {
     else {
        // Calculate size
        int sz = 0;
-       struct piece *p = sys->file_output[index];
+       struct piece *p = s->file_output[index];
        while (p->prev) {
          sz += p->size;
          p = p->prev;
        }
        outputSize(index, sz);
-       p = sys->file_output[index];
+       p = s->file_output[index];
        while (p->prev) {
          sz -= p->size;
          for (int i = 0; i < p->size; i++) {
@@ -211,9 +214,10 @@ void finalizeSystem() {
 
 // read one byte
 int read8(int fd) {
-  int idx = sys->ptr[fd];
-  int res = sys->file_data[idx][sys->pos[fd]];
-  sys->pos[fd]++;
+  struct system *s = getSystem();
+  int idx = s->ptr[fd];
+  int res = s->file_data[idx][s->pos[fd]];
+  s->pos[fd]++;
 /*  debugString((char*)sys->file_name[idx]);
   debugInt(sys->pos[fd]); */
   return res;
@@ -243,7 +247,8 @@ uint32_t read64(int fd) {
 
 // Ignore the call
 void skipCall() {
-  int fd = sys->call_record;
+  struct system *s = getSystem();
+  int fd = s->call_record;
   if (fd < 0) return;
   // read args
   int arg_len = read16(fd);
@@ -274,7 +279,8 @@ void skipCall() {
 
 // Actual handling of calls: first have to drop from stack, so return the number of args
 int callArguments() {
-  int fd = sys->call_record;
+  struct system *s = getSystem();
+  int fd = s->call_record;
   if (fd < 0) return 0;
   // read args
   int arg_len = read16(fd);
@@ -284,7 +290,8 @@ int callArguments() {
 }
 
 int callReturns() {
-  int fd = sys->call_record;
+  struct system *s = getSystem();
+  int fd = s->call_record;
   if (fd < 0) return 0;
   // read rets
   int rets = read16(fd);
@@ -294,14 +301,16 @@ int callReturns() {
 
 // uint64_t getReturn() {
 uint32_t getReturn() {
-  int fd = sys->call_record;
+  struct system *s = getSystem();
+  int fd = s->call_record;
   uint32_t x = read64(fd);
   debugInt(x);
   return x;
 }
 
 void callMemory() {
-  int fd = sys->call_record;
+  struct system *s = getSystem();
+  int fd = s->call_record;
   if (fd < 0) return;
   // read memory 8
   int mem8_len = read32(fd);
@@ -334,20 +343,21 @@ void callMemory() {
 
 // Open file
 int env____syscall5(int which, int *varargs) {
+  struct system *s = getSystem();
   unsigned char *name = (unsigned char*)varargs[0];
   int flags = varargs[1];
   int mode = varargs[2];
   // No empty names allowed
   if (!name || !name[0]) return -1;
   int index = 0;
-  if (!sys) return -1;
-  while (sys->file_name[index]) {
-      if (str_eq(sys->file_name[index], name)) {
-              int fd = sys->next_fd;
-              sys->ptr[fd] = index;
-              sys->pos[fd] = 0;
-              sys->closed[fd] = 0;
-              sys->next_fd++;
+  if (!s) return -1;
+  while (s->file_name[index]) {
+      if (str_eq(s->file_name[index], name)) {
+              int fd = s->next_fd;
+              s->ptr[fd] = index;
+              s->pos[fd] = 0;
+              s->closed[fd] = 0;
+              s->next_fd++;
               return fd;
       }
       index++;
@@ -358,6 +368,7 @@ int env____syscall5(int which, int *varargs) {
 
 // Seeking
 int env____syscall140(int which, int *varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   int offset_high = varargs[1];
   int offset_low = varargs[2];
@@ -365,17 +376,17 @@ int env____syscall140(int which, int *varargs) {
   int whence = varargs[4];
   // llseek(stream, offset_low, whence)
   if (whence == 1) {
-    sys->pos[fd] += offset_low;
+    s->pos[fd] += offset_low;
   }
   // Maybe this is seeking from end?
   else if (whence == 2) {
-    int sz = sys->file_size[sys->ptr[fd]];
-    sys->pos[fd] = sz + offset_low;
+    int sz = s->file_size[s->ptr[fd]];
+    s->pos[fd] = sz + offset_low;
     debugSeek(offset_low);
   }
   else return -1;
-  *result = sys->pos[fd];
-  if (sys->pos[fd] < 0) return -1;
+  *result = s->pos[fd];
+  if (s->pos[fd] < 0) return -1;
   return 0;
 }
 
@@ -391,26 +402,28 @@ unsigned int env__emscripten_memcpy_big(unsigned int dest, unsigned int src, int
 
 // Close
 int env____syscall6(int which, int *varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
-  sys->closed[fd] = 1;
+  s->closed[fd] = 1;
   return 0;
 }
 
 // Read
 int env____syscall3(int which, int *varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
   debugReadCount(count);
   // read
-  int index = sys->ptr[fd];
-  int pos = sys->pos[fd];
+  int index = s->ptr[fd];
+  int pos = s->pos[fd];
   int i;
-  for (i = 0; i < count && i+pos < sys->file_size[index]; i++) {
-    buf[i] = sys->file_data[index][pos+i];
+  for (i = 0; i < count && i+pos < s->file_size[index]; i++) {
+    buf[i] = s->file_data[index][pos+i];
     debugRead(buf[i]);
   }
-  sys->pos[fd] += i;
+  s->pos[fd] += i;
   return i;
 }
 
@@ -428,6 +441,7 @@ int env____syscall195(int which, int *varargs) {
 
 // Write
 int env____syscall146(int which, int *varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   unsigned char *buf = (unsigned char*)varargs[1];
   unsigned int *iov = (unsigned int*)varargs[1];
@@ -438,20 +452,21 @@ int env____syscall146(int which, int *varargs) {
     int len = (int)iov[i*2 + 1];
     debugBuffer((char*)buf, len);
     ret += len;
-    if (sys->ptr[fd] < 0) continue;
-    addPiece(sys->ptr[fd], buf, len);
+    if (s->ptr[fd] < 0) continue;
+    addPiece(s->ptr[fd], buf, len);
   }
   return ret;
 }
 
 // Write
 int env____syscall4(int which, int *varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
   debugString((char*)buf);
-  if (sys->ptr[fd] < 0) return count;
-  addPiece(sys->ptr[fd], buf, count);
+  if (s->ptr[fd] < 0) return count;
+  addPiece(s->ptr[fd], buf, count);
   return count;
 }
 
@@ -466,22 +481,23 @@ int env____syscall54(int which, int *varargs) {
 // dup
 // do we need to check for fd validity?
 int env____syscall41(int which, int* varargs) {
+  struct system *s = getSystem();
   int oldfd = varargs[0];
   if (oldfd > 1023 || oldfd < 0) {
     return -1;
   }
   int i = 0;
   for (i = 0; i < 1024; ++i) {
-    if (sys->closed[i]) {
+    if (s->closed[i]) {
       //copy fd
-      sys->ptr[i] = sys->ptr[oldfd];
-      sys->pos[i] = sys->ptr[oldfd];
-      sys->closed[i] = sys->closed[oldfd];
-      sys->file_size[i] = sys->file_size[oldfd];
+      s->ptr[i] = s->ptr[oldfd];
+      s->pos[i] = s->ptr[oldfd];
+      s->closed[i] = s->closed[oldfd];
+      s->file_size[i] = s->file_size[oldfd];
 
-      for (int j = 0; j < sys->file_size[oldfd]; ++j) {
-        sys->file_data[i][j] = sys->file_data[oldfd][j];
-        sys->file_name[i][j] = sys->file_name[oldfd][j];
+      for (int j = 0; j < s->file_size[oldfd]; ++j) {
+        s->file_data[i][j] = s->file_data[oldfd][j];
+        s->file_name[i][j] = s->file_name[oldfd][j];
       }
     }
   }
@@ -521,6 +537,7 @@ int env____syscall330(int which, int* varargs) {
 
 // readv
 int env____syscall145(int which, int* varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   struct iovec *iov = (struct iovec*)varargs[1];
   int iovcnt = (int)varargs[2];
@@ -528,11 +545,11 @@ int env____syscall145(int which, int* varargs) {
   for (int i = 0; i < iovcnt; ++i) {
     int len = iov[i].iov_len;
     total_length += len;
-    if (total_length < sys->file_size[fd]) {
-      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+    if (total_length < s->file_size[fd]) {
+      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
     } else {
-      len = total_length - sys->file_size[fd];
-      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+      len = total_length - s->file_size[fd];
+      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
       return total_length;
     }
   }
@@ -541,6 +558,7 @@ int env____syscall145(int which, int* varargs) {
 
 // preadv
 int env____syscall333(int which, int* varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   struct iovec *iov = (struct iovec*)varargs[1];
   int iovcnt = varargs[2];
@@ -549,11 +567,11 @@ int env____syscall333(int which, int* varargs) {
   for (int i = 0; i < iovcnt; ++i) {
     int len = iov[i].iov_len;
     total_length += len;
-    if (total_length + offset < sys->file_size[fd]) {
-      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+    if (total_length + offset < s->file_size[fd]) {
+      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
     } else {
-      len = total_length - sys->file_size[fd];
-      copyChunk(sys->file_data[sys->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
+      len = total_length - s->file_size[fd];
+      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
       return total_length;
     }
   }
@@ -567,15 +585,16 @@ int env____syscall334(int which, int* varargs) {
 
 // pread64
 int env____syscall180(int which, int* varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   unsigned char* buf = (unsigned char*)varargs[1];
   int count = varargs[2];
   int offset = varargs[3];
 
   int i = 0;
-  if (offset + count > sys->file_size[fd]) count = offset + count - sys->file_size[fd];
+  if (offset + count > s->file_size[fd]) count = offset + count - s->file_size[fd];
   for (i = 0; i < count; ++i) {
-    buf[i] = sys->file_data[sys->ptr[fd]][offset + i];
+    buf[i] = s->file_data[s->ptr[fd]][offset + i];
   }
 
   return i + 1;
@@ -583,6 +602,7 @@ int env____syscall180(int which, int* varargs) {
 
 // pwrite64
 int env____syscall181(int which, int* varargs) {
+  struct system *s = getSystem();
   int fd = varargs[0];
   unsigned char* buf = (unsigned char*)varargs[1];
   int count = varargs[2];
@@ -590,7 +610,7 @@ int env____syscall181(int which, int* varargs) {
 
   int i = 0;
   for (i = 0; i < count; ++i) {
-    sys->file_data[sys->ptr[fd]][offset + i] = buf[i];
+    s->file_data[s->ptr[fd]][offset + i] = buf[i];
   }
 
   return i + 1;
