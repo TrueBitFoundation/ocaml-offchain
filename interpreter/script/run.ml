@@ -307,6 +307,7 @@ let terminate str =
   for i = 0 to String.length str-1 do
     Bytes.set res i str.[i]
   done;
+  (* prerr_endline ("Hashing " ^ str ^ Mproof.to_hex (Mbinary.string_to_root res)); *)
   res
 
 let add_input vm i fname =
