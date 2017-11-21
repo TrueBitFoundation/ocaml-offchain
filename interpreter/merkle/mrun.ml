@@ -31,7 +31,7 @@ type vm = {
 let inc_pc vm = vm.pc <- vm.pc+1
 
 let empty_input sz = {
-  file_name = Array.make sz (String.make 1 (Char.chr 0));
+  file_name = Array.make sz "";
   file_data = Array.make sz "";
   file_size = Array.make sz 0;
 }

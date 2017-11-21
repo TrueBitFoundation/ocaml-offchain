@@ -374,9 +374,10 @@ let rec mapMerkle f arr idx level =
    if level = 0 then ( if idx < Array.length arr then f arr.(idx) else zeroword )
    else keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1))
 
-let rec depth x = if x = 1 then 0 else 1 + depth (x/2)
+let rec depth x = if x <= 1 then 0 else 1 + depth (x/2)
 
-let get_hash arr = makeMerkle arr 0 (depth (Array.length arr*2-1))
+let get_hash arr =
+  makeMerkle arr 0 (depth (Array.length arr*2-1))
 
 let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
 
@@ -411,7 +412,7 @@ let hash_stack arr =
 
 let string_to_array str =
   (* need one extra for nil terminated strings*)
-  let res = Array.make (String.length str + 1) (u256 0) in
+  let res = Array.make (String.length str) (u256 0) in
   for i = 0 to String.length str - 1 do
     res.(i) <- u256 (Char.code str.[i])
   done;
