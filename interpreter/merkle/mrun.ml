@@ -686,7 +686,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_name.(s2).[s1]);
+   let str = vm.input.file_name.(s2) in
+   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   vm.stack.(vm.stack_ptr-2) <- i (chr);
    vm.stack_ptr <- vm.stack_ptr - 1
  | INPUTDATA ->
    inc_pc vm;
