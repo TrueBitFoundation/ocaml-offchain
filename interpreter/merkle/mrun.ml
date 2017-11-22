@@ -186,7 +186,11 @@ let read_register vm reg = function
  | TableIn -> i vm.calltable.(value_to_int reg.reg1)
  | TableTypeIn -> I64 vm.calltable_types.(value_to_int reg.reg1)
  | InputSizeIn -> i vm.input.file_size.(value_to_int reg.reg1)
- | InputNameIn -> i (Char.code vm.input.file_name.(value_to_int reg.reg2).[value_to_int reg.reg1])
+ | InputNameIn ->
+   let str = vm.input.file_name.(value_to_int reg.reg2) in
+   let s1 = value_to_int reg.reg1 in
+   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   i chr
  | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg2).[value_to_int reg.reg1])
 
 let get_register regs = function
@@ -202,10 +206,9 @@ let memop mem v addr = function
 
 let set_input_name vm s2 s1 v =
    let str = vm.input.file_name.(s2) in
-   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   let str = if String.length str < 256 then String.make 256 (Char.chr 0) else str in
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
-
 
 let write_register vm regs v = function
  | NoOut -> ()
