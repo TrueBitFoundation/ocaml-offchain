@@ -21,6 +21,7 @@ let add_arg source = args := !args @ [source]
 let quote s = "\"" ^ String.escaped s ^ "\""
 
 let merge_mode = ref false
+let float_mode = ref false
 let globals_file = ref None
 let init_code = ref None
 let print_imports = ref false
@@ -49,6 +50,7 @@ let argspec = Arg.align
   "-v", Arg.Unit banner, " show version";
 
   "-merge", Arg.Set merge_mode, " merge files";
+  "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
@@ -114,6 +116,12 @@ let () =
       let m = Addglobals.add_globals m fn in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "globals.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !float_mode, !lst with
+    | true, a :: b :: _ ->
+      let m = Intfloat.process a b in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "intfloat.wasm" () (fun () -> m)
     | _ -> () );
     ( match !underscore_mode, !lst with
     | true, m :: _ ->
