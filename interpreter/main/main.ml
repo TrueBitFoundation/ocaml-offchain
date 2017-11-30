@@ -24,6 +24,7 @@ let merge_mode = ref false
 let float_mode = ref false
 let globals_file = ref None
 let init_code = ref None
+let shift_mem_mode : int option ref = ref None
 let print_imports = ref false
 let do_compile = ref false
 let run_inited : string option ref = ref None
@@ -51,6 +52,7 @@ let argspec = Arg.align
 
   "-merge", Arg.Set merge_mode, " merge files";
   "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
+  "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
@@ -122,6 +124,12 @@ let () =
       let m = Intfloat.process a b in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !shift_mem_mode, !lst with
+    | Some num, m :: _ ->
+      let m = Shiftmem.process m num in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "shiftmem.wasm" () (fun () -> m)
     | _ -> () );
     ( match !underscore_mode, !lst with
     | true, m :: _ ->
