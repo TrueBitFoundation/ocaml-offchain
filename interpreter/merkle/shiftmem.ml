@@ -21,9 +21,13 @@ and convert_inst num x = do_it x (fun x -> convert_inst' num x)
 let convert_func num f =
   do_it f (fun f -> {f with body=List.map (convert_inst num) f.body})
 
-let convert_mem num (seg:string segment) = do_it seg (fun seg ->
-  let ofs = do_it seg.offset (fun lst -> lst @ [elem (Const (elem (I32 num))); elem (Binary (I32 I32Op.Add))]) in
-  {seg with offset=ofs})
+let convert_const num = function
+ | [{it=Const {it=I32 x; _}; _}] ->
+   let res = Int32.add num x in
+   [elem (Const (elem (I32 res)))]
+ | lst -> [elem (Const (elem (I32 num))); elem (Binary (I32 I32Op.Add))] @ lst
+
+let convert_mem num (seg:string segment) = do_it seg (fun seg -> {seg with offset=do_it seg.offset (convert_const num)})
 
 (* also constants have to be converted *)
 let process m num =

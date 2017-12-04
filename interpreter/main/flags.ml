@@ -49,3 +49,5 @@ let output_file_proof : string option ref = ref None
 let input_proof = ref false
 let output_proof = ref false
 
+let sbrk_offset = ref 0l
+
