@@ -59,7 +59,8 @@ let argspec = Arg.align
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
-  "-compile", Arg.Set do_compile, "Compiles wasm file to C";
+  "-compile", Arg.Set do_compile, " Compiles wasm file to C";
+  "-hash-file", Arg.String Run.hash_file, " return the root hash of a file";
 
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";

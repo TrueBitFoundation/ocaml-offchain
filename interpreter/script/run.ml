@@ -310,6 +310,15 @@ let terminate str =
   (* prerr_endline ("Hashing " ^ str ^ Mproof.to_hex (Mbinary.string_to_root res)); *)
   res
 
+let hash_file fname =
+  let ch = open_in_bin fname in
+  let sz = in_channel_length ch in
+  let dta = Bytes.create sz in
+  really_input ch dta 0 sz;
+  close_in ch;
+  Printf.printf "{\"size\": %i, \"root\": %s}\n" sz (Mproof.to_hex (Mbinary.string_to_root dta));
+  exit 0
+
 let add_input vm i fname =
   let open Mrun in
   vm.input.file_name.(i) <- terminate fname;
@@ -331,6 +340,16 @@ let output_files vm =
       close_out ch
     end
   done
+
+let print_file_names vm =
+  let open Mrun in
+  let res = ref [] in
+  for i = 0 to Array.length vm.input.file_name - 1 do
+    if vm.input.file_size.(i) > 0 then begin
+      res := ("\"" ^ Mbinary.string_from_bytes vm.input.file_name.(i) ^ ".out\"") :: !res
+    end
+  done;
+  "[" ^ String.concat "," !res ^ "]"
 
 let setup_vm inst mdle func vs =
 (*  prerr_endline "Setting up"; *)
@@ -412,7 +431,7 @@ let run_test inst mdle func vs =
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) !last_step;
     if !task_number = !Flags.case + 1 && !Flags.output_proof then
     ( let vm_bin = Mbinary.vm_to_bin vm in
-      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) !last_step );
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) !last_step (print_file_names vm) );
 (*    trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
