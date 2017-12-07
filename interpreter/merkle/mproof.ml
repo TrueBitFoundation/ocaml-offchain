@@ -288,6 +288,13 @@ let read_from_proof regs vm proof = function
  | ReadPc -> get_value (i (vm.bin_pc+1))
  | MemsizeIn -> get_value (i vm.bin_memsize)
  | ReadStackPtr -> get_value (i vm.bin_stack_ptr)
+ | InputDataIn ->
+   ( match proof with
+   | LocationProof2 (_, loc2, (_, lst2)) ->
+     let leaf = get_leaf (loc2/32) lst2 in
+     let byte = Bytes.get leaf (loc2 mod 32) in
+     get_value (i (Char.code byte))
+   | _ -> raise EmptyArray )
  | _ -> value_from_proof proof
 
 let read_position_bin vm regs = function
