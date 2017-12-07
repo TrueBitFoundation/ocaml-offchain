@@ -362,6 +362,10 @@ let set_leaf loc v = function
   | a::b::tl -> if loc mod 2 = 0 then v::b::tl else a::v::tl
   | _ -> raise EmptyArray
 
+let do_set_leaf loc f = function
+  | a::b::tl -> if loc mod 2 = 0 then f a::b::tl else a::f b::tl
+  | _ -> raise EmptyArray
+
 (*
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 *)
@@ -420,11 +424,32 @@ let string_to_array str =
 
 let string_to_root str = get_hash (string_to_array str)
 
+let zeros = String.make 32 (Char.chr 0)
+
+let get_bytes32 str n = String.sub str n 32
+
+let bytes_to_array str =
+  (* need one extra for nil terminated strings*)
+  let res = Array.make (String.length str / 32 + 1) (u256 0) in
+  let str_e = str ^ zeros in
+  for i = 0 to String.length str / 32 - 1 do
+    res.(i) <- get_bytes32 str_e (i*32)
+  done;
+  res
+
+let bytes_to_root str = get_hash (bytes_to_array str)
+
 (* probably most simple to just generate two proofs *)
 let location_proof2 arr loc1 loc2 =
   (* first make the first level proof *)
   let proof1 = map_location_proof string_to_root arr loc1 in
   let proof2 = location_proof (string_to_array arr.(loc1)) loc2 in
+  (proof1, proof2)
+
+let location_proof_data arr loc1 loc2 =
+  (* first make the first level proof *)
+  let proof1 = map_location_proof bytes_to_root arr loc1 in
+  let proof2 = location_proof (bytes_to_array arr.(loc1)) (loc2/32) in
   (proof1, proof2)
 
 (*
@@ -496,7 +521,7 @@ let vm_to_bin vm = {
   bin_memory = map_hash (fun v -> get_value (I64 v)) vm.memory;
   bin_input_size = map_hash u256 vm.input.file_size;
   bin_input_name = map_hash string_to_root vm.input.file_name;
-  bin_input_data = map_hash string_to_root vm.input.file_data;
+  bin_input_data = map_hash bytes_to_root vm.input.file_data;
   bin_stack = map_hash (fun v -> get_value v) vm.stack;
   bin_globals = map_hash (fun v -> get_value v) vm.globals;
   bin_call_stack = map_hash (fun v -> u256 v) vm.call_stack;
@@ -526,7 +551,7 @@ let hash_vm vm =
   hash#add_string hash_ttable;
   hash#add_string (map_hash u256 vm.input.file_size);
   hash#add_string (map_hash string_to_root vm.input.file_name);
-  hash#add_string (map_hash string_to_root vm.input.file_data);
+  hash#add_string (map_hash bytes_to_root vm.input.file_data);
   hash#add_string (u256 vm.pc);
   hash#add_string (u256 vm.stack_ptr);
   hash#add_string (u256 vm.call_ptr);

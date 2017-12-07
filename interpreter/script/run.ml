@@ -432,7 +432,7 @@ let run_test inst mdle func vs =
     if !task_number = !Flags.case + 1 && !Flags.output_proof then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) !last_step (print_file_names vm) );
-(*    trace (Printexc.to_string a);
+(*  trace (Printexc.to_string a);
     Printexc.print_backtrace stderr; *)
     values_from_arr vm.stack 0 vm.stack_ptr
    | a ->
