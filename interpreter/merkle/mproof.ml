@@ -79,6 +79,7 @@ let write_position vm regs = function
 let loc_proof loc f arr = (loc, map_location_proof f arr loc)
 
 let loc_proof2 loc1 loc2 arr = (loc1, loc2, location_proof2 arr loc1 loc2)
+let loc_proof_data loc1 loc2 arr = (loc1, loc2, location_proof_data arr loc1 loc2)
 
 let get_read_location m loc =
  let pos = read_position m.m_vm m.m_regs loc in
@@ -104,12 +105,12 @@ let get_read_location m loc =
  | InputNameIn ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_name)
  | InputDataIn ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
+   LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
 
 let find_file vm name =
   let res = ref SimpleProof in
   for i = 0 to Array.length vm.input.file_data - 1 do
-    if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i string_to_root vm.input.file_data)
+    if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i bytes_to_root vm.input.file_data)
   done;
   !res
 
@@ -139,7 +140,7 @@ let get_write_location m loc =
  | InputNameOut ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
  | InputDataOut ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
+   LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -287,6 +288,13 @@ let read_from_proof regs vm proof = function
  | ReadPc -> get_value (i (vm.bin_pc+1))
  | MemsizeIn -> get_value (i vm.bin_memsize)
  | ReadStackPtr -> get_value (i vm.bin_stack_ptr)
+ | InputDataIn ->
+   ( match proof with
+   | LocationProof2 (_, loc2, (_, lst2)) ->
+     let leaf = get_leaf (loc2/32) lst2 in
+     let byte = Bytes.get leaf (loc2 mod 32) in
+     get_value (i (Char.code byte))
+   | _ -> raise EmptyArray )
  | _ -> value_from_proof proof
 
 let read_position_bin vm regs = function
@@ -375,7 +383,7 @@ let check_read_proof regs vm proof = function
        value_to_int regs.reg2 = loc1 &&
        value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
-       get_leaf loc1 lst1 = get_root loc2 lst2
+       get_leaf loc1 lst1 = get_root (loc2/32) lst2
     | _ -> false )
  | a ->
     ( match proof with
@@ -386,6 +394,22 @@ let check_read_proof regs vm proof = function
 
 let check_write_proof regs vm proof = function
  | NoOut -> true
+ | InputNameOut ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg2 = loc1 &&
+       value_to_int regs.reg1 = loc2 &&
+       vm.bin_input_name = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root loc2 lst2
+    | _ -> false )
+ | InputDataOut ->
+    ( match proof with
+    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
+       value_to_int regs.reg2 = loc1 &&
+       value_to_int regs.reg1 = loc2 &&
+       vm.bin_input_data = get_root loc1 lst1 &&
+       get_leaf loc1 lst1 = get_root (loc2/32) lst2
+    | _ -> false )
  | a ->
     ( match proof with
     | LocationProof (loc, lst) ->
@@ -502,6 +526,12 @@ let rec make_zero n =
 
 let build_root v = make_zero (Int64.to_int (Decode.word v))
 
+let modify_data i nv str =
+  let nv = Int64.to_int (Decode.word nv) in
+  let res = Bytes.copy str in
+  Bytes.set res i (Char.chr nv);
+  res
+
 let write_register_bin proof vm regs v = function
  | NoOut -> vm
  | SetStack -> {vm with bin_stack=build_root v}
@@ -523,7 +553,6 @@ let write_register_bin proof vm regs v = function
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
  | InputNameOut ->
-   prerr_endline (loc_to_string proof);
    ( match proof with
    | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
        assert (value_to_int regs.reg1 = loc1 &&
@@ -541,8 +570,8 @@ let write_register_bin proof vm regs v = function
                value_to_int regs.reg2 = loc2 &&
                vm.bin_input_data = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
-       let lst2 = set_leaf loc2 v lst2 in
-       let lst1 = set_leaf loc1 (get_root loc2 lst2) lst1 in
+       let lst2 = do_set_leaf (loc2/32) (modify_data (loc2 mod 32) v) lst2 in
+       let lst1 = set_leaf loc1 (get_root (loc2/32) lst2) lst1 in
        {vm with bin_input_data=get_root loc1 lst1}
    | _ -> assert false )
 
@@ -681,48 +710,48 @@ let micro_step_states vm =
   let res = ref [] in
   let push st = res := st :: !res in
   try
-  push (hash_vm vm);
-  let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0} in
-  let op = get_code vm.code.(vm.pc) in
-  let m = {m_vm=vm; m_regs=regs; m_microp=op} in
-  push (hash_machine m);
-  (* init registers *)
-  regs.ireg <- op.immed;
-  push (hash_machine m);
-  (* read registers *)
-  regs.reg1 <- read_register vm regs op.read_reg1;
-  push (hash_machine m);
-  trace ("read R1 " ^ string_of_value regs.reg1);
-  regs.reg2 <- read_register vm regs op.read_reg2;
-  push (hash_machine m);
-  trace ("read R2 " ^ string_of_value regs.reg2);
-  regs.reg3 <- read_register vm regs op.read_reg3;
-  push (hash_machine m);
-  trace ("read R3 " ^ string_of_value regs.reg3);
-  (* ALU *)
-  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
-  push (hash_machine m);
-  (* Write registers *)
-  let w1 = get_register regs (fst op.write1) in
-  push (hash_machine m);
-  trace ("write 1: " ^ string_of_value w1);
-  write_register vm regs w1 (snd op.write1);
-  let w2 = get_register regs (fst op.write2) in
-  push (hash_machine m);
-  trace ("write 2: " ^ string_of_value w2);
-  write_register vm regs w2 (snd op.write2);
-  push (hash_machine m);
-  (* update pointers *)
-  trace "update pointers";
-  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
-  push (hash_machine m);
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
-  push (hash_machine m);
-  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
-  push (hash_machine m);
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
-  push (hash_vm vm);
-  raise VmError
+    push (hash_vm vm);
+    let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0} in
+    let op = get_code vm.code.(vm.pc) in
+    let m = {m_vm=vm; m_regs=regs; m_microp=op} in
+    push (hash_machine m);
+    (* init registers *)
+    regs.ireg <- op.immed;
+    push (hash_machine m);
+    (* read registers *)
+    regs.reg1 <- read_register vm regs op.read_reg1;
+    push (hash_machine m);
+    trace ("read R1 " ^ string_of_value regs.reg1);
+    regs.reg2 <- read_register vm regs op.read_reg2;
+    push (hash_machine m);
+    trace ("read R2 " ^ string_of_value regs.reg2);
+    regs.reg3 <- read_register vm regs op.read_reg3;
+    push (hash_machine m);
+    trace ("read R3 " ^ string_of_value regs.reg3);
+    (* ALU *)
+    regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+    push (hash_machine m);
+    (* Write registers *)
+    let w1 = get_register regs (fst op.write1) in
+    push (hash_machine m);
+    trace ("write 1: " ^ string_of_value w1);
+    write_register vm regs w1 (snd op.write1);
+    let w2 = get_register regs (fst op.write2) in
+    push (hash_machine m);
+    trace ("write 2: " ^ string_of_value w2);
+    write_register vm regs w2 (snd op.write2);
+    push (hash_machine m);
+    (* update pointers *)
+    trace "update pointers";
+    vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+    push (hash_machine m);
+    vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+    push (hash_machine m);
+    vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+    push (hash_machine m);
+    if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+    push (hash_vm vm);
+    raise VmError
   with a ->
     Printf.printf "{\"states\": [%s]}\n" (String.concat ", " (List.map to_hex (List.rev !res)))
 

@@ -437,13 +437,13 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_sbrk" then
        [STUB "sbrk";
         LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
-        LOAD {ty=I32Type; align=0; offset=0l; sz=None};
+        LOAD {ty=I32Type; align=0; offset= !Flags.sbrk_offset; sz=None};
         DUP 1;
         DUP 3;
         BIN (I32 I32Op.Add);
         LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
         DUP 2;
-        STORE {ty=I32Type; align=0; offset=0l; sz=None};
+        STORE {ty=I32Type; align=0; offset= !Flags.sbrk_offset; sz=None};
         DUP 2;
         SWAP 4;
         DROP 3;
