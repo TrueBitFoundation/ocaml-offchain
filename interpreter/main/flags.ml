@@ -45,6 +45,7 @@ let arguments : string list ref = ref []
 
 let input_file_proof : string option ref = ref None
 let output_file_proof : string option ref = ref None
+let output_all_file_proofs = ref false
 
 let input_proof = ref false
 let output_proof = ref false

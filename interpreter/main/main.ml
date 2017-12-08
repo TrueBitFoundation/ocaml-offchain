@@ -90,6 +90,7 @@ let argspec = Arg.align
   "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
   "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
+  "-output-proofs", Arg.Set Flags.output_all_file_proofs, " output proofs for all output files that are in the final state";
   "-input", Arg.Set Flags.input_proof, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";
   "-sbrk-offset", Arg.Int (fun n -> Flags.sbrk_offset := Int32.of_int n), " memory offset used by sbrk";

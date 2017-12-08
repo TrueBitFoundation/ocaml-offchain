@@ -114,6 +114,15 @@ let find_file vm name =
   done;
   !res
 
+let find_files vm =
+  let res = ref [] in
+  for i = 0 to Array.length vm.input.file_data - 1 do
+    if vm.input.file_name.(i).[0] <> '\000' then begin
+      res := (map_location_proof bytes_to_root vm.input.file_data i, map_location_proof string_to_root vm.input.file_data i, i) :: !res
+    end
+  done;
+  !res
+
 let get_write_location m loc =
  let pos = write_position m.m_vm m.m_regs loc in
  let vm = m.m_vm in
