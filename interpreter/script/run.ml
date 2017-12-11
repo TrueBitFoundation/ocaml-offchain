@@ -316,7 +316,7 @@ let hash_file fname =
   let dta = Bytes.create sz in
   really_input ch dta 0 sz;
   close_in ch;
-  Printf.printf "{\"size\": %i, \"root\": %s}\n" sz (Mproof.to_hex (Mbinary.string_to_root dta));
+  Printf.printf "{\"size\": %i, \"root\": %s}\n" sz (Mproof.to_hex (Mbinary.bytes_to_root dta));
   exit 0
 
 let add_input vm i fname =
@@ -429,7 +429,7 @@ let run_test inst mdle func vs =
     | None -> () );
     if !task_number - 1 = !Flags.case && !Flags.output_all_file_proofs then begin
        let lst = Mproof.find_files vm in
-       let print_file (p1, p2, idx) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx in
+       let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
        Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst))
     end;
     if  !task_number - 1 = !Flags.case then output_files vm;
