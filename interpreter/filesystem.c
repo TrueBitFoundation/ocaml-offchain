@@ -78,7 +78,10 @@ unsigned char *getData(int ptr) {
 
 unsigned char* copyBytes(unsigned char* bytes, int len) {
   unsigned char* res = malloc(len);
-  for (int i = 0; i < len; i++) res[i] = bytes[i];
+  for (int i = 0; i < len; i++) {
+    res[i] = bytes[i];
+    // debugInt(res[i]);
+  }
   return res;
 }
 
@@ -181,26 +184,27 @@ void finalizeSystem() {
     }
     // If there is no output, then output the linear block in case it was changed
     if (!s->file_output[index]) {
-      outputSize(index, s->file_size[index]);
+      int sz = s->file_size[index];
+      outputSize(index, sz);
+      debugInt(sz);
       unsigned char *data = s->file_data[index];
-      int i = 0;
-      while (*data) {
+      for (int i = 0; i < sz; i++) {
         outputData(index, i, *data);
         data++;
-        i++;
       }
     }
     else {
        // Calculate size
        int sz = 0;
        struct piece *p = s->file_output[index];
-       while (p->prev) {
+       while (p) {
          sz += p->size;
          p = p->prev;
        }
        outputSize(index, sz);
+       debugInt(sz);
        p = s->file_output[index];
-       while (p->prev) {
+       while (p) {
          sz -= p->size;
          for (int i = 0; i < p->size; i++) {
            outputData(index, sz+i, p->data[i]);
@@ -414,6 +418,7 @@ int env____syscall3(int which, int *varargs) {
   int fd = varargs[0];
   unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
+  debugInt(3+1000000);
   debugReadCount(count);
   // read
   int index = s->ptr[fd];
@@ -443,6 +448,7 @@ int env____syscall195(int which, int *varargs) {
 int env____syscall146(int which, int *varargs) {
   struct system *s = getSystem();
   int fd = varargs[0];
+  debugInt(146+1000000);
   unsigned char *buf = (unsigned char*)varargs[1];
   unsigned int *iov = (unsigned int*)varargs[1];
   int iovcnt = varargs[2];
@@ -542,16 +548,20 @@ int env____syscall145(int which, int* varargs) {
   struct iovec *iov = (struct iovec*)varargs[1];
   int iovcnt = (int)varargs[2];
   int total_length = 0;
+  debugInt(145+1000000);
+  debugInt(iovcnt);
   for (int i = 0; i < iovcnt; ++i) {
-    int len = iov[i].iov_len;
-    total_length += len;
-    if (total_length < s->file_size[fd]) {
-      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
-    } else {
-      len = total_length - s->file_size[fd];
-      copyChunk(s->file_data[s->ptr[fd]], (unsigned char*)iov[i].iov_base, len, total_length - len);
-      return total_length;
+    int count = iov[i].iov_len;
+    debugInt(count);
+    int index = s->ptr[fd];
+    int pos = s->pos[fd];
+    int j;
+    uint8_t *buf = (uint8_t *)iov[i].iov_base;
+    for (j = 0; j < count && j+pos < s->file_size[index]; j++) {
+      buf[j] = s->file_data[index][pos+j];
     }
+    s->pos[fd] += j;
+    total_length += j;
   }
   return total_length;
 }

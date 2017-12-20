@@ -332,7 +332,7 @@ let find_function_index m inst name =
 let find_global_index m inst name =
   let num_imports = 0l (* Int32.of_int (List.length (global_imports m)) *) in
   let rec get_exports = function
-   | [] -> raise Not_found
+   | [] -> trace ("Cannot Find global: " ^ Utf8.encode name); raise Not_found
    | {it=im; _} :: tl ->
      match im.edesc.it with
      | GlobalExport tvar -> if im.name = name then Int32.add tvar.it num_imports else get_exports tl

@@ -113,6 +113,7 @@ let add_globals m fn =
   let m = if has_import m "DYNAMICTOP_PTR" then m else
     try add_i32_global m "DYNAMICTOP_PTR" (List.assoc "DYNAMICTOP_PTR" globals)
     with Not_found -> m in
+  let m = add_i32_global m "_system_ptr" 0 in
   let g_imports = ref [] in
   let gmap1 = Hashtbl.create 10 in
   let gmap2 = Hashtbl.create 10 in
