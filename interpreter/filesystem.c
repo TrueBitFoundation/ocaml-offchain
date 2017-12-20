@@ -412,6 +412,18 @@ int env____syscall6(int which, int *varargs) {
   return 0;
 }
 
+// sysctl
+int env____syscall54(int which, int *varargs) {
+  return 0;
+}
+
+// lock
+void env____lock(int which) {
+}
+
+void env____unlock(int which) {
+}
+
 // Read
 int env____syscall3(int which, int *varargs) {
   struct system *s = getSystem();
