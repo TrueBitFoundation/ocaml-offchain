@@ -31,4 +31,6 @@ let instance m =
     exports = ExportMap.empty }
 
 let export inst name =
-  try Some (ExportMap.find name inst.exports) with Not_found -> None
+  try Some (ExportMap.find name inst.exports)
+  with Not_found -> None
+

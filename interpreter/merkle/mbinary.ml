@@ -5,6 +5,8 @@ open Ast
 open Mrun
 (* open Types *)
 
+let u256 i = get_value (I32 (Int32.of_int i))
+
 let op x = Char.chr x
 
 (* cannot be zero because of size_code *)
@@ -406,8 +408,6 @@ let map_location_proof f arr loc = List.rev (get_map_location_proof f arr 0 loc 
 
 let location_proof arr loc = List.rev (get_location_proof arr 0 loc (depth (Array.length arr*2-1)))
 
-let u256 i = get_value (I32 (Int32.of_int i))
-
 (* simple hash, not merkle root *)
 let hash_stack arr =
   let hash = Hash.keccak 256 in
@@ -424,20 +424,21 @@ let string_to_array str =
 
 let string_to_root str = get_hash (string_to_array str)
 
-let zeros = String.make 32 (Char.chr 0)
+let zeros = String.make 64 (Char.chr 0)
 
 let get_bytes32 str n = String.sub str n 32
 
 let bytes_to_array str =
-  (* need one extra for nil terminated strings*)
-  let res = Array.make (String.length str / 32 + 1) (u256 0) in
+  let cells = max ((String.length str + 31) / 32) 2 in
+  let res = Array.make cells (u256 0) in
   let str_e = str ^ zeros in
-  for i = 0 to String.length str / 32 - 1 do
+  for i = 0 to cells - 1 do
     res.(i) <- get_bytes32 str_e (i*32)
   done;
   res
 
-let bytes_to_root str = get_hash (bytes_to_array str)
+let bytes_to_root str =
+  get_hash (bytes_to_array str)
 
 (* probably most simple to just generate two proofs *)
 let location_proof2 arr loc1 loc2 =

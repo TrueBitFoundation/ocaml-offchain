@@ -37,7 +37,11 @@ let remap_global map gmap ftmap x =
 
 let drop_table exp = match exp.it.edesc.it with
  | TableExport _ -> false
- | _ -> true
+ | _ ->
+   let str = Utf8.encode exp.it.name in
+   str <> "_stackSave" &&
+   str <> "_stackAlloc" &&
+   str <> "_stackRestore"
 
 let drop_table_import exp = match exp.it.idesc.it with
  | TableImport _ -> false
