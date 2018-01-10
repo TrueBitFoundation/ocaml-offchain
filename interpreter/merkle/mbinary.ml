@@ -510,6 +510,14 @@ let hash_io_bin vm =
   trace ("hash io bin " ^ w256_to_string res);
   res
 
+let hash_io vm =
+  let hash = Hash.keccak 256 in
+  hash#add_string (map_hash (fun v -> microp_word (get_code v)) vm.code);
+  hash#add_string (map_hash u256 vm.input.file_size);
+  hash#add_string (map_hash string_to_root vm.input.file_name);
+  hash#add_string (map_hash bytes_to_root vm.input.file_data);
+  hash#result
+
 let string_from_bytes bs =
   let rec aux n = 
     if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in

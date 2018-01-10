@@ -649,3 +649,21 @@ int env____syscall295(int which, int* varargs) {
   return -1;
 }
 
+int env__pthread_mutex_lock(void *ptr) {
+  return 0;
+}
+
+int env__pthread_mutex_unlock(void *ptr) {
+  return 0;
+}
+
+int env__pthread_cond_broadcast(void *ptr) {
+  return 0;
+}
+
+int env____cxa_atexit(int a, int b, int c) {
+  return 0;
+}
+
+
+
