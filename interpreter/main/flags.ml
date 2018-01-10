@@ -10,6 +10,9 @@ let harness = ref true
 let merkle = ref false
 let microstep = ref false
 let trace_stack = ref false
+let debug_error = ref false
+
+let trace_from = ref (-1)
 
 let insert_error = ref (-1)
 
@@ -34,6 +37,8 @@ let table_size = ref 8
 let globals_size = ref 8
 let stack_size = ref 14
 let call_size = ref 10
+
+let memory_offset = ref 0
 
 let run_wasm = ref false
 

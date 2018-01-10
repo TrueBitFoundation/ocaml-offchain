@@ -560,12 +560,12 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | STUB "env . _debugString" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = Int32.to_int !Flags.sbrk_offset + ptr in
+   let ptr = !Flags.memory_offset + ptr in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
  | STUB "env . _debugBuffer" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 2)) in
-   let ptr = Int32.to_int !Flags.sbrk_offset + ptr in
+   let ptr = !Flags.memory_offset + ptr in
    let len = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ get_vm_buffer vm ptr len);
    inc_pc vm

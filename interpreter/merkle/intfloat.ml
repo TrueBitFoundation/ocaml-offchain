@@ -18,7 +18,7 @@ let merge a b =
   let funcs_b = List.map (Merge.remap (simple_add num) (fun x -> x) (simple_add num_ft)) b.it.funcs in
   {a with it={(a.it) with funcs = funcs_a@funcs_b;
      globals = a.it.globals @ b.it.globals;
-     imports = List.rev a.it.imports;
+     imports = a.it.imports;
      exports = a.it.exports@List.filter Merge.drop_table (List.map (Merge.remap_export (simple_add num) (fun x -> x) (simple_add num_ft) "") b.it.exports);
      elems = a.it.elems;
      types=a.it.types@b.it.types;
@@ -74,6 +74,13 @@ let convert_float m =
    | Block (ty, lst) -> [Block (ty, convert_body lst)]
    | Loop (ty, lst) -> [Loop (ty, convert_body lst)]
    | If (ty, texp, fexp) -> [If (ty, convert_body texp, convert_body fexp)]
+   
+   | Store ({ty=F32Type; _} as op) -> [Store {op with ty=I32Type}]
+   | Load ({ty=F32Type; _} as op) -> [Load {op with ty=I32Type}]
+
+   | Store ({ty=F64Type; _} as op) -> [Store {op with ty=I64Type}]
+   | Load ({ty=F64Type; _} as op) -> [Load {op with ty=I64Type}]
+
    | Binary (F32 F32Op.Add) -> [Call (find_function m "f32_add")]
    | Binary (F32 F32Op.Div) -> [Call (find_function m "f32_div")]
    | Binary (F32 F32Op.Mul) -> [Call (find_function m "f32_mul")]
@@ -85,6 +92,8 @@ let convert_float m =
    | Unary (F32 F32Op.Ceil) -> [Call (find_function m "f32_ceil")]
    | Unary (F32 F32Op.Floor) -> [Call (find_function m "f32_floor")]
    | Unary (F32 F32Op.Trunc) -> [Call (find_function m "f32_trunc")]
+   | Unary (F32 F32Op.Neg) -> [Call (find_function m "f32_neg")]
+   | Unary (F32 F32Op.Abs) -> [Call (find_function m "f32_abs")]
    | Compare (F32 F32Op.Eq) -> [Call (find_function m "f32_eq")]
    | Compare (F32 F32Op.Le) -> [Call (find_function m "f32_le")]
    | Compare (F32 F32Op.Lt) -> [Call (find_function m "f32_lt")]
@@ -103,6 +112,8 @@ let convert_float m =
    | Unary (F64 F64Op.Ceil) -> [Call (find_function m "f64_ceil")]
    | Unary (F64 F64Op.Floor) -> [Call (find_function m "f64_floor")]
    | Unary (F64 F64Op.Trunc) -> [Call (find_function m "f64_trunc")]
+   | Unary (F64 F64Op.Neg) -> [Call (find_function m "f64_neg")]
+   | Unary (F64 F64Op.Abs) -> [Call (find_function m "f64_abs")]
    | Compare (F64 F64Op.Eq) -> [Call (find_function m "f64_eq")]
    | Compare (F64 F64Op.Le) -> [Call (find_function m "f64_le")]
    | Compare (F64 F64Op.Lt) -> [Call (find_function m "f64_lt")]
@@ -123,8 +134,10 @@ let convert_float m =
    | Convert (F64 F64Op.ConvertSI64) -> [Call (find_function m "i64_to_f64")]
    | Convert (F64 F64Op.ConvertUI64) -> [Call (find_function m "ui64_to_f64")]
    | Convert (F64 F64Op.DemoteF64) -> [Call (find_function m "f64_to_f32")]
+   | Convert (F32 F32Op.DemoteF64) -> [Call (find_function m "f64_to_f32")]
    | Convert (F32 F32Op.PromoteF32) -> [Call (find_function m "f32_to_f64")]
-   
+   | Convert (F64 F64Op.PromoteF32) -> [Call (find_function m "f32_to_f64")]
+
    | Convert (I32 I32Op.TruncSF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_i32")]
    | Convert (I32 I32Op.TruncUF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_ui32")]
    | Convert (I32 I32Op.TruncSF64) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_i32")]
