@@ -22,7 +22,7 @@ let merge a b =
      exports = a.it.exports@List.filter Merge.drop_table (List.map (Merge.remap_export (simple_add num) (fun x -> x) (simple_add num_ft) "") b.it.exports);
      elems = a.it.elems;
      types=a.it.types@b.it.types;
-     data=a.it.data@b.it.data}}
+     data=a.it.data@b.it.data@[Addglobals.generate_data (256, !Flags.memory_offset)]}}
 
 let convert_type' = function
  | I32Type -> I32Type
