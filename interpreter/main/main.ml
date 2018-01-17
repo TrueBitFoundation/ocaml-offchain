@@ -62,7 +62,9 @@ let argspec = Arg.align
   "-compile", Arg.Set do_compile, " Compiles wasm file to C";
   "-hash-file", Arg.String Run.hash_file, " return the root hash of a file";
 
+  "-trace-from", Arg.Int (fun n -> Flags.trace_from := n), " start tracing from a step";
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
+  "-debug-error", Arg.Set Flags.debug_error, " try to find out why the interpreter failed";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-merkletest", Arg.Int (fun n -> Mbinary.test n; exit 0), " just run a merkle root computation test with a number of leafs";
@@ -75,11 +77,12 @@ let argspec = Arg.align
   "-error-step", Arg.Int (fun n -> Flags.checkerror := n), " for which step the intermediate state will be generated";
   "-final", Arg.Int (fun n -> Flags.checkfinal := n), " generate finality proof for the specified step";
   "-insert-error", Arg.Int (fun n -> Flags.insert_error := n), " insert a simple error so that verifier and solver will disagree";
-  "-memory-size", Arg.Int (fun sz -> Flags.memory_size := sz), " how many pages the size of the memory should be. One page is 64kb";
-  "-table-size", Arg.Int (fun sz -> Flags.table_size := sz), " how many elements should the call table have. Default 64";
-  "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how many elements should the globals table have. Default 64";
-  "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how many elements should the stack have. Default 16384";
-  "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how many elements should the call stack have. Default 1024";
+  "-memory-size", Arg.Int (fun sz -> Flags.memory_size := sz), " how deep the merkle tree for memory should be. Default 16";
+  "-memory-offset", Arg.Int (fun sz -> Flags.memory_offset := sz), " memory offset for stubs";
+  "-table-size", Arg.Int (fun sz -> Flags.table_size := sz), " how deep the merkle tree for the call table should be. Default 8";
+  "-globals-size", Arg.Int (fun sz -> Flags.globals_size := sz), " how deep the merkle tree for the globals table have. Default 8";
+  "-stack-size", Arg.Int (fun sz -> Flags.stack_size := sz), " how deep the merkle tree for the stack have. Default 14";
+  "-call-stack-size", Arg.Int (fun sz -> Flags.call_size := sz), " how deep the merkle tree for the call stack have. Default 10";
 (*  "-run-inited", Arg.String (fun file -> run_inited := Some file), "run pre-initialized code from a file."; *)
   "-wasm", Arg.String (fun file ->
     add_arg ("(input " ^ quote file ^ ")");
@@ -126,6 +129,7 @@ let () =
     | true, a :: b :: _ ->
       let m = Intfloat.process a b in
       (* Run.output_stdout (fun () -> m); *)
+      Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
     | _ -> () );
     ( match !shift_mem_mode, !lst with

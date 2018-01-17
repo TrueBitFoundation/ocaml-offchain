@@ -560,14 +560,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack.(vm.stack_ptr-1) <- value_of_bool (Eval_numeric.eval_testop op vm.stack.(vm.stack_ptr-1))
  | STUB "env . _debugString" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   let ptr = Int32.to_int !Flags.sbrk_offset + ptr in
+   let ptr = !Flags.memory_offset + ptr in
    prerr_endline ("DEBUG: " ^ get_vm_string vm ptr);
    inc_pc vm
  | STUB "env . _debugBuffer" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 2)) in
-   let ptr = Int32.to_int !Flags.sbrk_offset + ptr in
+   let ptr = !Flags.memory_offset + ptr in
    let len = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
-   prerr_endline ("DEBUG: " ^ get_vm_buffer vm ptr len);
+   prerr_endline ("DEBUG: " ^ String.escaped (get_vm_buffer vm ptr len));
    inc_pc vm
  | STUB "env . _debugInt" ->
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
@@ -891,6 +891,51 @@ let trace_step vm = match vm.code.(vm.pc) with
  | TEST op -> "TEST"
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
+ | CALLI -> "CALLI"
+ | CHECKCALLI x -> "CHECKCALLI"
+ | SETSTACK v -> "SETSTACK"
+ | SETCALLSTACK v -> "SETCALLSTACK"
+ | SETTABLE v -> "SETTABLE"
+ | SETMEMORY v -> "SETMEMORY"
+ | SETGLOBALS v -> "SETGLOBALS"
+
+let trace_clean vm = match vm.code.(vm.pc) with
+ | NOP -> "NOP"
+ | STUB str -> "STUB " ^ str
+ | UNREACHABLE -> "UNREACHABLE"
+ | EXIT -> "EXIT"
+ | INPUTSIZE -> "INPUTSIZE"
+ | INPUTNAME -> "INPUTNAME"
+ | INPUTDATA ->
+   "INPUTDATA"
+ | OUTPUTSIZE -> "OUTPUTSIZE"
+ | OUTPUTNAME -> "OUTPUTNAME"
+ | OUTPUTDATA -> "OUTPUTDATA"
+ | JUMP x -> "JUMP"
+ | JUMPI x -> "JUMPI"
+ | JUMPFORWARD x -> "JUMPFORWARD"
+ | CALL x -> "CALL " ^ string_of_int x
+ | LABEL _ -> "LABEL ???"
+ | RETURN -> "RETURN"
+ | LOAD x ->
+   "LOAD" ^ load_label x
+ | STORE x -> "STORE  offset " ^ Int32.to_string x.offset
+ | DROP x -> "DROP" ^ string_of_int x
+ | DROP_N -> "DROP_N "
+ | DUP x -> "DUP" ^ string_of_int x
+ | SWAP x -> "SWAP" ^ string_of_int x
+ | LOADGLOBAL x -> "LOADGLOBAL " ^ string_of_int x
+ | STOREGLOBAL x -> "STOREGLOBAL " ^ string_of_int x
+ | INITCALLTABLE x -> "INITCALLTABLE " ^ string_of_int x
+ | INITCALLTYPE x -> "INITCALLTYPE " ^ string_of_int x
+ | CURMEM -> "CURMEM"
+ | GROW -> "GROW"
+ | PUSH lit -> "PUSH " ^ string_of_value lit
+ | CONV op -> "CONV"
+ | UNA op -> "UNA"
+ | TEST op -> "TEST"
+ | BIN op -> "BIN"
+ | CMP op -> "CMP"
  | CALLI -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
  | SETSTACK v -> "SETSTACK"

@@ -400,6 +400,7 @@ let run_test inst mdle func vs =
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
       end;
       (* if i > 560019251 then begin  Flags.trace := true end; *)
+      if i = !Flags.trace_from then Flags.trace := true;
       if !Flags.trace (* || i mod 1000000 = 0 *) then begin
         (* trace (string_of_int vm.pc ^ ": " ^ trace_step vm); *)
         Printf.printf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
@@ -442,12 +443,15 @@ let run_test inst mdle func vs =
     values_from_arr vm.stack 0 vm.stack_ptr
    | a ->
    (* Print error result *)
-   (*
-    prerr_endline (stack_to_string vm 10);
-    prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
-    vm.pc <- vm.pc - 1;
-    prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
-    test_errors vm; *)
+    if !Flags.debug_error then begin
+      prerr_endline ("Error at step " ^ string_of_int !last_step);
+      prerr_endline (stack_to_string vm 10);
+      prerr_endline (string_of_int vm.pc ^ ": " ^ trace_clean vm);
+      prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      vm.pc <- vm.pc - 1;
+      prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
+      test_errors vm;
+    end;
     if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.u256 0)) (!last_step + 1);
    ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))

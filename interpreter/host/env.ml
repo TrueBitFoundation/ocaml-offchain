@@ -49,6 +49,8 @@ let lookup name t =
   | "ABORT", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "memoryBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "tableBase", ExternalGlobalType t -> ExternalGlobal (I32 0l)
+  | "__environ", ExternalGlobalType t -> ExternalGlobal (I32 0l)
+  | "___environ", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "___dso_handle", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | "__dso_handle", ExternalGlobalType t -> ExternalGlobal (I32 0l)
   | _, ExternalFuncType t -> ExternalFunc (HostFunc (t, abort))

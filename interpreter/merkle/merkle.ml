@@ -345,7 +345,7 @@ let malloc_string mdle malloc str =
   let len = String.length str + 1 in
   let res = ref [] in
   for j = 0 to len-2 do
-    res := [DUP 1; PUSH (i (Char.code str.[j])); STORE {ty=I32Type; align=0; offset=Int32.of_int j; sz=Some Mem8}] :: !res
+    res := [DUP 1; PUSH (i (Char.code str.[j])); STORE {ty=I32Type; align=0; offset=Int32.of_int (j + !Flags.memory_offset); sz=Some Mem8}] :: !res
   done;
   res := [DUP 1; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
   (* array address is left *)
@@ -355,7 +355,7 @@ let make_args mdle inst lst =
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i (List.length lst)); (* argc *)
    PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
-  List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4); sz=None}]) lst)
+  List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4 + !Flags.memory_offset); sz=None}]) lst)
 
 let init_system mdle inst =
   try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
@@ -365,7 +365,18 @@ let simple_call mdle inst name =
   try [CALL (find_function_index mdle inst (Utf8.decode name))]
   with Not_found -> []
 
-let make_cxx_init mdle inst = simple_call mdle inst "__GLOBAL__I_000101" @ simple_call mdle inst "__GLOBAL__sub_I_iostream_cpp"
+let find_initializers mdle =
+  let rec do_find = function
+   | exp :: lst ->
+     let rest = do_find lst in
+     let name = Utf8.encode exp.name in
+     if String.length name > 15 && String.sub name 0 15 = "__GLOBAL__sub_I" then name :: rest else rest
+   | [] -> [] in
+  do_find (List.map (fun x -> x.it) mdle.exports)
+
+let make_cxx_init mdle inst =
+  simple_call mdle inst "__GLOBAL__I_000101" @
+  List.flatten (List.map (fun name -> simple_call mdle inst name) (find_initializers mdle))
 
 let generic_stub m inst mname fname =
   try
@@ -437,13 +448,13 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_sbrk" then
        [STUB "sbrk";
         LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
-        LOAD {ty=I32Type; align=0; offset= !Flags.sbrk_offset; sz=None};
+        LOAD {ty=I32Type; align=0; offset=Int32.of_int !Flags.memory_offset; sz=None};
         DUP 1;
         DUP 3;
         BIN (I32 I32Op.Add);
         LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
         DUP 2;
-        STORE {ty=I32Type; align=0; offset= !Flags.sbrk_offset; sz=None};
+        STORE {ty=I32Type; align=0; offset=Int32.of_int !Flags.memory_offset; sz=None};
         DUP 2;
         SWAP 4;
         DROP 3;
