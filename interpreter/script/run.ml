@@ -446,6 +446,7 @@ let run_test inst mdle func vs =
     if !Flags.debug_error then begin
       prerr_endline ("Error at step " ^ string_of_int !last_step);
       prerr_endline (stack_to_string vm 10);
+      prerr_endline (string_of_int vm.pc ^ ": " ^ trace_clean vm);
       prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
       vm.pc <- vm.pc - 1;
       prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
