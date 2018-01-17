@@ -634,6 +634,15 @@ let vm_step vm = match vm.code.(vm.pc) with
        let b = vm.memory.(loc/8+1) in
        if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
        vm.stack.(vm.stack_ptr-1) <- mem_load (I64 a) (I64 b) x.ty x.sz loc )
+   | Types.I64Type, None ->
+     let idx = loc land 0x07 in
+     ( match idx with
+     | 0 -> vm.stack.(vm.stack_ptr-1) <- I64 vm.memory.(loc lsr 3)
+     | _ ->
+       let a = vm.memory.(loc/8) in
+       let b = vm.memory.(loc/8+1) in
+       if !Flags.trace then Printf.printf "Loading %s and %s\n" (Int64.to_string a) (Int64.to_string b);
+       vm.stack.(vm.stack_ptr-1) <- mem_load (I64 a) (I64 b) x.ty x.sz loc )
    | Types.I32Type, Some (Memory.Mem8, Memory.ZX) ->
      let idx = loc mod 8 in
      vm.stack.(vm.stack_ptr-1) <- I32 (Int64.to_int32 (Int64.logand (Int64.shift_right vm.memory.(loc/8) (8*idx)) 0xffL))
@@ -666,6 +675,19 @@ let vm_step vm = match vm.code.(vm.pc) with
        if check <> a then Printf.printf "What? got %Lx should be %Lx, value %Lx, old %Lx\n" check a v2 oldv;
        vm.memory.(loc/8) <- a;
        vm.memory.(loc/8+1) <- b *)
+     | _ ->
+      let mem = get_memory vm.memory loc in
+      let v = vm.stack.(vm.stack_ptr-1) in
+      memop mem v (Int64.of_int (loc-(loc/8)*8)) x.sz;
+      let a, b = Byteutil.Decode.mini_memory mem in
+      vm.memory.(loc/8) <- a;
+      vm.memory.(loc/8+1) <- b )
+   | Types.I64Type, None ->
+     let idx = loc mod 8 in
+     ( match idx with
+     | 0 ->
+       let v2 = match vm.stack.(vm.stack_ptr-1) with I64 v -> v | _ -> 0L in
+       vm.memory.(loc lsr 3) <- v2
      | _ ->
       let mem = get_memory vm.memory loc in
       let v = vm.stack.(vm.stack_ptr-1) in

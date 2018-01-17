@@ -483,18 +483,7 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_getSystem" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
      if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
-     generic_stub m inst mname fname
-     (*
-     if mname = "env" && fname = "_getenv" then [DROP 1; PUSH (i 0); RETURN] else
-     if mname = "env" && fname = "_debugRead" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
-     (* opening file *)
-     if mname = "env" && fname = "___syscall5" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i (-1)); RETURN] else
-     if mname = "env" && fname = "___syscall3" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
-     if mname = "env" && fname = "___syscall6" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
-     if mname = "env" && fname = "___syscall140" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 0); RETURN] else
-     (* writing to file descriptor *)
-     if mname = "env" && fname = "___syscall146" then [STUB (mname ^ " . " ^ fname); DROP 2; PUSH (i 1); RETURN] else
-     [STUB (mname ^ " . " ^ fname); RETURN] *) ) f_imports in
+     generic_stub m inst mname fname ) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
      compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
