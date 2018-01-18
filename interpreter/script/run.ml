@@ -334,8 +334,9 @@ let add_input vm i fname =
 let output_files vm =
   let open Mrun in
   for i = 0 to Array.length vm.input.file_name - 1 do
-    if vm.input.file_size.(i) > 0 then begin
-      let ch = open_out_bin (Mbinary.string_from_bytes vm.input.file_name.(i) ^ ".out") in
+    let fname = Mbinary.string_from_bytes vm.input.file_name.(i) in
+    if String.length fname > 0 then begin
+      let ch = open_out_bin (fname ^ ".out") in
       output ch vm.input.file_data.(i) 0 vm.input.file_size.(i);
       close_out ch
     end
