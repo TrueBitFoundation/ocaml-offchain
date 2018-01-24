@@ -213,6 +213,19 @@ let set_input_name vm s2 s1 v =
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
 
+let process_custom vm x file_num =
+   (* output file *)
+   let ch = open_out_bin "custom.out" in
+   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+   close_out ch;
+   ignore (Sys.command (Hashtbl.find custom_command x));
+   let ch = open_in_bin "custom.in" in
+   let sz = in_channel_length ch in
+   let dta = Bytes.create sz in
+   really_input ch dta 0 sz;
+   close_in ch;
+   dta, sz
+
 let write_register vm regs v = function
  | NoOut -> ()
  | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
@@ -275,18 +288,8 @@ let write_register vm regs v = function
  | CustomFileWrite ->
    (* Will this actually work? *)
    let file_num = value_to_int regs.reg1 in
-   (* output file *)
-   let ch = open_out_bin "custom.out" in
-   let x = value_to_int regs.ireg in
-   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
-   close_out ch;
-   ignore (Sys.command (Hashtbl.find custom_command x));
-   let ch = open_in_bin "custom.in" in
-   let sz = in_channel_length ch in
+   let dta, sz = process_custom vm (value_to_int regs.reg1) (value_to_int regs.ireg) in
    regs.reg2 <- i sz;
-   let dta = Bytes.create sz in
-   really_input ch dta 0 sz;
-   close_in ch;
    vm.input.file_data.(file_num) <- dta
 
 let setup_memory vm m instance =
