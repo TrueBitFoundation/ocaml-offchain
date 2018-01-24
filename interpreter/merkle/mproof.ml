@@ -74,6 +74,7 @@ let write_position vm regs = function
  | InputCreateOut -> value_to_int regs.reg1
  | CallTableOut -> value_to_int regs.ireg
  | CallTypeOut -> value_to_int regs.ireg
+ | CustomFileWrite -> value_to_int regs.reg1
  | _ -> 0
 
 let loc_proof loc f arr = (loc, map_location_proof f arr loc)
@@ -150,6 +151,10 @@ let get_write_location m loc =
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
  | InputDataOut ->
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
+ | CustomFileWrite ->
+   (* does it really have to be performed here? doesn't seem like that is theh case
+   write_register m.m_vm m.m_regs (i 0) CustomFileWrite; *)
+   LocationProof (loc_proof pos string_to_root vm.input.file_data)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -258,6 +263,8 @@ let micro_step_proofs_with_error vm =
    update_ptr_proof1; update_ptr_proof2; update_ptr_proof3; memsize_proof; finalize_proof}
 
 (* Doing checks *)
+
+(* Custom checking is not implemented *)
 
 let check_fetch state1 state2 (vm_bin, op, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
@@ -559,6 +566,8 @@ let write_register_bin proof vm regs v = function
  | CallTableOut -> {vm with bin_calltable=merkle_change v proof}
  | CallTypeOut -> {vm with bin_calltable_types=merkle_change v proof}
  | InputCreateOut -> {vm with bin_input_data=merkle_change (make_root (Int64.to_int (Decode.word v)) (u256 0)) proof}
+ | CustomFileWrite ->
+   {vm with bin_input_data=merkle_change v proof}
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
  | InputNameOut ->

@@ -236,6 +236,7 @@ let out_code_byte = function
  | SetTable -> 0x13
  | SetTableTypes -> 0x14
  | SetMemory -> 0x15
+ | CustomFileWrite -> 0x16
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00

@@ -30,6 +30,8 @@ type vm = {
 
 let inc_pc vm = vm.pc <- vm.pc+1
 
+let custom_command = Hashtbl.create 7
+
 let empty_input sz = {
   file_name = Array.make sz "";
   file_data = Array.make sz "";
@@ -120,6 +122,7 @@ type out_code =
  | SetTableTypes
  | SetMemory
  | SetGlobals
+ | CustomFileWrite
 
 type stack_ch =
  | StackRegSub
@@ -269,6 +272,22 @@ let write_register vm regs v = function
  | SetGlobals ->
    let sz = pow2 (value_to_int v) in
    vm.globals <- Array.make sz (i 0)
+ | CustomFileWrite ->
+   (* Will this actually work? *)
+   let file_num = value_to_int regs.reg1 in
+   (* output file *)
+   let ch = open_out_bin "custom.out" in
+   let x = value_to_int regs.ireg in
+   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+   close_out ch;
+   ignore (Sys.command (Hashtbl.find custom_command x));
+   let ch = open_in_bin "custom.in" in
+   let sz = in_channel_length ch in
+   regs.reg2 <- i sz;
+   let dta = Bytes.create sz in
+   really_input ch dta 0 sz;
+   close_in ch;
+   vm.input.file_data.(file_num) <- dta
 
 let setup_memory vm m instance =
   let open Ast in
@@ -444,6 +463,7 @@ let get_code = function
  | SETGLOBALS x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetGlobals)}
  | SETMEMORY x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetMemory)}
  | SETTABLE x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetTableTypes); write2=(Reg1,SetTable)}
+ | CUSTOM x -> {noop with immed=i x; read_reg1=StackIn0; read_reg2=InputSizeIn; write1=(Reg1,CustomFileWrite); write2=(Reg2,InputSizeOut)}
 
 let micro_step vm =
   let open Values in
@@ -784,6 +804,22 @@ let vm_step vm = match vm.code.(vm.pc) with
    let sz = pow2 v in
    vm.globals <- Array.make sz (i 0);
    inc_pc vm
+ | CUSTOM x ->
+   inc_pc vm;
+   let file_num = value_to_int vm.stack.(vm.stack_ptr-1) in
+   vm.stack_ptr <- vm.stack_ptr - 1;
+   (* output file *)
+   let ch = open_out_bin "custom.out" in
+   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+   close_out ch;
+   ignore (Sys.command (Hashtbl.find custom_command x));
+   let ch = open_in_bin "custom.in" in
+   let sz = in_channel_length ch in
+   vm.input.file_size.(file_num) <- sz;
+   let dta = Bytes.create sz in
+   really_input ch dta 0 sz;
+   close_in ch;
+   vm.input.file_data.(file_num) <- dta
 
 open Types
 
@@ -920,6 +956,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | SETTABLE v -> "SETTABLE"
  | SETMEMORY v -> "SETMEMORY"
  | SETGLOBALS v -> "SETGLOBALS"
+ | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let trace_clean vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
@@ -965,6 +1002,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | SETTABLE v -> "SETTABLE"
  | SETMEMORY v -> "SETMEMORY"
  | SETGLOBALS v -> "SETGLOBALS"
+ | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let stack_to_string vm n =
   let res = ref "" in

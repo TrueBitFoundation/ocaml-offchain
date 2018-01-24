@@ -6,6 +6,9 @@ open Source
 open Types
 open Values
 
+(* call name to custom judge number *)
+let custom_calls = Hashtbl.create 7
+
 let trace = Byteutil.trace
 
 (* perhaps we need to link the modules first *)
@@ -70,6 +73,7 @@ type inst =
  | SETTABLE of int
  | SETGLOBALS of int
  | SETMEMORY of int
+ | CUSTOM of int
 
 type control = {
   target : int;
@@ -483,6 +487,7 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_getSystem" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
      if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
+     if mname = "env" && Hashtbl.mem custom_calls fname then [CUSTOM (Hashtbl.find custom_calls fname); RETURN] else
      generic_stub m inst mname fname ) f_imports in
   let module_codes = List.map (fun f ->
      if f = func then trace "*************** CURRENT ";
