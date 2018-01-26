@@ -397,7 +397,7 @@ let check_read_proof regs vm proof = function
        value_to_int regs.reg2 = loc1 &&
        value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
-       get_leaf loc1 lst1 = get_root (loc2/32) lst2
+       get_leaf loc1 lst1 = get_root (loc2/16) lst2
     | _ -> false )
  | a ->
     ( match proof with
@@ -422,7 +422,7 @@ let check_write_proof regs vm proof = function
        value_to_int regs.reg2 = loc1 &&
        value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
-       get_leaf loc1 lst1 = get_root (loc2/32) lst2
+       get_leaf loc1 lst1 = get_root (loc2/16) lst2
     | _ -> false )
  | a ->
     ( match proof with
@@ -588,7 +588,7 @@ let write_register_bin proof vm regs v = function
                value_to_int regs.reg2 = loc2 &&
                vm.bin_input_data = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
-       let lst2 = do_set_leaf (loc2/32) (modify_data (loc2 mod 32) v) lst2 in
+       let lst2 = do_set_leaf (loc2/16) (modify_data (loc2 mod 16) v) lst2 in
        let lst1 = set_leaf loc1 (get_root (loc2/32) lst2) lst1 in
        {vm with bin_input_data=get_root loc1 lst1}
    | _ -> assert false )

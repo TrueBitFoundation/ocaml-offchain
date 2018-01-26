@@ -428,13 +428,23 @@ let string_to_root str = get_hash (string_to_array str)
 let zeros = String.make 64 (Char.chr 0)
 
 let get_bytes32 str n = String.sub str n 32
+let get_bytes16 str n = String.sub str n 16
 
-let bytes_to_array str =
+let bytes_to_array32 str =
   let cells = max ((String.length str + 31) / 32) 2 in
   let res = Array.make cells (u256 0) in
   let str_e = str ^ zeros in
   for i = 0 to cells - 1 do
     res.(i) <- get_bytes32 str_e (i*32)
+  done;
+  res
+
+let bytes_to_array str =
+  let cells = max ((String.length str + 15) / 16) 2 in
+  let res = Array.make cells (u256 0) in
+  let str_e = str ^ zeros in
+  for i = 0 to cells - 1 do
+    res.(i) <- get_bytes16 str_e (i*16)
   done;
   res
 
@@ -451,7 +461,7 @@ let location_proof2 arr loc1 loc2 =
 let location_proof_data arr loc1 loc2 =
   (* first make the first level proof *)
   let proof1 = map_location_proof bytes_to_root arr loc1 in
-  let proof2 = location_proof (bytes_to_array arr.(loc1)) (loc2/32) in
+  let proof2 = location_proof (bytes_to_array arr.(loc1)) (loc2/16) in
   (proof1, proof2)
 
 (*
