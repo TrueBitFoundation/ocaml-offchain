@@ -76,7 +76,7 @@ let int_binary i =
   Bytes.set res 1 (Char.chr ((i lsr 8) land 0xff));
   Bytes.set res 2 (Char.chr ((i lsr 16) land 0xff));
   Bytes.set res 3 (Char.chr ((i lsr 24) land 0xff));
-  res
+  Bytes.to_string res
 
 let generate_data (addr, i) : string segment =
   elem {

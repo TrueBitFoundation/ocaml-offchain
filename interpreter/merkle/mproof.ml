@@ -109,7 +109,7 @@ let get_read_location m loc =
  | InputDataIn ->
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
 
-let find_file vm name =
+let find_file vm (name:string) =
   let res = ref SimpleProof in
   for i = 0 to Array.length vm.input.file_data - 1 do
     if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i bytes_to_root vm.input.file_data)
@@ -119,7 +119,7 @@ let find_file vm name =
 let find_files vm =
   let res = ref [] in
   for i = 0 to Array.length vm.input.file_data - 1 do
-    if String.length vm.input.file_name.(i) > 0 && vm.input.file_name.(i).[0] <> '\000' then begin
+    if Bytes.length vm.input.file_name.(i) > 0 && (Bytes.get vm.input.file_name.(i) 0) <> '\000' then begin
       res := (map_location_proof bytes_to_root vm.input.file_data i, map_location_proof string_to_root vm.input.file_name i, i, Mbinary.string_from_bytes vm.input.file_name.(i) ^ ".out") :: !res
     end
   done;
@@ -306,7 +306,7 @@ let read_from_proof regs vm proof = function
    ( match proof with
    | LocationProof2 (_, loc2, (_, lst2)) ->
      let leaf = get_leaf (loc2/32) lst2 in
-     let byte = Bytes.get leaf (loc2 mod 32) in
+     let byte = String.get leaf (loc2 mod 32) in
      get_value (i (Char.code byte))
    | _ -> raise EmptyArray )
  | _ -> value_from_proof proof
@@ -482,7 +482,7 @@ let check_update_call_ptr state1 state2 (m,vm) =
   m.bin_vm = hash_vm_bin vm &&
   state2 = hash_machine_bin m2
 
-let check_update_memsize (state1:bytes) (state2:bytes) (m,vm) =
+let check_update_memsize (state1:w256) (state2:w256) (m,vm) =
   let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
@@ -544,9 +544,9 @@ let build_root v = make_zero (Int64.to_int (Decode.word v))
 
 let modify_data i nv str =
   let nv = Int64.to_int (Decode.word nv) in
-  let res = Bytes.copy str in
+  let res = Bytes.of_string str in
   Bytes.set res i (Char.chr nv);
-  res
+  Bytes.to_string res
 
 let write_register_bin proof vm regs v = function
  | NoOut -> vm

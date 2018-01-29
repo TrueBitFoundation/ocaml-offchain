@@ -5,8 +5,8 @@ let trace name = if !Flags.trace then print_endline ("-- " ^ name)
 
 let w256_to_string bs =
   let res = ref "" in
-  for i = 0 to Bytes.length bs - 1 do
-    let code = Char.code bs.[i] in
+  for i = 0 to String.length bs - 1 do
+    let code = Char.code (String.get bs i) in
     res := !res ^ (if code < 16 then "0" else "") ^ Printf.sprintf "%x" code
   done;
   !res
@@ -32,7 +32,7 @@ let eos s = (pos s = len s)
 let check n s = if pos s + n > len s then raise EOS
 let skip n s = check n s; s.pos := !(s.pos) + n
 
-let read s = if !(s.pos) < len s then Char.code (s.bytes.[!(s.pos)]) else 0
+let read s = if !(s.pos) < len s then Char.code (String.get s.bytes (!(s.pos))) else 0
 let peek s = if eos s then None else Some (read s)
 
 (* let get s = check 1 s; let b = read s in skip 1 s; b *)
@@ -60,7 +60,7 @@ let u64 s =
   Int64.(add lo (shift_left hi 32))
 
 let mini_memory bytes =
-  let s = stream (Memory.to_bytes bytes) in
+  let s = stream (Bytes.to_string (Memory.to_bytes bytes)) in
 (*  trace ("Get memory: " ^ w256_to_string (Memory.to_bytes bytes)); *)
   let a = u64 s and b = u64 s in
 (*  trace ("A: " ^ Int64.to_string a); *)
@@ -78,7 +78,7 @@ let word bytes =
   !res
 
 let bytes_to_array bytes =
-  let s = stream bytes in
+  let s = stream (Bytes.to_string bytes) in
   let res = Array.make (Bytes.length bytes) 0L in
   for i = 0 to Bytes.length bytes / 8 do
     res.(i) <- u64 s
@@ -106,8 +106,6 @@ let to_bytes s =
   s.patches := [];
   Buffer.clear s.buf;
   bs
-
-
 
 let s = stream ()
 
@@ -146,7 +144,7 @@ let extend bs n =
     Bytes.set nbs (n-1-i) (Bytes.get bs i)
   done;
 (*  Bytes.blit bs 0 nbs (n-len) len; *)
-  nbs
+  Bytes.to_string nbs
 
 let value = function
   | I32 i -> u32 i

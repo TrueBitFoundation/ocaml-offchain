@@ -6,8 +6,8 @@ exception VmTrap
 exception VmError
 
 type input = {
-  file_name : string array;
-  file_data : string array;
+  file_name : bytes array;
+  file_data : bytes array;
   file_size : int array;
 }
 
@@ -33,8 +33,8 @@ let inc_pc vm = vm.pc <- vm.pc+1
 let custom_command = Hashtbl.create 7
 
 let empty_input sz = {
-  file_name = Array.make sz "";
-  file_data = Array.make sz "";
+  file_name = Array.make sz Bytes.empty;
+  file_data = Array.make sz Bytes.empty;
   file_size = Array.make sz 0;
 }
 
@@ -192,9 +192,9 @@ let read_register vm reg = function
  | InputNameIn ->
    let str = vm.input.file_name.(value_to_int reg.reg2) in
    let s1 = value_to_int reg.reg1 in
-   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   let chr = if s1 < Bytes.length str then Char.code (Bytes.get str s1) else 0 in
    i chr
- | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg2).[value_to_int reg.reg1])
+ | InputDataIn -> i (Char.code (Bytes.get vm.input.file_data.(value_to_int reg.reg2) (value_to_int reg.reg1)))
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -209,7 +209,7 @@ let memop mem v addr = function
 
 let set_input_name vm s2 s1 v =
    let str = vm.input.file_name.(s2) in
-   let str = if String.length str < 256 then String.make 256 (Char.chr 0) else str in
+   let str = if Bytes.length str < 256 then Bytes.make 256 (Char.chr 0) else str in
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
 
@@ -307,11 +307,12 @@ let init_memory m instance =
   let open Source in
   trace ("Segments: " ^ string_of_int (List.length m.data));
   let res = ref [] in
-  let init (dta:bytes Ast.segment) =
+  let init (dta:string Ast.segment) =
+    let bts = Bytes.of_string dta.it.init in
     let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
-    let sz = Bytes.length dta.it.init in
+    let sz = Bytes.length bts in
     for i = 0 to sz-1 do
-      let v = I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))) in
+      let v = I32 (Int32.of_int (Char.code (Bytes.get bts i))) in
       res :=
         [STORE {ty=I32Type; align=0; offset=0l; sz=Some Memory.Mem8};
           PUSH v; PUSH (I32 (Int32.of_int (offset+i)))] @ !res
@@ -737,14 +738,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    let str = vm.input.file_name.(s2) in
-   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   let chr = if s1 < Bytes.length str then Char.code (Bytes.get str s1) else 0 in
    vm.stack.(vm.stack_ptr-2) <- i (chr);
    vm.stack_ptr <- vm.stack_ptr - 1
  | INPUTDATA ->
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s2).[s1]);
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code (Bytes.get vm.input.file_data.(s2) s1));
    vm.stack_ptr <- vm.stack_ptr - 1
  | OUTPUTSIZE ->
    inc_pc vm;
@@ -760,7 +761,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
    let str = vm.input.file_name.(s3) in
-   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   let str = if Bytes.length str = 1 then Bytes.make 256 (Char.chr 0) else str in
    Bytes.set str s2 (Char.chr s1);
    vm.input.file_name.(s3) <- str
  | OUTPUTDATA ->
@@ -913,7 +914,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | INPUTDATA ->
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   let str = String.make 1 vm.input.file_data.(s2).[s1] in
+   let str = String.make 1 (Bytes.get vm.input.file_data.(s2) s1) in
    "INPUTDATA " ^ str
  | OUTPUTSIZE -> "OUTPUTSIZE"
  | OUTPUTNAME -> "OUTPUTNAME"
