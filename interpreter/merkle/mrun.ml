@@ -818,16 +818,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    let file_num = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack_ptr <- vm.stack_ptr - 1;
    (* output file *)
-   let ch = open_out_bin "custom.out" in
-   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
-   close_out ch;
-   ignore (Sys.command (Hashtbl.find custom_command x));
-   let ch = open_in_bin "custom.in" in
-   let sz = in_channel_length ch in
+   let dta, sz = process_custom vm x file_num in
    vm.input.file_size.(file_num) <- sz;
-   let dta = Bytes.create sz in
-   really_input ch dta 0 sz;
-   close_in ch;
    vm.input.file_data.(file_num) <- dta
 
 open Types
