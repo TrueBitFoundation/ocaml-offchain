@@ -11,6 +11,20 @@ let w256_to_string bs =
   done;
   !res
 
+let w256_to_int w =
+  let res = ref 0 in
+  for i = 0 to 8 do
+    res := !res*256;
+    res := !res + Char.code w.[i];
+  done;
+  !res
+
+let bytes32_to_int w = w256_to_int (Bytes.to_string w)
+
+let w256_to_value w =
+  (* should have a tag for value *)
+  I32 (Int32.of_int (w256_to_int w))
+
 module Decode = struct
 
 (* Decoding stream *)

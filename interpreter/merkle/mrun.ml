@@ -215,16 +215,21 @@ let set_input_name vm s2 s1 v =
 
 let process_custom vm x file_num =
    (* output file *)
-   let ch = open_out_bin "custom.out" in
-   output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
-   close_out ch;
-   ignore (Sys.command (Hashtbl.find custom_command x));
-   let ch = open_in_bin "custom.in" in
-   let sz = in_channel_length ch in
-   let dta = Bytes.create sz in
-   really_input ch dta 0 sz;
-   close_in ch;
-   dta, sz
+   if x = 1 then begin
+     let dta = vm.input.file_data.(file_num) in
+     GenMerkle.do_read dta, 32
+   end else begin
+     let ch = open_out_bin "custom.out" in
+     output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+     close_out ch;
+     ignore (Sys.command (Hashtbl.find custom_command x));
+     let ch = open_in_bin "custom.in" in
+     let sz = in_channel_length ch in
+     let dta = Bytes.create sz in
+     really_input ch dta 0 sz;
+     close_in ch;
+     dta, sz
+   end
 
 let write_register vm regs v = function
  | NoOut -> ()

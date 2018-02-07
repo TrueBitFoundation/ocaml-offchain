@@ -683,15 +683,4 @@ let test n =
   prerr_endline (string_of_int (List.length lst))
 *)
 
-let w256_to_int w =
-  let res = ref 0 in
-  for i = 0 to 8 do
-    res := !res*256;
-    res := !res + Char.code w.[i];
-  done;
-  !res
-
-let w256_to_value w =
-  (* should have a tag for value *)
-  I32 (Int32.of_int (w256_to_int w))
 
