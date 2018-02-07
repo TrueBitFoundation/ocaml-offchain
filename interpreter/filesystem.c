@@ -61,6 +61,11 @@ int getNameLength(int ptr) {
   return res;
 }
 
+int getInternalFile(int fd) {
+   struct system *s = getSystem();
+   return s->ptr[fd];
+}
+
 unsigned char *getName(int ptr) {
   int sz = getNameLength(ptr);
   unsigned char *res = malloc(sz+1);
