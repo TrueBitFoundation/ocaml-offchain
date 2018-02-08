@@ -9,6 +9,9 @@ open Values
 (* call name to custom judge number *)
 let custom_calls = Hashtbl.create 7
 
+let _ =
+  Hashtbl.add custom_calls "_readBlock" 1
+
 let trace = Byteutil.trace
 
 (* perhaps we need to link the modules first *)

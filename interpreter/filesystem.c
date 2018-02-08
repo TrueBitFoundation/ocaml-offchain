@@ -61,7 +61,7 @@ int getNameLength(int ptr) {
   return res;
 }
 
-int getInternalFile(int fd) {
+int env__getInternalFile(int fd) {
    struct system *s = getSystem();
    return s->ptr[fd];
 }
@@ -220,6 +220,11 @@ void finalizeSystem() {
     index++;
   }
 }
+
+void env__internalSync(int fd) {
+   finalizeSystem();
+}
+
 
 // read one byte
 int read8(int fd) {
