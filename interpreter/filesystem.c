@@ -225,6 +225,13 @@ void env__internalSync(int fd) {
    finalizeSystem();
 }
 
+void env__internalSync2(int index) {
+  struct system *s = getSystem();
+  s->file_size[index] = inputSize(index);
+  s->file_data[index] = getData(index);
+  s->file_output[index] = 0;
+  debugBuffer((char*)s->file_data[index], s->file_size[index]);
+}
 
 // read one byte
 int read8(int fd) {

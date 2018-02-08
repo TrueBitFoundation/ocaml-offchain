@@ -19,7 +19,22 @@ let w256_to_int w =
   done;
   !res
 
-let bytes32_to_int w = w256_to_int (Bytes.to_string w)
+let from_hex str =
+  let res = ref "" in
+  for i = 0 to 31 do
+    res := !res ^ String.make 1 (Char.chr (int_of_string ("0x" ^ String.sub str (i*2) 2)))
+  done;
+  !res
+
+let bytes_from_hex str = Bytes.of_string (from_hex str)
+
+let bytes32_to_int w =
+  let res = ref 0 in
+  for i = 0 to 31 do
+    res := !res*256;
+    res := !res + Char.code (Bytes.get w i);
+  done;
+  !res
 
 let w256_to_value w =
   (* should have a tag for value *)

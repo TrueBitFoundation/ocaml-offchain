@@ -651,13 +651,6 @@ let hash_machine_regs m regs =
   trace ("hash machine regs " ^ w256_to_string res);
   res
 
-let from_hex str =
-  let res = ref "" in
-  for i = 0 to 31 do
-    res := !res ^ String.make 1 (Char.chr (int_of_string ("0x" ^ String.sub str (i*2) 2)))
-  done;
-  !res
-
 let test2 () =
   let hash = Hash.keccak 256 in
   (*
