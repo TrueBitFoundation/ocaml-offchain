@@ -342,6 +342,18 @@ let output_files vm =
     end
   done
 
+let do_output_file vm i =
+  let open Mrun in
+  let fname = Mbinary.string_from_bytes vm.input.file_name.(i) in
+  let sz = vm.input.file_size.(i) in
+  let dta = vm.input.file_data.(i) in
+  if String.length fname > 0 then begin
+      Printf.printf "{\"size\": %i, \"root\": %s, \"name\": \"%s\", \"data\": \"%s\"}\n" sz
+         (Mproof.to_hex (Mbinary.bytes_to_root dta))
+         (String.escaped fname)
+         (String.escaped (Bytes.to_string dta));
+  end
+
 let print_file_names vm =
   let open Mrun in
   let res = ref [] in
@@ -408,6 +420,7 @@ let run_test inst mdle func vs =
       end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
+      if i = !Flags.output_file_at && !task_number - 1 = !Flags.case then do_output_file vm !Flags.output_file_number;
       if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
       else if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
          let proof =

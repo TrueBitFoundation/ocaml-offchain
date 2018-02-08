@@ -20,18 +20,20 @@ let _ =
   Hashtbl.add chunks a2 (Bytes.concat empty [Bytes.of_string "test"; a3; Bytes.of_string "stuff"]);
   Hashtbl.add chunks a3 (Bytes.make 32 '\000')
 
-let rec read_file_aux id lst prefix_length =
+let rec read_file id lst =
   match lst with
   | (start, stop) :: lst ->
      ( try
        let chunk = Hashtbl.find chunks id in
        prerr_endline ("chunk " ^ w256_to_string (Bytes.to_string id) ^ " is " ^ String.escaped (Bytes.to_string chunk));
-       let id = Bytes.sub chunk (start-prefix_length) 32 in
-       read_file_aux id lst (prefix_length+stop)
+       let id = Bytes.sub chunk start 32 in
+       read_file id lst stop
      with Not_found -> ( prerr_endline ("Cannot find chunk " ^ w256_to_string (Bytes.to_string id)) ; Bytes.make 32 '\000' ) )
   | [] -> id
 
-let read_file id lst = read_file_aux id lst 0
+let rec normalize prefix_length = function
+  | (start, stop) :: lst -> (start-prefix_length, stop-prefix_length) :: normalize (prefix_length+stop) lst
+  | [] -> []
 
 let rec pairify = function
  | a::b::lst -> (a,b) :: pairify lst
@@ -45,7 +47,7 @@ let do_read dta =
   let rec read idx =
      if idx+32 > Bytes.length dta then [] else
      let v = bytes32_to_int (Bytes.sub dta idx 32) in
-     prerr_endline ("reading " ^string_of_int v);
+     prerr_endline ("reading " ^ string_of_int v);
      v :: read (idx+32) in
-  read_file id (pairify (read 32))
+  read_file id (List.rev (normalize 0 (pairify (read 32))))
 

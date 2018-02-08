@@ -96,6 +96,8 @@ let argspec = Arg.align
   "-input", Arg.Set Flags.input_proof, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";
   "-sbrk-offset", Arg.Int (fun n -> Flags.sbrk_offset := Int32.of_int n), " memory offset used by sbrk";
+  "-output-step", Arg.Int (fun x -> Flags.output_file_at := x), " for which step the file will be output";
+  "-output-file", Arg.Int (fun x -> Flags.output_file_number := x), " which file will be output at the given step";
 ]
 
 let () =
