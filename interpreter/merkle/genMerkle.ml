@@ -27,7 +27,7 @@ let rec read_file id lst =
        let chunk = Hashtbl.find chunks id in
        prerr_endline ("chunk " ^ w256_to_string (Bytes.to_string id) ^ " is " ^ String.escaped (Bytes.to_string chunk));
        let id = Bytes.sub chunk start 32 in
-       read_file id lst stop
+       read_file id lst
      with Not_found -> ( prerr_endline ("Cannot find chunk " ^ w256_to_string (Bytes.to_string id)) ; Bytes.make 32 '\000' ) )
   | [] -> id
 

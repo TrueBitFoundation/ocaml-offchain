@@ -26,6 +26,8 @@ type vm = {
   mutable stack_ptr : int;
   mutable call_ptr : int;
   mutable memsize : int;
+  
+  mutable step : int; (* use for debugging *)
 }
 
 let inc_pc vm = vm.pc <- vm.pc+1
@@ -53,6 +55,8 @@ let create_vm code = {
   stack_ptr = 0;
   memsize = 0;
   call_ptr = 0;
+  
+  step = 0;
 }
 
 let rec pow2 n = if n = 0 then 1 else 2 * pow2 (n-1)
