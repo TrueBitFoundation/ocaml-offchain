@@ -25,14 +25,7 @@ type location_proof =
  | SimpleProof
  | LocationProof of (int * w256 list)
  | LocationProof2 of (int * int * (w256 list * w256 list)) (* loc1, loc2, proof1, proof2 *)
- | CustomProof of (int * w256 * (int * w256 list))
-
-(*
-type pointer =
- | PcPtr
- | StackPtr
- | CallPtr
-*)
+ | CustomProof of (int * w256 * (int * w256 list) * bytes)
 
 let make_fetch_code vm =
   trace ("microp word " ^ to_hex (microp_word (get_code vm.code.(vm.pc))));
@@ -154,7 +147,7 @@ let get_write_location m loc =
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
  | CustomFileWrite ->
    let dta, sz = process_custom vm (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.ireg) in
-   CustomProof (sz, string_to_root dta, loc_proof pos string_to_root vm.input.file_data)
+   CustomProof (sz, string_to_root dta, loc_proof pos string_to_root vm.input.file_data, dta)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -293,7 +286,7 @@ let check_init_registers state1 state2 m =
 let value_from_proof = function
  | SimpleProof -> raise EmptyArray
  | LocationProof (loc, lst) -> get_leaf loc lst
- | CustomProof (_, _, (loc, lst)) -> get_leaf loc lst
+ | CustomProof (_, _, (loc, lst), _) -> get_leaf loc lst
  | LocationProof2 (_, loc2, (_, lst2)) -> get_leaf loc2 lst2
 
 let read_from_proof regs vm proof = function
@@ -529,8 +522,8 @@ let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 let loc_to_string = function
  | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
- | CustomProof (result_size, result_state, (loc,lst)) ->
-    "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ ", \"result_size\": " ^ string_of_int result_size ^ ", \"result_state\": " ^ to_hex result_state ^ " }"
+ | CustomProof (result_size, result_state, (loc,lst), dta) ->
+    "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ ", \"result_size\": " ^ string_of_int result_size ^ ", \"result_state\": " ^ to_hex result_state ^ ", \"data\": " ^ to_hex (Bytes.to_string dta) ^ "}"
  | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
     "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
