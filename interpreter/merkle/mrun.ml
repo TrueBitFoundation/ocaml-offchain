@@ -222,6 +222,9 @@ let process_custom vm x file_num =
    if x = 1 then begin
      let dta = vm.input.file_data.(file_num) in
      GenMerkle.do_read dta, 32
+   end else if x = 2 then begin
+     prerr_endline ("***** Step " ^ string_of_int vm.step);
+     (vm.input.file_data.(file_num), vm.input.file_size.(file_num))
    end else begin
      let ch = open_out_bin "custom.out" in
      output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);

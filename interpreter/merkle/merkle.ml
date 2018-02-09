@@ -10,7 +10,8 @@ open Values
 let custom_calls = Hashtbl.create 7
 
 let _ =
-  Hashtbl.add custom_calls "_readBlock" 1
+  Hashtbl.add custom_calls "_readBlock" 1;
+  Hashtbl.add custom_calls "_internalStep" 
 
 let trace = Byteutil.trace
 
