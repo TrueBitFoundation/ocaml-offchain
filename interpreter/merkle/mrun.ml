@@ -6,8 +6,8 @@ exception VmTrap
 exception VmError
 
 type input = {
-  file_name : string array;
-  file_data : string array;
+  file_name : bytes array;
+  file_data : bytes array;
   file_size : int array;
 }
 
@@ -26,13 +26,17 @@ type vm = {
   mutable stack_ptr : int;
   mutable call_ptr : int;
   mutable memsize : int;
+  
+  mutable step : int; (* use for debugging *)
 }
 
 let inc_pc vm = vm.pc <- vm.pc+1
 
+let custom_command = Hashtbl.create 7
+
 let empty_input sz = {
-  file_name = Array.make sz "";
-  file_data = Array.make sz "";
+  file_name = Array.make sz Bytes.empty;
+  file_data = Array.make sz Bytes.empty;
   file_size = Array.make sz 0;
 }
 
@@ -42,7 +46,7 @@ let create_vm code = {
   stack = Array.make !Flags.stack_size (i 0);
 (*  memory = Array.make (1024*64) 0L; *)
   memory = Array.make (!Flags.memory_size*1024*8) 0L;
-  input = empty_input 16;
+  input = empty_input 1024;
   call_stack = Array.make (!Flags.call_size) 0;
   globals = Array.make (!Flags.globals_size) (i 0);
   calltable = Array.make (!Flags.table_size) (-1);
@@ -51,6 +55,8 @@ let create_vm code = {
   stack_ptr = 0;
   memsize = 0;
   call_ptr = 0;
+  
+  step = 0;
 }
 
 let rec pow2 n = if n = 0 then 1 else 2 * pow2 (n-1)
@@ -120,6 +126,7 @@ type out_code =
  | SetTableTypes
  | SetMemory
  | SetGlobals
+ | CustomFileWrite
 
 type stack_ch =
  | StackRegSub
@@ -189,9 +196,9 @@ let read_register vm reg = function
  | InputNameIn ->
    let str = vm.input.file_name.(value_to_int reg.reg2) in
    let s1 = value_to_int reg.reg1 in
-   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   let chr = if s1 < Bytes.length str then Char.code (Bytes.get str s1) else 0 in
    i chr
- | InputDataIn -> i (Char.code vm.input.file_data.(value_to_int reg.reg2).[value_to_int reg.reg1])
+ | InputDataIn -> i (Char.code (Bytes.get vm.input.file_data.(value_to_int reg.reg2) (value_to_int reg.reg1)))
 
 let get_register regs = function
  | Reg1 -> regs.reg1
@@ -206,9 +213,30 @@ let memop mem v addr = function
 
 let set_input_name vm s2 s1 v =
    let str = vm.input.file_name.(s2) in
-   let str = if String.length str < 256 then String.make 256 (Char.chr 0) else str in
+   let str = if Bytes.length str < 256 then Bytes.make 256 (Char.chr 0) else str in
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
+
+let process_custom vm x file_num =
+   (* output file *)
+   if x = 1 then begin
+     let dta = vm.input.file_data.(file_num) in
+     GenMerkle.do_read dta, 32
+   end else if x = 2 then begin
+     prerr_endline ("***** Step " ^ string_of_int vm.step);
+     (vm.input.file_data.(file_num), vm.input.file_size.(file_num))
+   end else begin
+     let ch = open_out_bin "custom.out" in
+     output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+     close_out ch;
+     ignore (Sys.command (Hashtbl.find custom_command x));
+     let ch = open_in_bin "custom.in" in
+     let sz = in_channel_length ch in
+     let dta = Bytes.create sz in
+     really_input ch dta 0 sz;
+     close_in ch;
+     dta, sz
+   end
 
 let write_register vm regs v = function
  | NoOut -> ()
@@ -269,6 +297,12 @@ let write_register vm regs v = function
  | SetGlobals ->
    let sz = pow2 (value_to_int v) in
    vm.globals <- Array.make sz (i 0)
+ | CustomFileWrite ->
+   (* Will this actually work? *)
+   let file_num = value_to_int regs.reg1 in
+   let dta, sz = process_custom vm (value_to_int regs.reg1) (value_to_int regs.ireg) in
+   regs.reg2 <- i sz;
+   vm.input.file_data.(file_num) <- dta
 
 let setup_memory vm m instance =
   let open Ast in
@@ -285,11 +319,12 @@ let init_memory m instance =
   let open Source in
   trace ("Segments: " ^ string_of_int (List.length m.data));
   let res = ref [] in
-  let init (dta:bytes Ast.segment) =
+  let init (dta:string Ast.segment) =
+    let bts = Bytes.of_string dta.it.init in
     let offset = value_to_int (Eval.eval_const instance dta.it.offset) in
-    let sz = Bytes.length dta.it.init in
+    let sz = Bytes.length bts in
     for i = 0 to sz-1 do
-      let v = I32 (Int32.of_int (Char.code (Bytes.get dta.it.init i))) in
+      let v = I32 (Int32.of_int (Char.code (Bytes.get bts i))) in
       res :=
         [STORE {ty=I32Type; align=0; offset=0l; sz=Some Memory.Mem8};
           PUSH v; PUSH (I32 (Int32.of_int (offset+i)))] @ !res
@@ -444,6 +479,7 @@ let get_code = function
  | SETGLOBALS x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetGlobals)}
  | SETMEMORY x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetMemory)}
  | SETTABLE x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetTableTypes); write2=(Reg1,SetTable)}
+ | CUSTOM x -> {noop with immed=i x; read_reg1=StackIn0; read_reg2=InputSizeIn; write1=(Reg1,CustomFileWrite); write2=(Reg2,InputSizeOut)}
 
 let micro_step vm =
   let open Values in
@@ -714,14 +750,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    let str = vm.input.file_name.(s2) in
-   let chr = if s1 < String.length str then Char.code str.[s1] else 0 in
+   let chr = if s1 < Bytes.length str then Char.code (Bytes.get str s1) else 0 in
    vm.stack.(vm.stack_ptr-2) <- i (chr);
    vm.stack_ptr <- vm.stack_ptr - 1
  | INPUTDATA ->
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   vm.stack.(vm.stack_ptr-2) <- i (Char.code vm.input.file_data.(s2).[s1]);
+   vm.stack.(vm.stack_ptr-2) <- i (Char.code (Bytes.get vm.input.file_data.(s2) s1));
    vm.stack_ptr <- vm.stack_ptr - 1
  | OUTPUTSIZE ->
    inc_pc vm;
@@ -737,7 +773,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
    let str = vm.input.file_name.(s3) in
-   let str = if String.length str = 1 then String.make 256 (Char.chr 0) else str in
+   let str = if Bytes.length str = 1 then Bytes.make 256 (Char.chr 0) else str in
    Bytes.set str s2 (Char.chr s1);
    vm.input.file_name.(s3) <- str
  | OUTPUTDATA ->
@@ -784,6 +820,14 @@ let vm_step vm = match vm.code.(vm.pc) with
    let sz = pow2 v in
    vm.globals <- Array.make sz (i 0);
    inc_pc vm
+ | CUSTOM x ->
+   inc_pc vm;
+   let file_num = value_to_int vm.stack.(vm.stack_ptr-1) in
+   vm.stack_ptr <- vm.stack_ptr - 1;
+   (* output file *)
+   let dta, sz = process_custom vm x file_num in
+   vm.input.file_size.(file_num) <- sz;
+   vm.input.file_data.(file_num) <- dta
 
 open Types
 
@@ -874,7 +918,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | INPUTDATA ->
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   let str = String.make 1 vm.input.file_data.(s2).[s1] in
+   let str = String.make 1 (Bytes.get vm.input.file_data.(s2) s1) in
    "INPUTDATA " ^ str
  | OUTPUTSIZE -> "OUTPUTSIZE"
  | OUTPUTNAME -> "OUTPUTNAME"
@@ -920,6 +964,7 @@ let trace_step vm = match vm.code.(vm.pc) with
  | SETTABLE v -> "SETTABLE"
  | SETMEMORY v -> "SETMEMORY"
  | SETGLOBALS v -> "SETGLOBALS"
+ | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let trace_clean vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
@@ -965,6 +1010,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | SETTABLE v -> "SETTABLE"
  | SETMEMORY v -> "SETMEMORY"
  | SETGLOBALS v -> "SETGLOBALS"
+ | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let stack_to_string vm n =
   let res = ref "" in

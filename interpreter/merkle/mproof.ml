@@ -25,13 +25,7 @@ type location_proof =
  | SimpleProof
  | LocationProof of (int * w256 list)
  | LocationProof2 of (int * int * (w256 list * w256 list)) (* loc1, loc2, proof1, proof2 *)
-
-(*
-type pointer =
- | PcPtr
- | StackPtr
- | CallPtr
-*)
+ | CustomProof of (int * w256 * (int * w256 list) * bytes)
 
 let make_fetch_code vm =
   trace ("microp word " ^ to_hex (microp_word (get_code vm.code.(vm.pc))));
@@ -74,6 +68,7 @@ let write_position vm regs = function
  | InputCreateOut -> value_to_int regs.reg1
  | CallTableOut -> value_to_int regs.ireg
  | CallTypeOut -> value_to_int regs.ireg
+ | CustomFileWrite -> value_to_int regs.reg1
  | _ -> 0
 
 let loc_proof loc f arr = (loc, map_location_proof f arr loc)
@@ -107,7 +102,7 @@ let get_read_location m loc =
  | InputDataIn ->
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
 
-let find_file vm name =
+let find_file vm (name:string) =
   let res = ref SimpleProof in
   for i = 0 to Array.length vm.input.file_data - 1 do
     if string_from_bytes vm.input.file_name.(i) = name then res := LocationProof (loc_proof i bytes_to_root vm.input.file_data)
@@ -117,7 +112,7 @@ let find_file vm name =
 let find_files vm =
   let res = ref [] in
   for i = 0 to Array.length vm.input.file_data - 1 do
-    if String.length vm.input.file_name.(i) > 0 && vm.input.file_name.(i).[0] <> '\000' then begin
+    if Bytes.length vm.input.file_name.(i) > 0 && (Bytes.get vm.input.file_name.(i) 0) <> '\000' then begin
       res := (map_location_proof bytes_to_root vm.input.file_data i, map_location_proof string_to_root vm.input.file_name i, i, Mbinary.string_from_bytes vm.input.file_name.(i) ^ ".out") :: !res
     end
   done;
@@ -150,6 +145,9 @@ let get_write_location m loc =
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
  | InputDataOut ->
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
+ | CustomFileWrite ->
+   let dta, sz = process_custom vm (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.ireg) in
+   CustomProof (sz, string_to_root dta, loc_proof pos string_to_root vm.input.file_data, dta)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -259,6 +257,8 @@ let micro_step_proofs_with_error vm =
 
 (* Doing checks *)
 
+(* Custom checking is not implemented *)
+
 let check_fetch state1 state2 (vm_bin, op, proof) =
   let microp = get_leaf vm_bin.bin_pc proof in
   trace ("OP: " ^ to_hex (microp_word op));
@@ -284,12 +284,10 @@ let check_init_registers state1 state2 m =
   state2 = hash_machine_bin {m with bin_regs=regs}
 
 let value_from_proof = function
- | SimpleProof ->
-    raise EmptyArray
- | LocationProof (loc, lst) ->
-    get_leaf loc lst
- | LocationProof2 (_, loc2, (_, lst2)) ->
-    get_leaf loc2 lst2
+ | SimpleProof -> raise EmptyArray
+ | LocationProof (loc, lst) -> get_leaf loc lst
+ | CustomProof (_, _, (loc, lst), _) -> get_leaf loc lst
+ | LocationProof2 (_, loc2, (_, lst2)) -> get_leaf loc2 lst2
 
 let read_from_proof regs vm proof = function
  | NoIn -> get_value (i 0)
@@ -301,7 +299,7 @@ let read_from_proof regs vm proof = function
    ( match proof with
    | LocationProof2 (_, loc2, (_, lst2)) ->
      let leaf = get_leaf (loc2/32) lst2 in
-     let byte = Bytes.get leaf (loc2 mod 32) in
+     let byte = String.get leaf (loc2 mod 32) in
      get_value (i (Char.code byte))
    | _ -> raise EmptyArray )
  | _ -> value_from_proof proof
@@ -392,7 +390,7 @@ let check_read_proof regs vm proof = function
        value_to_int regs.reg2 = loc1 &&
        value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
-       get_leaf loc1 lst1 = get_root (loc2/32) lst2
+       get_leaf loc1 lst1 = get_root (loc2/16) lst2
     | _ -> false )
  | a ->
     ( match proof with
@@ -417,7 +415,7 @@ let check_write_proof regs vm proof = function
        value_to_int regs.reg2 = loc1 &&
        value_to_int regs.reg1 = loc2 &&
        vm.bin_input_data = get_root loc1 lst1 &&
-       get_leaf loc1 lst1 = get_root (loc2/32) lst2
+       get_leaf loc1 lst1 = get_root (loc2/16) lst2
     | _ -> false )
  | a ->
     ( match proof with
@@ -477,7 +475,7 @@ let check_update_call_ptr state1 state2 (m,vm) =
   m.bin_vm = hash_vm_bin vm &&
   state2 = hash_machine_bin m2
 
-let check_update_memsize (state1:bytes) (state2:bytes) (m,vm) =
+let check_update_memsize (state1:w256) (state2:w256) (m,vm) =
   let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
@@ -524,6 +522,8 @@ let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 let loc_to_string = function
  | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+ | CustomProof (result_size, result_state, (loc,lst), dta) ->
+    "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ ", \"result_size\": " ^ string_of_int result_size ^ ", \"result_state\": " ^ to_hex result_state ^ ", \"data\": " ^ to_hex (Bytes.to_string dta) ^ "}"
  | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
     "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
@@ -537,9 +537,9 @@ let build_root v = make_zero (Int64.to_int (Decode.word v))
 
 let modify_data i nv str =
   let nv = Int64.to_int (Decode.word nv) in
-  let res = Bytes.copy str in
+  let res = Bytes.of_string str in
   Bytes.set res i (Char.chr nv);
-  res
+  Bytes.to_string res
 
 let write_register_bin proof vm regs v = function
  | NoOut -> vm
@@ -559,6 +559,8 @@ let write_register_bin proof vm regs v = function
  | CallTableOut -> {vm with bin_calltable=merkle_change v proof}
  | CallTypeOut -> {vm with bin_calltable_types=merkle_change v proof}
  | InputCreateOut -> {vm with bin_input_data=merkle_change (make_root (Int64.to_int (Decode.word v)) (u256 0)) proof}
+ | CustomFileWrite ->
+   {vm with bin_input_data=merkle_change v proof}
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}
  | MemoryOut2 (_,sz) -> {vm with bin_memory=merkle_change_memory2 regs v sz proof}
  | InputNameOut ->
@@ -579,7 +581,7 @@ let write_register_bin proof vm regs v = function
                value_to_int regs.reg2 = loc2 &&
                vm.bin_input_data = get_root loc1 lst1 &&
                get_leaf loc1 lst1 = get_root loc2 lst2);
-       let lst2 = do_set_leaf (loc2/32) (modify_data (loc2 mod 32) v) lst2 in
+       let lst2 = do_set_leaf (loc2/16) (modify_data (loc2 mod 16) v) lst2 in
        let lst1 = set_leaf loc1 (get_root (loc2/32) lst2) lst1 in
        {vm with bin_input_data=get_root loc1 lst1}
    | _ -> assert false )

@@ -61,6 +61,11 @@ int getNameLength(int ptr) {
   return res;
 }
 
+int env__getInternalFile(int fd) {
+   struct system *s = getSystem();
+   return s->ptr[fd];
+}
+
 unsigned char *getName(int ptr) {
   int sz = getNameLength(ptr);
   unsigned char *res = malloc(sz+1);
@@ -214,6 +219,18 @@ void finalizeSystem() {
     }
     index++;
   }
+}
+
+void env__internalSync(int fd) {
+   finalizeSystem();
+}
+
+void env__internalSync2(int index) {
+  struct system *s = getSystem();
+  s->file_size[index] = inputSize(index);
+  s->file_data[index] = getData(index);
+  s->file_output[index] = 0;
+  debugBuffer((char*)s->file_data[index], s->file_size[index]);
 }
 
 // read one byte

@@ -236,6 +236,7 @@ let out_code_byte = function
  | SetTable -> 0x13
  | SetTableTypes -> 0x14
  | SetMemory -> 0x15
+ | CustomFileWrite -> 0x16
 
 let stack_ch_byte = function
  | StackRegSub -> 0x00
@@ -278,12 +279,13 @@ let microp_word op =
   value op.immed;
   extend (to_bytes s) 32
 
-type w256 = bytes
+type w256 = string
 
 open Cryptokit
 
 (* keccak two words, clear control byte *)
 
+(*
 let ccb w =
   let res = Bytes.copy w in
   Bytes.set res 31 (Char.chr 0);
@@ -298,6 +300,7 @@ let ccb2 w =
   let res = Bytes.copy w in
   Bytes.set res 31 (Char.chr 1);
   res
+*)
 
 let keccak w1 w2 =
   let hash = Hash.keccak 256 in
@@ -382,7 +385,7 @@ let rec mapMerkle f arr idx level =
 
 let rec depth x = if x <= 1 then 0 else 1 + depth (x/2)
 
-let get_hash arr =
+let get_hash (arr: w256 array) =
   makeMerkle arr 0 (depth (Array.length arr*2-1))
 
 let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
@@ -416,24 +419,34 @@ let hash_stack arr =
 
 let string_to_array str =
   (* need one extra for nil terminated strings*)
-  let res = Array.make (String.length str) (u256 0) in
-  for i = 0 to String.length str - 1 do
-    res.(i) <- u256 (Char.code str.[i])
+  let res = Array.make (Bytes.length str) (u256 0) in
+  for i = 0 to Bytes.length str - 1 do
+    res.(i) <- u256 (Char.code (Bytes.get str i))
   done;
   res
 
 let string_to_root str = get_hash (string_to_array str)
 
-let zeros = String.make 64 (Char.chr 0)
+let zeros = Bytes.make 64 (Char.chr 0)
 
-let get_bytes32 str n = String.sub str n 32
+let get_bytes32 str n = Bytes.sub str n 32
+let get_bytes16 str n = Bytes.sub str n 16
+
+let bytes_to_array32 str =
+  let cells = max ((Bytes.length str + 31) / 32) 2 in
+  let res = Array.make cells (u256 0) in
+  let str_e = Bytes.cat str zeros in
+  for i = 0 to cells - 1 do
+    res.(i) <- Bytes.to_string (get_bytes32 str_e (i*32))
+  done;
+  res
 
 let bytes_to_array str =
-  let cells = max ((String.length str + 31) / 32) 2 in
+  let cells = max ((Bytes.length str + 15) / 16) 2 in
   let res = Array.make cells (u256 0) in
-  let str_e = str ^ zeros in
+  let str_e = Bytes.cat str zeros in
   for i = 0 to cells - 1 do
-    res.(i) <- get_bytes32 str_e (i*32)
+    res.(i) <- Bytes.to_string (get_bytes16 str_e (i*16))
   done;
   res
 
@@ -450,7 +463,7 @@ let location_proof2 arr loc1 loc2 =
 let location_proof_data arr loc1 loc2 =
   (* first make the first level proof *)
   let proof1 = map_location_proof bytes_to_root arr loc1 in
-  let proof2 = location_proof (bytes_to_array arr.(loc1)) (loc2/32) in
+  let proof2 = location_proof (bytes_to_array arr.(loc1)) (loc2/16) in
   (proof1, proof2)
 
 (*
@@ -520,7 +533,7 @@ let hash_io vm =
 
 let string_from_bytes bs =
   let rec aux n = 
-    if String.length bs = n || Char.code bs.[n] = 0 then "" else String.make 1 bs.[n] ^ aux (n+1) in
+    if Bytes.length bs = n || Char.code (Bytes.get bs n) = 0 then "" else String.make 1 (Bytes.get bs n) ^ aux (n+1) in
   aux 0
 
 let code_hash arr = get_hash (Array.map (fun v -> microp_word (get_code v)) arr)
@@ -638,13 +651,6 @@ let hash_machine_regs m regs =
   trace ("hash machine regs " ^ w256_to_string res);
   res
 
-let from_hex str =
-  let res = ref "" in
-  for i = 0 to 31 do
-    res := !res ^ String.make 1 (Char.chr (int_of_string ("0x" ^ String.sub str (i*2) 2)))
-  done;
-  !res
-
 let test2 () =
   let hash = Hash.keccak 256 in
   (*
@@ -662,21 +668,12 @@ let test2 () =
 let _ = test2()
 *)
 
+(*
 let test n =
   let w = Bytes.create 32 in
   let arr = Array.make n w in
   let lst = make_levels_aux arr in
   prerr_endline (string_of_int (List.length lst))
+*)
 
-let w256_to_int w =
-  let res = ref 0 in
-  for i = 0 to 8 do
-    res := !res*256;
-    res := !res + Char.code w.[i];
-  done;
-  !res
-
-let w256_to_value w =
-  (* should have a tag for value *)
-  I32 (Int32.of_int (w256_to_int w))
 
