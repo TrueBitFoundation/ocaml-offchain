@@ -10,3 +10,4 @@ interpreter/globals.*
 solidity/contracts
 solidity/node_modules
 *.cmi
+**/node_modules

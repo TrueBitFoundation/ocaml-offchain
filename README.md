@@ -38,6 +38,30 @@ Outputting proofs:
 ```
 This will make a proof for step 4 in the computation. Because there are many test cases, one of them has to be selected, so for example `-case 0` will select the first test case.
 
+# Using the JSON-RPC Server
+
+```
+cd server
+npm install
+node index.js
+```
+
+A client can communicate with the server like this:
+```javascript
+var jayson = require('jayson');
+
+// create a client
+var client = jayson.client.http({
+  port: 3000
+});
+
+// invoke *command* with *args*
+client.request('*command*', [*args*], function(err, response) {
+  if(err) throw err;
+  console.log(response.result);
+});
+```
+
 # Docker
 
 If you want to run these tests inside of a Docker container you can pull the latest docker image and try it out.
