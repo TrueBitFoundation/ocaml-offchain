@@ -2,6 +2,14 @@
 let name = "wasm"
 let version = "1.0"
 
+let add_custom_judge str =
+  match String.split_on_char ',' str with
+  | [num; symbol; command] ->
+    let num = int_of_string num in
+    Hashtbl.add Merkle.custom_calls symbol num;
+    Hashtbl.add Mrun.custom_command num command
+  | _ -> prerr_endline "bad format for custom judge"
+
 let configure () =
   Import.register (Utf8.decode "spectest") Spectest.lookup;
   Import.register (Utf8.decode "input") Input.lookup;
@@ -98,6 +106,8 @@ let argspec = Arg.align
   "-sbrk-offset", Arg.Int (fun n -> Flags.sbrk_offset := Int32.of_int n), " memory offset used by sbrk";
   "-output-step", Arg.Int (fun x -> Flags.output_file_at := x), " for which step the file will be output";
   "-output-file", Arg.Int (fun x -> Flags.output_file_number := x), " which file will be output at the given step";
+  
+  "-custom", Arg.String add_custom_judge, " Add custom judge. Format: num,symbol,judge";
 ]
 
 let () =
