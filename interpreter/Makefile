@@ -23,7 +23,6 @@ FLAGS = 	-cflags '-w +a-4-27-42-44-45 -warn-error +a'
 OCB =		ocamlbuild -package cryptokit -package yojson $(FLAGS) $(DIRS:%=-I %) $(LIBS:%=-libs %)
 JS =		# set to JS shell command to run JS tests
 
-
 # Main targets
 
 .PHONY:		default opt unopt libopt libunopt jslib all land zip

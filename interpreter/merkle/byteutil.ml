@@ -11,6 +11,14 @@ let w256_to_string bs =
   done;
   !res
 
+let bytes_to_hex bs =
+  let res = ref "" in
+  for i = 0 to Bytes.length bs - 1 do
+    let code = Char.code (Bytes.get bs i) in
+    res := !res ^ (if code < 16 then "0" else "") ^ Printf.sprintf "%x" code
+  done;
+  !res
+
 let w256_to_int w =
   let res = ref 0 in
   for i = 0 to 8 do
@@ -27,6 +35,13 @@ let from_hex str =
   !res
 
 let bytes_from_hex str = Bytes.of_string (from_hex str)
+
+let get_bytes_from_hex str =
+  let res = ref "" in
+  for i = 0 to String.length str/2 - 1 do
+    res := !res ^ String.make 1 (Char.chr (int_of_string ("0x" ^ String.sub str (i*2) 2)))
+  done;
+  Bytes.of_string !res
 
 let bytes32_to_int w =
   let res = ref 0 in

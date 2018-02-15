@@ -217,6 +217,24 @@ let set_input_name vm s2 s1 v =
    Bytes.set str s1 (Char.chr (value_to_int v));
    vm.input.file_name.(s2) <- str
 
+(*
+open Lwt
+open Cohttp
+open Cohttp_lwt_unix
+
+let rpc_custom_command name data =
+  let req = "{\"name\": \"" ^ name ^ "\"}" in 
+  Client.get (Uri.of_string "http://localhost:18358") >>= fun (resp, body) ->
+  let code = resp |> Response.status |> Code.code_of_status in
+  Printf.printf "Response code: %d\n" code;
+  Printf.printf "Headers: %s\n" (resp |> Response.headers |> Header.to_string);
+  body |> Cohttp_lwt.Body.to_string >|= fun body ->
+  Printf.printf "Body of length: %d\n" (String.length body);
+  Bytes.of_string body
+*)
+
+let custom_lookup = Hashtbl.create 7
+
 let process_custom vm x file_num =
    (* output file *)
    if x = 1 then begin
@@ -225,9 +243,26 @@ let process_custom vm x file_num =
    end else if x = 2 then begin
      prerr_endline ("***** Step " ^ string_of_int vm.step);
      (vm.input.file_data.(file_num), vm.input.file_size.(file_num))
+   end else if x < 100 then begin
+     (* custom lookup *)
+     let fdata = vm.input.file_data.(file_num) in
+     let fsize = vm.input.file_size.(file_num) in
+     let dta = Bytes.sub fdata 0 fsize in
+     let key = Byteutil.bytes_to_hex dta in
+     let lookup = Hashtbl.find custom_lookup x in
+     let res = Hashtbl.find lookup key in
+     Byteutil.get_bytes_from_hex res, String.length res/2
    end else begin
+     (*
+     let cmd = Hashtbl.find custom_command x in
+     let dta = Lwt_main.run (rpc_custom_command cmd (Bytes.sub fdata 0 fsize)) in
+     dta, Bytes.length dta
+     *)
+     let fdata = vm.input.file_data.(file_num) in
+     let fsize = vm.input.file_size.(file_num) in
      let ch = open_out_bin "custom.out" in
-     output ch vm.input.file_data.(file_num) 0 vm.input.file_size.(file_num);
+     let dta = Bytes.sub fdata 0 fsize in
+     output_string ch (Byteutil.bytes_to_hex dta);
      close_out ch;
      ignore (Sys.command (Hashtbl.find custom_command x));
      let ch = open_in_bin "custom.in" in
@@ -235,7 +270,7 @@ let process_custom vm x file_num =
      let dta = Bytes.create sz in
      really_input ch dta 0 sz;
      close_in ch;
-     dta, sz
+     Byteutil.get_bytes_from_hex (Bytes.to_string dta), sz/2
    end
 
 let write_register vm regs v = function
