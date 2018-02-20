@@ -1,5 +1,9 @@
 [![Build Status](https://travis-ci.org/TrueBitFoundation/ocaml-offchain.svg?branch=master)](https://travis-ci.org/TrueBitFoundation/ocaml-offchain)
 
+<p align="center">
+  <img src="./Computation Layer.jpg"/>
+</p>
+
 # Installation of the off-chain interpreter
 
 These instructions were tested on Ubuntu 17.04.
@@ -37,6 +41,30 @@ Outputting proofs:
 ./wasm -case 0 -step 4 -m ../test/core/fac.wast
 ```
 This will make a proof for step 4 in the computation. Because there are many test cases, one of them has to be selected, so for example `-case 0` will select the first test case.
+
+# Using the JSON-RPC Server
+
+```
+cd server
+npm install
+node index.js
+```
+
+A client can communicate with the server like this:
+```javascript
+var jayson = require('jayson');
+
+// create a client
+var client = jayson.client.http({
+  port: 3000
+});
+
+// invoke *command* with *args*
+client.request('*command*', [*args*], function(err, response) {
+  if(err) throw err;
+  console.log(response.result);
+});
+```
 
 # Docker
 
