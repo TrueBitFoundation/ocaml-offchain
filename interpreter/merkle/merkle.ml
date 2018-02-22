@@ -6,6 +6,8 @@ open Source
 open Types
 open Values
 
+let (@) a b = List.rev_append (List.rev a) b
+
 (* call name to custom judge number *)
 let custom_calls = Hashtbl.create 7
 
@@ -411,7 +413,14 @@ let vm_init () =
 
 let elem x = {it=x; at=no_region}
 
+let flatten_tl lst =
+  let rec do_flatten acc = function
+  | [] -> acc
+  | a::tl -> do_flatten (a @ acc) tl in
+  do_flatten [] (List.rev lst)
+
 let compile_test m func vs init inst =
+  trace ("????");
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));
@@ -506,6 +515,8 @@ let compile_test m func vs init inst =
      build (n+1) (x::acc) (List.length x + l_acc) tl in
   let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry] @ exit_code in
   let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
-  let flat_code = List.flatten (List.rev codes) in
+  trace ("Here, working");
+  let flat_code = flatten_tl (List.rev codes) in
+  trace ("flatten ???");
   List.rev (List.rev_map (resolve_inst2 f_resolve) flat_code), f_resolve
 

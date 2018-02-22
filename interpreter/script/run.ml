@@ -364,6 +364,8 @@ let print_file_names vm =
   done;
   "[" ^ String.concat "," !res ^ "]"
 
+let (@) a b = List.rev_append (List.rev a) b
+
 let setup_vm inst mdle func vs =
 (*  prerr_endline "Setting up"; *)
   let open Merkle in
@@ -377,7 +379,11 @@ let setup_vm inst mdle func vs =
   let cxx_init = Merkle.make_cxx_init mdle inst in
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
-  let code, f_resolve = Merkle.compile_test mdle func vs (vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init) inst in
+  trace ("Initing " ^ string_of_int (List.length mem_init));
+  let inits = vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init in
+  trace "Compiling";
+  let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
+  trace "Compiled";
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
   Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init ()));
