@@ -371,7 +371,9 @@ let init_calltable m instance =
   let open Ast in
   let open Source in
   let init (dta:var list Ast.segment) = List.flatten (List.map (fun _ -> [NOP;NOP;NOP;NOP]) dta.it.init) in
-  List.flatten (List.map init m.elems)
+  let ct = List.flatten (List.map init m.elems) in
+  trace ("Initialized call table");
+  ct
 
 (* cannot compile function before the size of this segment is known *)
 let setup_calltable vm m instance f_resolve code_offset =
@@ -391,7 +393,8 @@ let setup_calltable vm m instance f_resolve code_offset =
       vm.code.(!pos) <- PUSH (I64 func); incr pos;
       vm.code.(!pos) <- INITCALLTYPE (offset+idx); incr pos;
       ()) dta.it.init in
-  List.iter init m.elems
+  List.iter init m.elems;
+  trace ("Setup calltable")
 
 let find_global a b t =
  let open Types in
