@@ -1,8 +1,37 @@
 [![Build Status](https://travis-ci.org/TrueBitFoundation/ocaml-offchain.svg?branch=master)](https://travis-ci.org/TrueBitFoundation/ocaml-offchain)
 
-# Installation of the off-chain interpreter
+# Usage
 
 These instructions were tested on Ubuntu 17.04.
+
+## Install
+The easiest way to install the necessary dependencies is to run this script.
+```
+chmod 755 build.sh
+./build.sh
+```
+
+## Run
+```
+chmod 755 run.sh
+./run.sh -m *wast file*
+```
+
+For example:
+```
+./run.sh -m /test/core/fac.wast
+```
+
+## Test
+
+```
+cd interpreter/
+./run_tests.sh
+```
+
+# Installation of the off-chain interpreter
+
+Or you can follow along with these steps
 
 First install dependencies
 ```
