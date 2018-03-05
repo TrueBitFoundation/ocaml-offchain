@@ -50,6 +50,7 @@ let do_compile = ref false
 let run_inited : string option ref = ref None
 let underscore_mode = ref false
 let counter_mode = ref false
+let test_counter_mode = ref false
 let handle_nan_mode = ref false
 
 let argspec = Arg.align
@@ -75,6 +76,7 @@ let argspec = Arg.align
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
+  "-test-counter", Arg.Set test_counter_mode, " add a counter variable to the file (new test version)";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
@@ -170,6 +172,12 @@ let () =
     ( match !counter_mode, !lst with
     | true, m :: _ ->
       let m = Counter.process m in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "counter.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !test_counter_mode, !lst with
+    | true, m :: _ ->
+      let m = Evallocation.process m in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "counter.wasm" () (fun () -> m)
     | _ -> () );

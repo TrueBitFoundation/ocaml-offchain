@@ -55,10 +55,14 @@ let convert_types m =
     {m with types=List.map convert_ftype m.types;
             funcs=List.map convert_func m.funcs})
 
+(* perhaps just the types inside softfloat should be changed? but how to make only in interface? *)
+
 (* exported function by name *)
 let find_function m (name:string) =
   let rec find = function
-   | [] -> raise Not_found
+   | [] ->
+     Run.trace ("Not found " ^ name);
+     raise Not_found
    | a::tl ->
      if Utf8.encode a.it.name = name then
        ( match a.it.edesc.it with
@@ -74,10 +78,9 @@ let convert_float m =
    | Block (ty, lst) -> [Block (ty, convert_body lst)]
    | Loop (ty, lst) -> [Loop (ty, convert_body lst)]
    | If (ty, texp, fexp) -> [If (ty, convert_body texp, convert_body fexp)]
-   
+
    | Store ({ty=F32Type; _} as op) -> [Store {op with ty=I32Type}]
    | Load ({ty=F32Type; _} as op) -> [Load {op with ty=I32Type}]
-
    | Store ({ty=F64Type; _} as op) -> [Store {op with ty=I64Type}]
    | Load ({ty=F64Type; _} as op) -> [Load {op with ty=I64Type}]
 
@@ -100,7 +103,7 @@ let convert_float m =
    | Compare (F32 F32Op.Ne) -> [Call (find_function m "f32_ne")]
    | Compare (F32 F32Op.Ge) -> [Call (find_function m "f32_ge")]
    | Compare (F32 F32Op.Gt) -> [Call (find_function m "f32_gt")]
-   
+
    | Binary (F64 F64Op.Add) -> [Call (find_function m "f64_add")]
    | Binary (F64 F64Op.Div) -> [Call (find_function m "f64_div")]
    | Binary (F64 F64Op.Mul) -> [Call (find_function m "f64_mul")]
@@ -120,7 +123,7 @@ let convert_float m =
    | Compare (F64 F64Op.Ne) -> [Call (find_function m "f64_ne")]
    | Compare (F64 F64Op.Ge) -> [Call (find_function m "f64_ge")]
    | Compare (F64 F64Op.Gt) -> [Call (find_function m "f64_gt")]
-   
+
    | Convert (F32 F32Op.ReinterpretInt) -> []
    | Convert (F64 F64Op.ReinterpretInt) -> []
    | Convert (I32 I32Op.ReinterpretFloat) -> []
@@ -137,15 +140,14 @@ let convert_float m =
    | Convert (F32 F32Op.DemoteF64) -> [Call (find_function m "f64_to_f32")]
    | Convert (F32 F32Op.PromoteF32) -> [Call (find_function m "f32_to_f64")]
    | Convert (F64 F64Op.PromoteF32) -> [Call (find_function m "f32_to_f64")]
-
-   | Convert (I32 I32Op.TruncSF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_i32")]
-   | Convert (I32 I32Op.TruncUF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_ui32")]
-   | Convert (I32 I32Op.TruncSF64) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_i32")]
-   | Convert (I32 I32Op.TruncUF64) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_ui32")]
-   | Convert (I64 I64Op.TruncSF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_i64")]
-   | Convert (I64 I64Op.TruncUF32) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_ui64")]
-   | Convert (I64 I64Op.TruncSF64) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_i64")]
-   | Convert (I64 I64Op.TruncUF64) -> [Const (elem (I32 (Int32.of_int 0))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_ui64")]
+   | Convert (I32 I32Op.TruncSF32) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_i32")]
+   | Convert (I32 I32Op.TruncUF32) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_ui32")]
+   | Convert (I32 I32Op.TruncSF64) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_i32")]
+   | Convert (I32 I32Op.TruncUF64) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_ui32")]
+   | Convert (I64 I64Op.TruncSF32) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_i64")]
+   | Convert (I64 I64Op.TruncUF32) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f32_to_ui64")]
+   | Convert (I64 I64Op.TruncSF64) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_i64")]
+   | Convert (I64 I64Op.TruncUF64) -> [Const (elem (I32 (Int32.of_int 2))); Const (elem (I32 (Int32.of_int 0))); Call (find_function m "f64_to_ui64")]
    | Const {it=F32 f; _} -> [Const (elem (I32 (F32.to_bits f)))]
    | Const {it=F64 f; _} -> [Const (elem (I64 (F64.to_bits f)))]
    | a -> [a]
@@ -153,6 +155,7 @@ let convert_float m =
   and convert_body lst = List.flatten (List.map convert_op lst) in
   let convert_func f = do_it f (fun f -> {f with body=convert_body f.body}) in
   let convert_global g = do_it g (fun g -> {value=do_it g.value convert_body; gtype=convert_gtype g.gtype}) in
+  Run.trace "Converting floats";
   do_it m (fun m -> {m with funcs=List.map convert_func m.funcs; globals=List.map convert_global m.globals})
 
 let process a b =

@@ -260,17 +260,19 @@ let process_custom vm x file_num =
      *)
      let fdata = vm.input.file_data.(file_num) in
      let fsize = vm.input.file_size.(file_num) in
-     let ch = open_out_bin "custom.out" in
+     let ch = open_out_bin "custom.in" in
      let dta = Bytes.sub fdata 0 fsize in
-     output_string ch (Byteutil.bytes_to_hex dta);
+(*     output_string ch (Byteutil.bytes_to_hex dta); *)
+     output_string ch (Bytes.to_string dta);
      close_out ch;
      ignore (Sys.command (Hashtbl.find custom_command x));
-     let ch = open_in_bin "custom.in" in
+     let ch = open_in_bin "custom.out" in
      let sz = in_channel_length ch in
      let dta = Bytes.create sz in
      really_input ch dta 0 sz;
      close_in ch;
-     Byteutil.get_bytes_from_hex (Bytes.to_string dta), sz/2
+(*     Byteutil.get_bytes_from_hex (Bytes.to_string dta), sz/2 *)
+     dta, sz
    end
 
 let write_register vm regs v = function
@@ -346,7 +348,7 @@ let setup_memory vm m instance =
   List.iter (function MemoryType {min; _} ->
     trace ("Memory size " ^ Int32.to_string min);
     vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
-  if !Flags.run_wasm then vm.memsize <- 1000000
+  if !Flags.run_wasm then vm.memsize <- 100000000
 
 let init_memory m instance =
   let open Ast in
