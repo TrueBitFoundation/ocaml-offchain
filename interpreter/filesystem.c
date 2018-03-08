@@ -448,16 +448,17 @@ int env____syscall3(int which, int *varargs) {
   unsigned char *buf = (unsigned char*)varargs[1];
   int count = varargs[2];
   debugInt(3+1000000);
-  debugReadCount(count);
+  debugInt(count);
   // read
   int index = s->ptr[fd];
   int pos = s->pos[fd];
   int i;
   for (i = 0; i < count && i+pos < s->file_size[index]; i++) {
     buf[i] = s->file_data[index][pos+i];
-    debugRead(buf[i]);
+    // debugInt(buf[i]);
   }
   s->pos[fd] += i;
+  debugInt(i);
   return i;
 }
 
@@ -666,6 +667,16 @@ int env____syscall295(int which, int* varargs) {
   return -1;
 }
 
+// remove xattr
+int env____syscall197(int which, int* varargs) {
+  return 0;
+}
+
+// fadvice64
+int env____syscall221(int which, int* varargs) {
+  return 0;
+}
+
 int env__pthread_mutex_lock(void *ptr) {
   return 0;
 }
@@ -675,6 +686,10 @@ int env__pthread_mutex_unlock(void *ptr) {
 }
 
 int env__pthread_cond_broadcast(void *ptr) {
+  return 0;
+}
+
+int env__getenv(void *ptr) {
   return 0;
 }
 
