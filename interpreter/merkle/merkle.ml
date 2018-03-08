@@ -372,7 +372,7 @@ let init_system mdle inst =
   with Not_found -> []
 
 let simple_call mdle inst name =
-  try [CALL (find_function_index mdle inst (Utf8.decode name))]
+  try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name))]
   with Not_found -> []
 
 let find_initializers mdle =
@@ -380,13 +380,24 @@ let find_initializers mdle =
    | exp :: lst ->
      let rest = do_find lst in
      let name = Utf8.encode exp.name in
-     if String.length name > 15 && String.sub name 0 15 = "__GLOBAL__sub_I" then name :: rest else rest
+     if String.length name > 15 && String.sub name 0 15 = "__GLOBAL__sub_I" then
+       begin
+         (* Run.trace ("initializer " ^ name); *)
+         name :: rest
+       end else
+     if String.length name > 22 && String.sub name 0 22 = "___cxx_global_var_init" then
+       begin
+         (* Run.trace ("initializer " ^ name); *)
+         name :: rest
+       end else
+     rest
    | [] -> [] in
   do_find (List.map (fun x -> x.it) mdle.exports)
 
 let make_cxx_init mdle inst =
   simple_call mdle inst "__GLOBAL__I_000101" @
-  List.flatten (List.map (fun name -> simple_call mdle inst name) (find_initializers mdle))
+  List.flatten (List.map (fun name -> simple_call mdle inst name) (List.rev (find_initializers mdle))) @
+  [STUB "Initialization finished"]
 
 let generic_stub m inst mname fname =
   try
