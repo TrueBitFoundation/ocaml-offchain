@@ -50,6 +50,7 @@ let do_compile = ref false
 let run_inited : string option ref = ref None
 let underscore_mode = ref false
 let counter_mode = ref false
+let critical_mode = ref false
 let test_counter_mode = ref false
 let handle_nan_mode = ref false
 
@@ -76,6 +77,7 @@ let argspec = Arg.align
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
+  "-critical", Arg.Set critical_mode, " find the critical path to step";
   "-test-counter", Arg.Set test_counter_mode, " add a counter variable to the file (new test version)";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
@@ -149,6 +151,12 @@ let () =
       let m = Addglobals.add_globals m fn in
       (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "globals.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !critical_mode, !lst with
+    | true, m :: _ ->
+      let m = Critical.process m in
+      (* Run.output_stdout (fun () -> m); *)
+      Run.create_binary_file "critical.wasm" () (fun () -> m)
     | _ -> () );
     ( match !float_mode, !lst with
     | true, a :: b :: _ ->
