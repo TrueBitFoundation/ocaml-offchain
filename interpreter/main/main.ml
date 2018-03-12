@@ -155,7 +155,7 @@ let () =
     ( match !critical_mode, !lst with
     | true, m :: _ ->
       let m = Critical.process m in
-      (* Run.output_stdout (fun () -> m); *)
+      Run.create_sexpr_file "critical.wast" () (fun () -> m);
       Run.create_binary_file "critical.wasm" () (fun () -> m)
     | _ -> () );
     ( match !float_mode, !lst with

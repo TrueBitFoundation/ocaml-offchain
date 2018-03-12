@@ -19,6 +19,9 @@ type ctx = {
   push : var; (* number of steps taken *)
   pop : var; (* stack pointer *)
   pop_loop : var; (* target step *)
+  start_block : var; (* target step *)
+  end_block : var; (* target step *)
+  f_loops : Int32.t list;
 }
 
 (*
@@ -48,19 +51,32 @@ let rec inner_loops inst =
 
 let rec process_inst ctx inst =
   let loc = Int32.of_int inst.at.left.column in
-  let loops = List.flatten (List.map (fun loc -> List.map it [Const (it (I32 loc)); Call ctx.pop_loop]) (inner_loops inst)) in
+  let loop_locs = List.rev (inner_loops inst) in
+  (*
+  let loops = List.flatten (List.map (fun loc -> List.map it [Const (it (I32 loc)); Call ctx.pop_loop]) loop_locs) in
+  if loop_locs <> [] then prerr_endline ("At location " ^ Int32.to_string loc ^ " loops " ^ String.concat ", " (List.map Int32.to_string loop_locs));
+  *)
+  let mk_block inst =
+     if loop_locs = [] then [it inst] 
+     else List.map it [Const (it (I32 loc)); Call ctx.start_block; inst; Const (it (I32 loc)); Call ctx.end_block] in
   let res = match inst.it with
-  | Block (ty, lst) -> List.map it [Block (ty, List.flatten (List.map (process_inst ctx) lst))]
-  | Loop (ty, lst) ->
-    List.map it [Const (it (I32 loc)); Call ctx.pop_loop; Const (it (I32 loc)); Call ctx.push; Loop (ty, List.flatten (List.map (process_inst ctx) lst))]
-  | If (ty, l1, l2) -> List.map it [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
+  | Block (ty, lst) -> mk_block (Block (ty, List.flatten (List.map (process_inst ctx) lst)))
+  | If (ty, l1, l2) -> mk_block (If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2)))
+  | Loop (ty, lst) -> mk_block (Loop (ty, List.map it [Const (it (I32 loc)); Call ctx.end_block; Const (it (I32 loc)); Call ctx.start_block] @ List.flatten (List.map (process_inst ctx) lst)))
   | Call x -> List.map it [Const (it (I32 loc)); Call ctx.push; Call x; Call ctx.pop]
   | CallIndirect x -> List.map it [Const (it (I32 loc)); Call ctx.push; CallIndirect x; Call ctx.pop]
+(*
+  | Loop (ty, lst) ->
+    List.map it [Loop (ty, loops @ List.map it [Const (it (I32 loc)); Call ctx.push] @ List.flatten (List.map (process_inst ctx) lst))]
+  | Return ->
+    List.flatten (List.map (fun loc -> List.map it [Const (it (I32 loc)); Call ctx.pop_loop]) ctx.f_loops) @ [it Return] *)
   | a -> List.map it [a] in
-  res @ loops
+  res (* @ loops *)
 
 let process_function ctx f =
-  do_it f (fun f -> {f with body=List.flatten (List.map (process_inst ctx) f.body)})
+  do_it f (fun f ->
+    (* let loop_locs = List.flatten (List.map (fun inst -> List.rev (inner_loops inst)) f.body) in *)
+    {f with body=List.flatten (List.map (process_inst ctx) f.body)})
 
 let process m =
   do_it m (fun m ->
@@ -68,26 +84,38 @@ let process m =
     let i_num = List.length (Merkle.func_imports (it m)) in
     let ftypes = m.types @ [it (FuncType ([], [I32Type])); it (FuncType ([I32Type], [])); it (FuncType ([], []))] in
     let ftypes_len = List.length m.types in
-    let set_type = it (Int32.of_int ftypes_len) in
-    let get_type = it (Int32.of_int (ftypes_len+1)) in
+    let get_type = it (Int32.of_int ftypes_len) in
+    let set_type = it (Int32.of_int (ftypes_len+1)) in
     let pop_type = it (Int32.of_int (ftypes_len+2)) in
     (* add imports *)
-    let imps = m.imports @ [
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "setStack"; idesc=it (FuncImport set_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "setStep"; idesc=it (FuncImport set_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "getStack"; idesc=it (FuncImport get_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "getStep"; idesc=it (FuncImport get_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "getTarget"; idesc=it (FuncImport get_type)};
+    let added = [
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "pushCritical"; idesc=it (FuncImport set_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popCritical"; idesc=it (FuncImport pop_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popLoopCritical"; idesc=it (FuncImport set_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "startCritical"; idesc=it (FuncImport set_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "endCritical"; idesc=it (FuncImport set_type)};
     ] in
+    let imps = m.imports @ added in
     let ctx = {
-      push = it (Int32.of_int (i_num+5));
-      pop = it (Int32.of_int (i_num+6));
-      pop_loop = it (Int32.of_int (i_num+7));
+      push = it (Int32.of_int (i_num+0));
+      pop = it (Int32.of_int (i_num+1));
+      pop_loop = it (Int32.of_int (i_num+2));
+      start_block = it (Int32.of_int (i_num+3));
+      end_block = it (Int32.of_int (i_num+4));
+      f_loops = [];
     } in
     (* remap calls *)
-    let funcs = List.map (Merge.remap (fun x -> let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + 7) else Int32.of_int x) (fun x -> x) (fun x -> x)) m.funcs in
-    {m with funcs=List.map (process_function ctx) funcs; types=ftypes; imports=imps})
+    let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
+    let funcs = List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs in
+    {m with funcs=List.map (process_function ctx) funcs;
+            types=ftypes;
+            imports=imps;
+            exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
+            elems=List.map (Merge.remap_elements remap) m.elems; }
+(*
+    {m with funcs=funcs; types=ftypes; imports=imps; elems=List.map (Merge.remap_elements remap) m.elems; exports = List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports}
+    {m with types=ftypes } 
+    m
+    *)
+    )
 
