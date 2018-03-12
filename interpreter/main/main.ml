@@ -50,9 +50,11 @@ let do_compile = ref false
 let run_inited : string option ref = ref None
 let underscore_mode = ref false
 let counter_mode = ref false
-let critical_mode = ref false
 let test_counter_mode = ref false
 let handle_nan_mode = ref false
+
+let critical_mode = ref false
+let buildstack_mode = ref false
 
 let argspec = Arg.align
 [
@@ -78,6 +80,7 @@ let argspec = Arg.align
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-critical", Arg.Set critical_mode, " find the critical path to step";
+  "-build-stack", Arg.Set buildstack_mode, " build the stack for critical path";
   "-test-counter", Arg.Set test_counter_mode, " add a counter variable to the file (new test version)";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
@@ -157,6 +160,12 @@ let () =
       let m = Critical.process m in
       Run.create_sexpr_file "critical.wast" () (fun () -> m);
       Run.create_binary_file "critical.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !buildstack_mode, !lst with
+    | true, m :: _ ->
+      let m = Buildstack.process m in
+      Run.create_sexpr_file "buildstack.wast" () (fun () -> m);
+      Run.create_binary_file "buildstack.wasm" () (fun () -> m)
     | _ -> () );
     ( match !float_mode, !lst with
     | true, a :: b :: _ ->
