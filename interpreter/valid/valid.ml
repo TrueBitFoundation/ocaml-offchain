@@ -461,3 +461,22 @@ let check_module (m : module_) =
     "multiple tables are not allowed (yet)";
   require (List.length c.memories <= 1) m.at
     "multiple memories are not allowed (yet)"
+
+let module_context (m : module_) =
+  let
+    { types; imports; tables; memories; globals; funcs; start; elems; data;
+      exports } = m.it
+  in
+  let c0 =
+    List.fold_right check_import imports
+      {(context m) with types = List.map (fun ty -> ty.it) types}
+  in
+  let c1 =
+    { c0 with
+      funcs = c0.funcs @ List.map (fun f -> type_ c0 f.it.ftype) funcs;
+      tables = c0.tables @ List.map (fun tab -> tab.it.ttype) tables;
+      memories = c0.memories @ List.map (fun mem -> mem.it.mtype) memories;
+    }
+  in
+  { c1 with globals = c1.globals @ List.map (fun g -> g.it.gtype) globals }
+
