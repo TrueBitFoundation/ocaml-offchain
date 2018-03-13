@@ -97,6 +97,13 @@ let inst_pops ctx = function
   | Store _ -> 2
   | _ -> 0
 
+let determine_type tctx block =
+  let _, lst = Valid.type_seq tctx block in
+  prerr_endline (string_of_int (List.length lst));
+  match List.rev lst with
+  | Some x :: _ -> x
+  | _ -> raise (Failure "typeing error")
+
 (* after each instruction, modify stack *)
 (* perhaps call should be different? nope *)
 (* so there should be two alternatives for return... *)
@@ -104,8 +111,14 @@ let build_stack ctx (pre, inst) =
   let rets = inst_rets ctx inst.it in
   if rets > 1 then prerr_endline ("number of rets " ^ string_of_int rets);
   let pops = inst_pops ctx inst.it in
-  if rets = 0 then inst :: List.map it [Const (it (I32 (Int32.of_int pops))); Call ctx.adjust_stack0]
-  else inst :: List.map it [Const (it (I32 (Int32.of_int pops))); Call ctx.adjust_stack1]
+  let adjust =
+    if rets = 0 then ctx.adjust_stack0 else match determine_type ctx.tctx (pre@[inst]) with
+    | I32Type -> ctx.adjust_stack_i32
+    | F32Type -> ctx.adjust_stack_f32
+    | I64Type -> ctx.adjust_stack_i64
+    | F64Type -> ctx.adjust_stack_f64
+    in
+  inst :: List.map it [Const (it (I32 (Int32.of_int pops))); Call adjust]
 
 let rec remap_blocks label inst =
   let handle {it=v; _} = if Int32.of_int label > v then it v else it (Int32.add v 1l) in
@@ -153,6 +166,7 @@ let rec process_inst ctx inst =
 
 let process_function ctx f =
   let loc = Int32.of_int f.at.left.column in
+  let ctx = {ctx with tctx=Valid.func_context ctx.tctx f} in
   do_it f (fun f ->
     {f with body=List.map it [Const (it (I32 loc)); Call ctx.push] @ List.flatten (List.map (process_inst ctx) f.body) @ List.map it [Call ctx.pop] })
 
@@ -173,20 +187,20 @@ let process m =
     let i_num = List.length (Merkle.func_imports (it m)) in
     let ftypes = m.types @ [
       it (FuncType ([I32Type], []));
-      it (FuncType ([I32Type; I32Type], [I32Type]));
       it (FuncType ([I32Type], [I32Type]));
       it (FuncType ([I32Type], []));
       it (FuncType ([], []));
+      it (FuncType ([I32Type; I32Type], [I32Type]));
       it (FuncType ([I64Type; I32Type], [I64Type]));
       it (FuncType ([F32Type; I32Type], [F32Type]));
       it (FuncType ([F64Type; I32Type], [F64Type]));
       ] in
     let ftypes_len = List.length m.types in
     let adjust_type0 = it (Int32.of_int ftypes_len) in
-    let adjust_type_i32 = it (Int32.of_int (ftypes_len+1)) in
-    let start_type = it (Int32.of_int (ftypes_len+2)) in
-    let end_type = it (Int32.of_int (ftypes_len+3)) in
-    let pop_type = it (Int32.of_int (ftypes_len+4)) in
+    let start_type = it (Int32.of_int (ftypes_len+1)) in
+    let end_type = it (Int32.of_int (ftypes_len+2)) in
+    let pop_type = it (Int32.of_int (ftypes_len+3)) in
+    let adjust_type_i32 = it (Int32.of_int (ftypes_len+4)) in
     let adjust_type_i64 = it (Int32.of_int (ftypes_len+5)) in
     let adjust_type_f32 = it (Int32.of_int (ftypes_len+6)) in
     let adjust_type_f64 = it (Int32.of_int (ftypes_len+7)) in
@@ -203,9 +217,18 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_type_f64)}; (* for each type, need a different function *)
     ] in
     let imps = m.imports @ added in
-    let ftab, ttab = Merkle.make_tables m in
     let pos_tab = path_table "critical.out" in
+    (* remap calls *)
+    let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
+    let funcs = List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs in
+    let pre_m = {m with funcs=funcs;
+            types=ftypes;
+            imports=imps;
+            exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
+            elems=List.map (Merge.remap_elements remap) m.elems; } in
+    let ftab, ttab = Merkle.make_tables pre_m in
     let ctx = {
+      tctx = Valid.module_context (it pre_m);
       adjust_stack0 = it (Int32.of_int (i_num+0));
       start_block = it (Int32.of_int (i_num+1));
       end_block = it (Int32.of_int (i_num+2));
@@ -220,14 +243,7 @@ let process m =
       possible = (fun loc -> Hashtbl.mem pos_tab loc);
       label = 0;
     } in
-    (* remap calls *)
-    let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
-    let funcs = List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs in
-    let res = {m with funcs=List.map (process_function ctx) funcs;
-            types=ftypes;
-            imports=imps;
-            exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
-            elems=List.map (Merge.remap_elements remap) m.elems; } in
+    let res = {pre_m with funcs=List.map (process_function ctx) pre_m.funcs} in
     prerr_endline ("here");
     res
     )

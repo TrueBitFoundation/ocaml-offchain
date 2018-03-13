@@ -175,6 +175,122 @@ let check_arity n at =
  * declarative typing rules.
  *)
 
+let type_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
+  match e.it with
+  | Unreachable ->
+    [] -->... []
+
+  | Nop ->
+    [] --> []
+
+  | Block (ts, es) ->
+    [] --> ts
+
+  | Loop (ts, es) ->
+    [] --> ts
+
+  | If (ts, es1, es2) ->
+    [I32Type] --> ts
+
+  | Br x ->
+    [] -->... []
+
+  | BrIf x ->
+    [I32Type] --> []
+
+  | BrTable (xs, x) ->
+    [I32Type] -->... []
+
+  | Return ->
+    c.results -->... []
+
+  | Call x ->
+    let FuncType (ins, out) = func c x in
+    (* prerr_endline ("Call " ^ Int32.to_string (x.it) ^ "  " ^ string_of_infer_types (List.map (fun x -> Some x) ins) ^ ", " ^ string_of_infer_types (List.map (fun x -> Some x) out)); *)
+    ins --> out
+
+  | CallIndirect x ->
+    ignore (table c (0l @@ e.at));
+    let FuncType (ins, out) = type_ c x in
+    (ins @ [I32Type]) --> out
+
+  | Drop ->
+    [peek 0 s] -~> []
+
+  | Select ->
+    let t = peek 1 s in
+    [t; t; Some I32Type] -~> [t]
+
+  | GetLocal x ->
+    [] --> [local c x]
+
+  | SetLocal x ->
+    [local c x] --> []
+
+  | TeeLocal x ->
+    [local c x] --> [local c x]
+
+  | GetGlobal x ->
+    let GlobalType (t, mut) = global c x in
+    [] --> [t]
+
+  | SetGlobal x ->
+    let GlobalType (t, mut) = global c x in
+    require (mut = Mutable) x.at "global is immutable";
+    [t] --> []
+
+  | Load memop ->
+    check_memop c memop (Lib.Option.map fst) e.at;
+    [I32Type] --> [memop.ty]
+
+  | Store memop ->
+    check_memop c memop (fun sz -> sz) e.at;
+    [I32Type; memop.ty] --> []
+
+  | CurrentMemory ->
+    ignore (memory c (0l @@ e.at));
+    [] --> [I32Type]
+
+  | GrowMemory ->
+    ignore (memory c (0l @@ e.at));
+    [I32Type] --> [I32Type]
+
+  | Const v ->
+    let t = type_value v.it in
+    [] --> [t]
+
+  | Test testop ->
+    let t = type_testop testop in
+    [t] --> [I32Type]
+
+  | Compare relop ->
+    let t = type_relop relop in
+    [t; t] --> [I32Type]
+
+  | Unary unop ->
+    let t = type_unop unop in
+    [t] --> [t]
+
+  | Binary binop ->
+    let t = type_binop binop in
+    [t; t] --> [t]
+
+  | Convert cvtop ->
+    let t1, t2 = type_cvtop e.at cvtop in
+    [t1] --> [t2]
+
+let rec type_seq (c : context) (es : instr list) : infer_stack_type =
+  match es with
+  | [] ->
+    stack []
+  | _ ->
+    let es', e = Lib.List.split_last es in
+    let s = type_seq c es' in
+    let {ins; outs} = type_instr c e s in
+    let res = push outs (pop ins s e.at) in
+    (* prerr_endline (string_of_infer_types (snd res)); *)
+    res
+
 let rec check_instr (c : context) (e : instr) (s : infer_stack_type) : op_type =
   match e.it with
   | Unreachable ->
@@ -479,4 +595,10 @@ let module_context (m : module_) =
     }
   in
   { c1 with globals = c1.globals @ List.map (fun g -> g.it.gtype) globals }
+
+
+let func_context (c : context) (f : func) =
+  let {ftype; locals; body} = f.it in
+  let FuncType (ins, out) = type_ c ftype in
+  {c with locals = ins @ locals; results = out; labels = [out]}
 
