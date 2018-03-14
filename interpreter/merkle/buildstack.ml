@@ -10,6 +10,7 @@ let it e = {it=e; at=no_region}
 
 type ctx = {
   tctx : Valid.context;
+  g64 : var;
   possible : int32 -> bool;
   adjust_stack0 : var;
   adjust_stack_i32 : var;
@@ -99,7 +100,7 @@ let inst_pops ctx = function
 
 let determine_type tctx block =
   let _, lst = Valid.type_seq tctx block in
-  prerr_endline (string_of_int (List.length lst));
+(*  prerr_endline (string_of_int (List.length lst)); *)
   match List.rev lst with
   | Some x :: _ -> x
   | _ -> raise (Failure "typeing error")
@@ -112,13 +113,13 @@ let build_stack ctx (pre, inst) =
   if rets > 1 then prerr_endline ("number of rets " ^ string_of_int rets);
   let pops = inst_pops ctx inst.it in
   let adjust =
-    if rets = 0 then ctx.adjust_stack0 else match determine_type ctx.tctx (pre@[inst]) with
-    | I32Type -> ctx.adjust_stack_i32
-    | F32Type -> ctx.adjust_stack_f32
-    | I64Type -> ctx.adjust_stack_i64
-    | F64Type -> ctx.adjust_stack_f64
+    if rets = 0 then [Call ctx.adjust_stack0] else match determine_type ctx.tctx (pre@[inst]) with
+    | I32Type -> [Call ctx.adjust_stack_i32]
+    | F32Type -> [Call ctx.adjust_stack_f32]
+    | I64Type -> [Drop; SetGlobal ctx.g64; Const (it (I32 64l)); GetGlobal ctx.g64; Store {ty=I64Type; align=0; offset=0l; sz=None}; Const (it (I32 (Int32.of_int pops))); Call ctx.adjust_stack_i64; GetGlobal ctx.g64] (* Drop *)
+    | F64Type -> [Call ctx.adjust_stack_f64]
     in
-  inst :: List.map it [Const (it (I32 (Int32.of_int pops))); Call adjust]
+  inst :: List.map it (Const (it (I32 (Int32.of_int pops))) :: adjust)
 
 let rec remap_blocks label inst =
   let handle {it=v; _} = if Int32.of_int label > v then it v else it (Int32.add v 1l) in
@@ -155,20 +156,33 @@ let rec process_inst ctx inst =
         Drop] @ lst in
   let e_block = if loop_locs = [] then [] else List.map it [Const (it (I32 loc)); Call ctx.end_block] in
   let res = match inst.it with
-  | Block (ty, lst) ->
-      List.map it [Block (ty, mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
-  | If (ty, l1, l2) ->
-      List.map it [If (ty, mk_block ty (List.flatten (List.map (process_inst ctx) l1)), mk_block ty (List.flatten (List.map (process_inst ctx) l2)))] @ e_block
-  | Loop (ty, lst) ->
-      List.map it [Loop (ty, List.map it [Const (it (I32 loc)); Call ctx.end_block] @ mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
+  | Block (ty, lst) -> List.map it [Block (ty, mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
+  | If (ty, l1, l2) -> List.map it [If (ty, mk_block ty (List.flatten (List.map (process_inst ctx) l1)), mk_block ty (List.flatten (List.map (process_inst ctx) l2)))] @ e_block
+  | Loop (ty, lst) -> List.map it [Loop (ty, List.map it [Const (it (I32 loc)); Call ctx.end_block] @ mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
+  | Call x -> List.map it [Call x; Call ctx.pop]
+(*  | CallIndirect x -> List.map it [Const (it (I32 123l)); Call ctx.adjust_stack_i32; CallIndirect x; Call ctx.pop] *)
+  | CallIndirect x -> List.map it [CallIndirect x; Call ctx.pop]
   | a -> List.map it [a] in
   res
 
 let process_function ctx f =
   let loc = Int32.of_int f.at.left.column in
   let ctx = {ctx with tctx=Valid.func_context ctx.tctx f} in
+  let mk_block ty lst =
+     if ctx.possible loc then 
+        (* here we have to remap all the blocks ... *)
+        let lst = List.map (remap_blocks 0) lst in
+        List.map it [
+          Const (it (I32 loc));
+          Call ctx.push;
+          If (ty, List.flatten (List.map (build_stack ctx) (prefix lst)), lst)]
+     else List.map it [
+        Const (it (I32 loc));
+        Call ctx.push;
+        Drop] @ lst in  
+  let FuncType (_, rets) = ctx.lookup_type f.it.ftype.it in
   do_it f (fun f ->
-    {f with body=List.map it [Const (it (I32 loc)); Call ctx.push] @ List.flatten (List.map (process_inst ctx) f.body) @ List.map it [Call ctx.pop] })
+    {f with body=mk_block rets (List.flatten (List.map (process_inst ctx) f.body))})
 
 let path_table fn =
   let res = Hashtbl.create 123 in
@@ -191,7 +205,8 @@ let process m =
       it (FuncType ([I32Type], []));
       it (FuncType ([], []));
       it (FuncType ([I32Type; I32Type], [I32Type]));
-      it (FuncType ([I64Type; I32Type], [I64Type]));
+      it (FuncType ([I32Type], []));
+(*      it (FuncType ([I64Type; I32Type], [I64Type])); *)
       it (FuncType ([F32Type; I32Type], [F32Type]));
       it (FuncType ([F64Type; I32Type], [F64Type]));
       ] in
@@ -210,7 +225,7 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "startCritical"; idesc=it (FuncImport start_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "endCritical"; idesc=it (FuncImport end_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popCritical"; idesc=it (FuncImport pop_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "pushCritical"; idesc=it (FuncImport end_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "pushCritical"; idesc=it (FuncImport start_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI32"; idesc=it (FuncImport adjust_type_i32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI64"; idesc=it (FuncImport adjust_type_i64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_type_f32)}; (* for each type, need a different function *)
@@ -224,10 +239,12 @@ let process m =
     let pre_m = {m with funcs=funcs;
             types=ftypes;
             imports=imps;
+            globals=m.globals @ [it {gtype=GlobalType (I64Type, Mutable); value=it [it (Const (it (I64 0L)))]}];
             exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
             elems=List.map (Merge.remap_elements remap) m.elems; } in
     let ftab, ttab = Merkle.make_tables pre_m in
     let ctx = {
+      g64 = it (Int32.of_int (List.length m.globals));
       tctx = Valid.module_context (it pre_m);
       adjust_stack0 = it (Int32.of_int (i_num+0));
       start_block = it (Int32.of_int (i_num+1));
@@ -244,7 +261,6 @@ let process m =
       label = 0;
     } in
     let res = {pre_m with funcs=List.map (process_function ctx) pre_m.funcs} in
-    prerr_endline ("here");
     res
     )
 

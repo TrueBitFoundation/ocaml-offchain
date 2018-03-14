@@ -42,15 +42,22 @@ let empty_input sz = {
 
 let create_vm code = {
   code = Array.of_list code;
-(*  stack = Array.make 1024 (i 0); memory = Array.make 1024 0L; *)
-  stack = Array.make !Flags.stack_size (i 0);
-(*  memory = Array.make (1024*64) 0L; *)
-  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   input = empty_input 1024;
+  stack = Array.make 4 (i 0);
+(*  memory = Array.make (1024*64) 0L; *)
+  memory = Array.make 4 0L;
+  call_stack = Array.make 4 0;
+  globals = Array.make 4 (i 0);
+  calltable = Array.make 4 (-1);
+  calltable_types = Array.make 4 0L;
+  (*
+  stack = Array.make !Flags.stack_size (i 0);
+  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   call_stack = Array.make (!Flags.call_size) 0;
   globals = Array.make (!Flags.globals_size) (i 0);
   calltable = Array.make (!Flags.table_size) (-1);
   calltable_types = Array.make (!Flags.table_size) 0L;
+  *)
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
