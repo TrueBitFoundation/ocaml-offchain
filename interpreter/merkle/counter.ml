@@ -9,10 +9,12 @@ let do_it x f = {x with it=f x.it}
 let it e = {it=e; at=no_region}
 
 let rec process_inst stepper inst = match inst.it with
- | Block (ty, lst) -> [it (Block (ty, List.flatten (List.map (process_inst stepper) lst)))]
- | Loop (ty, lst) -> [it (Loop (ty, List.flatten (List.map (process_inst stepper) lst)))]
- | If (ty, l1, l2) -> [it (If (ty, List.flatten (List.map (process_inst stepper) l1), List.flatten (List.map (process_inst stepper) l2)))]
- | a -> List.map it [a; GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper]
+ | Block (ty, lst) -> List.map it [GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper; (Block (ty, List.flatten (List.map (process_inst stepper) lst)))]
+ | Loop (ty, lst) -> List.map it [GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper; (Loop (ty, List.flatten (List.map (process_inst stepper) lst)))]
+ | If (ty, l1, l2) -> List.map it [ GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper; (If (ty, List.flatten (List.map (process_inst stepper) l1), List.flatten (List.map (process_inst stepper) l2)))]
+ | Br _ as a -> List.map it [GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper; a]
+ | Return as a ->  List.map it [GetGlobal stepper; Const (it (I64 1L)); Operators.i64_add; SetGlobal stepper; a]
+ | a -> List.map it [a]
 
 let process_function stepper f =
   do_it f (fun f -> {f with body=List.flatten (List.map (process_inst stepper) f.body)})
