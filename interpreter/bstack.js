@@ -45,7 +45,12 @@ Module.asmLibraryArg.adjustStackF32 = function (v, num) {
 Module.asmLibraryArg.adjustStackI64 = function (num) {
     var buffer = new ArrayBuffer(8)
     var view = new Uint8Array(buffer)
-    console.log("adjust i64", "???", num)
+    var str = ""
+    for (var i = 0; i < 8; i++) {
+        view[i] = HEAP8[64+i]
+        str = str + (Math.floor(view[i]/16)).toString(16) + (view[i]%16).toString(16)
+    }
+    console.log("adjust i64", str, num)
     stack.push(view)
     return 0
 }
