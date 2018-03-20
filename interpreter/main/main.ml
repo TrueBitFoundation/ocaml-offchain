@@ -161,8 +161,8 @@ let () =
     ( match !elim_globals_mode, !lst with
     | true, m :: _ ->
       let m = Elimglobals.process m in
-      Run.create_sexpr_file "globals.wast" () (fun () -> m);
-      Run.create_binary_file "globals.wasm" () (fun () -> m)
+      Run.create_sexpr_file "eglobals.wast" () (fun () -> m);
+      Run.create_binary_file "eglobals.wasm" () (fun () -> m)
     | _ -> () );
     ( match !critical_mode, !lst with
     | true, m :: _ ->
