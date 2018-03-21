@@ -26,6 +26,10 @@ type ctx = {
   var_type : int32 -> func_type;
   lookup_type : int32 -> func_type;
   bottom : int32;
+  store_local_i32 : var;
+  store_local_i64 : var;
+  store_local_f32 : var;
+  store_local_f64 : var;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -106,6 +110,20 @@ let determine_type tctx block =
   match List.rev lst with
   | Some x :: _ -> x
   | _ -> raise (Failure "typeing error")
+
+let store_locals ctx =
+   let res = ref [] in
+   let num_locals = List.length ctx.tctx.Valid.locals in
+   for i = 0 to num_locals - 1 do
+      let var = it (Int32.of_int i) in
+      let lst = match Valid.local ctx.tctx var with
+      | I32Type -> [GetLocal var; Call ctx.store_local_i32]
+      | F32Type -> [GetLocal var; Call ctx.store_local_f32]
+      | F64Type -> [GetLocal var; Call ctx.store_local_f64]
+      | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
+      res := !res @ (Const (it (I32 (Int32.of_int i))) :: lst)
+   done;
+   !res
 
 (* after each instruction, modify stack *)
 (* perhaps call should be different? nope *)
@@ -219,6 +237,11 @@ let process m =
       it (FuncType ([F32Type; I32Type], [F32Type]));
       it (FuncType ([F64Type; I32Type], [F64Type]));
       it (FuncType ([I32Type], []));
+      
+      it (FuncType ([I32Type; I32Type], []));
+      it (FuncType ([I32Type], []));
+      it (FuncType ([I32Type; F32Type], []));
+      it (FuncType ([I32Type; F64Type], []));
       ] in
     let ftypes_len = List.length m.types in
     let adjust_type0 = it (Int32.of_int ftypes_len) in
@@ -230,6 +253,10 @@ let process m =
     let adjust_type_f32 = it (Int32.of_int (ftypes_len+6)) in
     let adjust_type_f64 = it (Int32.of_int (ftypes_len+7)) in
     let count_bottom_type = it (Int32.of_int (ftypes_len+8)) in
+    let store_type_i32 = it (Int32.of_int (ftypes_len+9)) in
+    let store_type_i64 = it (Int32.of_int (ftypes_len+10)) in
+    let store_type_f32 = it (Int32.of_int (ftypes_len+11)) in
+    let store_type_f64 = it (Int32.of_int (ftypes_len+12)) in
     (* add imports *)
     let added = [
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStack0"; idesc=it (FuncImport adjust_type0)};
@@ -242,6 +269,10 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_type_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_type_f64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "countBottom"; idesc=it (FuncImport count_bottom_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalI32"; idesc=it (FuncImport store_type_i32)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalI64"; idesc=it (FuncImport store_type_i64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF32"; idesc=it (FuncImport store_type_f32)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF64"; idesc=it (FuncImport store_type_f64)}; (* for each type, need a different function *)
     ] in
     let imps = m.imports @ added in
     let pos_lst = path_table "critical.out" in
@@ -269,6 +300,10 @@ let process m =
       adjust_stack_f32 = it (Int32.of_int (i_num+7));
       adjust_stack_f64 = it (Int32.of_int (i_num+8));
       count_bottom = it (Int32.of_int (i_num+9));
+      store_local_i32 = it (Int32.of_int (i_num+10));
+      store_local_i64 = it (Int32.of_int (i_num+11));
+      store_local_f32 = it (Int32.of_int (i_num+12));
+      store_local_f64 = it (Int32.of_int (i_num+13));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       possible = (fun loc -> Hashtbl.mem pos_tab loc);

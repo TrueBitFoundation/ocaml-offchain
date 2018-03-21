@@ -30,12 +30,21 @@ function bytes(n) {
     return res
 }
 
+function pow2(x) { return Math.pow(2, x) }
+
 function makeMerkle(arr, idx, level) {
     if (level == 0) return idx < arr.length ? bytes(arr[idx]) : "";
-    else return keccak256(makeMerkle(arr, idx, level-1), makeMerkle(arr, idx+Math.pow(2,level-1)), level-1));
+    else return keccak256(makeMerkle(arr, idx, level-1), makeMerkle(arr, idx+Math.pow(2,level-1), level-1));
 }
 
 // making merkle proofs
+function getLocationProof(arr,idx,loc,level) {
+  if (level == 1) return [bytes (arr[idx+1]), bytes(arr[idx])]
+  let sz = Math.pow(2, level-1)
+  if (idx + sz > loc) return [makeMerkle(arr, idx+pow2(level-1), level-1)].concat(getLocationProof(arr,idx,loc,level-1))
+  else return [makeMerkle(arr,idx,level-1)].concat(getLocationProof(arr,idx+pow2(level-1), loc, level-1))
+}
+
 
 var stack = []
 
@@ -56,6 +65,46 @@ Module.asmLibraryArg.adjustStackI32 = function (v, num) {
     return v
 }
 
+var locals = []
+
+Module.asmLibraryArg.storeLocalI32 = function (num, v) {
+    locals[num] = v
+    console.log("store i32", v, num)
+}
+
+Module.asmLibraryArg.storeLocalF32 = function (num, v) {
+    locals[num] = v
+    console.log("store f32", v, num)
+}
+
+Module.asmLibraryArg.storeLocalF64 = function (num, v) {
+    locals[num] = v
+    console.log("store f64", v, num)
+}
+
+function getI64() {
+    var buffer = new ArrayBuffer(8)
+    var view = new Uint8Array(buffer)
+    for (var i = 0; i < 8; i++) {
+        view[i] = HEAP8[64+i]
+    }
+    return view
+}
+
+function i64str(view) {
+    var str = ""
+    for (var i = 0; i < 8; i++) {
+        str = str + (Math.floor(view[i]/16)).toString(16) + (view[i]%16).toString(16)
+    }
+    return str
+}
+
+Module.asmLibraryArg.storeLocalI64 = function (num) {
+    var v = getI64()
+    locals[num] = v
+    console.log("store i64", i64str(v), num)
+}
+
 Module.asmLibraryArg.adjustStackF32 = function (v, num) {
     stack.length -= num
     stack.push(v)
@@ -65,15 +114,9 @@ Module.asmLibraryArg.adjustStackF32 = function (v, num) {
 
 Module.asmLibraryArg.adjustStackI64 = function (num) {
     stack.length -= num
-    var buffer = new ArrayBuffer(8)
-    var view = new Uint8Array(buffer)
-    var str = ""
-    for (var i = 0; i < 8; i++) {
-        view[i] = HEAP8[64+i]
-        str = str + (Math.floor(view[i]/16)).toString(16) + (view[i]%16).toString(16)
-    }
-    stack.push(view)
-    console.log("adjust i64", str, num, "stack len", stack.length)
+    var v = getI64()
+    stack.push(v)
+    console.log("adjust i64", i64str(v), num, "stack len", stack.length)
     return 0
 }
 /*
