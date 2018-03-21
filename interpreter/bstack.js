@@ -21,28 +21,50 @@ function startCritical(loc) {
     return false
 }
 
+function bytes(n) {
+    var res = ""
+    for (var i = 0; i < 4; i++) {
+        res = String.fromCharCode(n & 0xff) + res
+        n = n / 256
+    }
+    return res
+}
+
+function makeMerkle(arr, idx, level) {
+    if (level == 0) return idx < arr.length ? bytes(arr[idx]) : "";
+    else return keccak256(makeMerkle(arr, idx, level-1), makeMerkle(arr, idx+Math.pow(2,level-1)), level-1));
+}
+
+// making merkle proofs
+
 var stack = []
 
 Module.asmLibraryArg.adjustStack0 = function (num) {
     console.log("adjust", num)
+    stack.length -= num
+}
+
+Module.asmLibraryArg.countBottom = function (loc) {
+    if (path.length == 0) console.log("*** bottom level", loc)
     // stack.length -= num
 }
 
 Module.asmLibraryArg.adjustStackI32 = function (v, num) {
-    // stack.length -= num
+    stack.length -= num
     stack.push(v)
-    console.log("adjust i32", v, num)
+    console.log("adjust i32", v, num, "stack len", stack.length)
     return v
 }
 
 Module.asmLibraryArg.adjustStackF32 = function (v, num) {
-    // stack.length -= num
+    stack.length -= num
     stack.push(v)
-    console.log("adjust f32", v, num)
+    console.log("adjust f32", v, num, "stack len", stack.length)
     return v
 }
 
 Module.asmLibraryArg.adjustStackI64 = function (num) {
+    stack.length -= num
     var buffer = new ArrayBuffer(8)
     var view = new Uint8Array(buffer)
     var str = ""
@@ -50,8 +72,8 @@ Module.asmLibraryArg.adjustStackI64 = function (num) {
         view[i] = HEAP8[64+i]
         str = str + (Math.floor(view[i]/16)).toString(16) + (view[i]%16).toString(16)
     }
-    console.log("adjust i64", str, num)
     stack.push(view)
+    console.log("adjust i64", str, num, "stack len", stack.length)
     return 0
 }
 /*
@@ -64,7 +86,7 @@ Module.asmLibraryArg.adjustStackI64 = function (v, num) {
 */
 
 Module.asmLibraryArg.adjustStackF64 = function (v, num) {
-    // stack.length -= num
+    stack.length -= num
     stack.push(v)
     console.log("adjust f64", v, num)
     return v
@@ -79,6 +101,7 @@ Module.asmLibraryArg.pushCritical = function (loc) {
 
 Module.asmLibraryArg.popCritical = function () {
     if (fstack.length > 0) fstack.length--
+    // console.log("exiting function")
     step++
 }
 

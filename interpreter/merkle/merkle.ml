@@ -396,8 +396,9 @@ let find_initializers mdle =
 
 let make_cxx_init mdle inst =
   simple_call mdle inst "__GLOBAL__I_000101" @
-  List.flatten (List.map (fun name -> simple_call mdle inst name) (List.rev (find_initializers mdle))) @
-  [STUB "Initialization finished"]
+  List.flatten (List.map (fun name -> simple_call mdle inst name) (List.rev (find_initializers mdle)))
+  (* @
+  [STUB "Initialization finished"] *)
 
 let generic_stub m inst mname fname =
   try

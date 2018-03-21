@@ -18,12 +18,14 @@ type ctx = {
   adjust_stack_f32 : var;
   adjust_stack_f64 : var;
   start_block : var;
+  count_bottom : var;
   end_block : var;
   label : int;
   pop : var;
   push : var;
   var_type : int32 -> func_type;
   lookup_type : int32 -> func_type;
+  bottom : int32;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -80,7 +82,7 @@ let inst_pops ctx = function
   | Compare _ -> 2
   | Unary _ -> 1
   | Binary _ -> 2
-  | Convert _ -> 2
+  | Convert _ -> 1
   | BrIf _ -> 1
   | BrTable (_, _) -> 1
   | Drop -> 1
@@ -108,7 +110,7 @@ let determine_type tctx block =
 (* after each instruction, modify stack *)
 (* perhaps call should be different? nope *)
 (* so there should be two alternatives for return... *)
-let build_stack ctx (pre, inst) =
+let build_stack loc ctx (pre, inst) =
   let rets = inst_rets ctx inst.it in
   if rets > 1 then prerr_endline ("number of rets " ^ string_of_int rets);
   let pops = inst_pops ctx inst.it in
@@ -119,7 +121,8 @@ let build_stack ctx (pre, inst) =
     | I64Type -> [Drop; SetGlobal ctx.g64; Const (it (I32 64l)); GetGlobal ctx.g64; Store {ty=I64Type; align=0; offset=0l; sz=None}; Const (it (I32 (Int32.of_int pops))); Call ctx.adjust_stack_i64; GetGlobal ctx.g64] (* Drop *)
     | F64Type -> [Call ctx.adjust_stack_f64]
     in
-  inst :: List.map it (Const (it (I32 (Int32.of_int pops))) :: adjust)
+  let res = inst :: List.map it (Const (it (I32 (Int32.of_int pops))) :: adjust) in
+  if loc = ctx.bottom then List.map it [Const (it (I32 loc)); Call ctx.count_bottom] @ res else res
 
 let rec remap_blocks label inst =
   let handle {it=v; _} = if Int32.of_int label > v then it v else it (Int32.add v 1l) in
@@ -149,7 +152,7 @@ let rec process_inst ctx inst =
         List.map it [
           Const (it (I32 loc));
           Call ctx.start_block;
-          If (ty, List.flatten (List.map (build_stack ctx) (prefix lst)), lst)]
+          If (ty, List.flatten (List.map (build_stack loc ctx) (prefix lst)), lst)]
      else List.map it [
         Const (it (I32 loc));
         Call ctx.start_block;
@@ -165,8 +168,12 @@ let rec process_inst ctx inst =
   | a -> List.map it [a] in
   res
 
+let fnum = ref 0
+
 let process_function ctx f =
   let loc = Int32.of_int f.at.left.column in
+  prerr_endline ("Function " ^ string_of_int !fnum ^ " is at " ^ Int32.to_string loc);
+  incr fnum;
   let ctx = {ctx with tctx=Valid.func_context ctx.tctx f} in
   let mk_block ty lst =
      if ctx.possible loc then 
@@ -175,7 +182,7 @@ let process_function ctx f =
         List.map it [
           Const (it (I32 loc));
           Call ctx.push;
-          If (ty, List.flatten (List.map (build_stack ctx) (prefix lst)), lst)]
+          If (ty, List.flatten (List.map (build_stack loc ctx) (prefix lst)), lst)]
      else List.map it [
         Const (it (I32 loc));
         Call ctx.push;
@@ -185,14 +192,16 @@ let process_function ctx f =
     {f with body=mk_block rets (List.flatten (List.map (process_inst ctx) f.body))})
 
 let path_table fn =
-  let res = Hashtbl.create 123 in
   let open Yojson.Basic in
   let data = from_channel (open_in fn) in
   let lst = Util.to_list data in
-  List.iter (fun el ->
+  List.map (fun el ->
      let loc = Util.member "loc" el in
-     Hashtbl.add res (Int32.of_int (Util.to_int loc)) true;
-  ) lst;
+     Int32.of_int (Util.to_int loc)) lst
+
+let list_to_map lst =
+  let res = Hashtbl.create 123 in
+  List.iter (fun el -> Hashtbl.add res el true) lst;
   res
 
 let process m =
@@ -209,6 +218,7 @@ let process m =
 (*      it (FuncType ([I64Type; I32Type], [I64Type])); *)
       it (FuncType ([F32Type; I32Type], [F32Type]));
       it (FuncType ([F64Type; I32Type], [F64Type]));
+      it (FuncType ([I32Type], []));
       ] in
     let ftypes_len = List.length m.types in
     let adjust_type0 = it (Int32.of_int ftypes_len) in
@@ -219,6 +229,7 @@ let process m =
     let adjust_type_i64 = it (Int32.of_int (ftypes_len+5)) in
     let adjust_type_f32 = it (Int32.of_int (ftypes_len+6)) in
     let adjust_type_f64 = it (Int32.of_int (ftypes_len+7)) in
+    let count_bottom_type = it (Int32.of_int (ftypes_len+8)) in
     (* add imports *)
     let added = [
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStack0"; idesc=it (FuncImport adjust_type0)};
@@ -230,9 +241,11 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI64"; idesc=it (FuncImport adjust_type_i64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_type_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_type_f64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "countBottom"; idesc=it (FuncImport count_bottom_type)};
     ] in
     let imps = m.imports @ added in
-    let pos_tab = path_table "critical.out" in
+    let pos_lst = path_table "critical.out" in
+    let pos_tab = list_to_map pos_lst in
     (* remap calls *)
     let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
     let funcs = List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs in
@@ -255,9 +268,11 @@ let process m =
       adjust_stack_i64 = it (Int32.of_int (i_num+6));
       adjust_stack_f32 = it (Int32.of_int (i_num+7));
       adjust_stack_f64 = it (Int32.of_int (i_num+8));
+      count_bottom = it (Int32.of_int (i_num+9));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       possible = (fun loc -> Hashtbl.mem pos_tab loc);
+      bottom = List.hd (List.rev pos_lst);
       label = 0;
     } in
     let res = {pre_m with funcs=List.map (process_function ctx) pre_m.funcs} in
