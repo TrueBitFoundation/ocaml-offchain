@@ -30,6 +30,7 @@ type ctx = {
   store_local_i64 : var;
   store_local_f32 : var;
   store_local_f64 : var;
+  num_locals : var;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -112,8 +113,8 @@ let determine_type tctx block =
   | _ -> raise (Failure "typeing error")
 
 let store_locals ctx =
-   let res = ref [] in
    let num_locals = List.length ctx.tctx.Valid.locals in
+   let res = ref [Const (it (I32 (Int32.of_int num_locals))); Call ctx.num_locals] in
    for i = 0 to num_locals - 1 do
       let var = it (Int32.of_int i) in
       let lst = match Valid.local ctx.tctx var with
@@ -273,6 +274,7 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalI64"; idesc=it (FuncImport store_type_i64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF32"; idesc=it (FuncImport store_type_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF64"; idesc=it (FuncImport store_type_f64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "numLocals"; idesc=it (FuncImport adjust_type0)};
     ] in
     let imps = m.imports @ added in
     let pos_lst = path_table "critical.out" in
@@ -304,6 +306,7 @@ let process m =
       store_local_i64 = it (Int32.of_int (i_num+11));
       store_local_f32 = it (Int32.of_int (i_num+12));
       store_local_f64 = it (Int32.of_int (i_num+13));
+      num_locals = it (Int32.of_int (i_num+14));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       possible = (fun loc -> Hashtbl.mem pos_tab loc);
