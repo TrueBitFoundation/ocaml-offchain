@@ -131,6 +131,7 @@ let store_locals ctx =
 (* so there should be two alternatives for return... *)
 let build_stack loc ctx (pre, inst) =
   let rets = inst_rets ctx inst.it in
+  let cloc = Int32.of_int inst.at.left.column in
   if rets > 1 then prerr_endline ("number of rets " ^ string_of_int rets);
   let pops = inst_pops ctx inst.it in
   let adjust =
@@ -141,7 +142,7 @@ let build_stack loc ctx (pre, inst) =
     | F64Type -> [Call ctx.adjust_stack_f64]
     in
   let res = inst :: List.map it (Const (it (I32 (Int32.of_int pops))) :: adjust) in
-  if loc = ctx.bottom then List.map it [Const (it (I32 loc)); Call ctx.count_bottom] @ res else res
+  if loc = ctx.bottom then List.map it [Const (it (I32 cloc)); Call ctx.count_bottom] @ res else res
 
 let rec remap_blocks label inst =
   let handle {it=v; _} = if Int32.of_int label > v then it v else it (Int32.add v 1l) in
@@ -177,13 +178,15 @@ let rec process_inst ctx inst =
         Call ctx.start_block;
         Drop] @ lst in
   let e_block = if loop_locs = [] then [] else List.map it [Const (it (I32 loc)); Call ctx.end_block] in
+(*  let s_block = [Const (it (I32 loc)); Call ctx.start_block; Drop] in *)
+  let s_block = [Const (it (I32 loc)); Call ctx.start_block; If ([], List.map it (store_locals ctx), [])] in
+  let it x = {at=inst.at; it=x} in
   let res = match inst.it with
   | Block (ty, lst) -> List.map it [Block (ty, mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
   | If (ty, l1, l2) -> List.map it [If (ty, mk_block ty (List.flatten (List.map (process_inst ctx) l1)), mk_block ty (List.flatten (List.map (process_inst ctx) l2)))] @ e_block
   | Loop (ty, lst) -> List.map it [Loop (ty, List.map it [Const (it (I32 loc)); Call ctx.end_block] @ mk_block ty (List.flatten (List.map (process_inst ctx) lst)))] @ e_block
-  | Call x -> List.map it [Call x; Call ctx.pop]
-(*  | CallIndirect x -> List.map it [Const (it (I32 123l)); Call ctx.adjust_stack_i32; CallIndirect x; Call ctx.pop] *)
-  | CallIndirect x -> List.map it [CallIndirect x; Call ctx.pop]
+  | Call x -> List.map it (s_block @ [Call x; Call ctx.pop; Const (it (I32 loc)); Call ctx.end_block])
+  | CallIndirect x -> List.map it (s_block @ [CallIndirect x; Call ctx.pop; Const (it (I32 loc)); Call ctx.end_block])
   | a -> List.map it [a] in
   res
 

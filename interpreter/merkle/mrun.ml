@@ -603,6 +603,10 @@ let rec get_datas vm ptr count =
   let len = get_memory_int vm (ptr+4) in
   (get_vm_bytes vm (get_memory_int vm ptr) len) :: get_datas vm (ptr+8) (count-1)
 
+let value_to_float = function
+ | F32 f -> F32.to_float f
+ | _ -> 0.0
+
 let vm_step vm = match vm.code.(vm.pc) with
  | BIN op ->
    inc_pc vm;
@@ -667,6 +671,10 @@ let vm_step vm = match vm.code.(vm.pc) with
  | STUB "env . _debugSeek" ->
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("seeking at " ^ string_of_int chr);
+   inc_pc vm
+ | STUB "rintf" ->
+   let chr = value_to_float (vm.stack.(vm.stack_ptr - 1)) in
+   prerr_endline ("rintf " ^ string_of_float chr);
    inc_pc vm
  | STUB str ->
    prerr_endline ("STUB " ^ str);

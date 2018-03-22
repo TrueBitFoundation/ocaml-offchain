@@ -53,8 +53,8 @@ let rec process_inst ctx inst =
   | Block (ty, lst) -> mk_block (Block (ty, List.flatten (List.map (process_inst ctx) lst)))
   | If (ty, l1, l2) -> mk_block (If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2)))
   | Loop (ty, lst) -> mk_block (Loop (ty, List.map it [Const (it (I32 loc)); Call ctx.end_block; Const (it (I32 loc)); Call ctx.start_block] @ List.flatten (List.map (process_inst ctx) lst)))
-  | Call x -> List.map it [Call x; Call ctx.pop]
-  | CallIndirect x -> List.map it [CallIndirect x; Call ctx.pop]
+  | Call x -> List.map it [Const (it (I32 loc)); Call ctx.start_block; Call x; Call ctx.pop; Const (it (I32 loc)); Call ctx.end_block]
+  | CallIndirect x -> List.map it [Const (it (I32 loc)); Call ctx.start_block; CallIndirect x; Call ctx.pop; Const (it (I32 loc)); Call ctx.end_block]
   | a -> List.map it [a] in
   res
 
