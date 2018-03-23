@@ -1,18 +1,53 @@
 
+// const fs = require("fs")
+
 var stack = []
 var step = 0
 var target = 10000
 
+function checkFinish() {
+    if (target == step) {
+        console.log(stack)
+        fs.writeFileSync("critical.out", JSON.stringify(stack))
+    }
+}
+
 function pushCritical(loc) {
     if (step > target) return
     stack.push({step: step, loc:loc})
-    if (target == step) console.log(stack)
+    checkFinish()
     step++
 }
 
-function popCritical() {
+function pushCallCritical(loc, func) {
     if (step > target) return
-    if (target == step) console.log(stack)
+    stack.push({step: step, loc:loc, func:func})
+    checkFinish()
+    step++
+}
+
+function pushFuncCritical(loc) {
+    if (step > target) return
+    console.log("at function", loc)
+    stack.push({step: step, loc:loc, func:true})
+    checkFinish()
+    step++
+}
+
+function pushIndirectCritical(func, loc) {
+    if (step > target) return func
+    stack.push({step: step, loc:loc, func:func})
+    checkFinish()
+    step++
+    // console.log("push indirect", func, loc)
+    return func
+}
+
+function popCritical() {
+    if (step > target || stack.length == 0) return
+    var last = stack[stack.length-1]
+    if (!last.func) return
+    checkFinish()
     stack.pop()
     step++
 }
@@ -21,7 +56,8 @@ function popLoopCritical(loc) {
     if (step > target || stack.length == 0) return
     var last = stack[stack.length-1]
     if (last.loc != loc) return
-    if (Math.random() < 0.0001) console.log(stack, step)
+    checkFinish()
+    // if (Math.random() < 0.0001) console.log(stack, step)
     stack.pop()
     step++
 }
@@ -30,7 +66,7 @@ function startBlock(loc) {
     if (step > target) return
     // console.log("Start " + loc)
     stack.push({step: step, loc:loc})
-    if (target == step) console.log(stack)
+    checkFinish()
     step++
     // console.log(stack)
 }
@@ -42,7 +78,7 @@ function endBlock(loc) {
         console.log("Trying to pop from empty stack!")
         return
     }
-    if (target == step) console.log(stack)
+    checkFinish()
     var last = stack[stack.length-1]
     stack.length--
     while (stack.length != 0 && last.loc != loc) {
@@ -53,6 +89,9 @@ function endBlock(loc) {
 }
 
 Module.asmLibraryArg.pushCritical = pushCritical
+Module.asmLibraryArg.pushFuncCritical = pushFuncCritical
+Module.asmLibraryArg.pushCallCritical = pushCallCritical
+Module.asmLibraryArg.pushIndirectCritical = pushIndirectCritical
 Module.asmLibraryArg.popCritical = popCritical
 Module.asmLibraryArg.popLoopCritical = popLoopCritical
 

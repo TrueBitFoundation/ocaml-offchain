@@ -42,15 +42,22 @@ let empty_input sz = {
 
 let create_vm code = {
   code = Array.of_list code;
-(*  stack = Array.make 1024 (i 0); memory = Array.make 1024 0L; *)
-  stack = Array.make !Flags.stack_size (i 0);
-(*  memory = Array.make (1024*64) 0L; *)
-  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   input = empty_input 1024;
+  stack = Array.make 4 (i 0);
+(*  memory = Array.make (1024*64) 0L; *)
+  memory = Array.make 4 0L;
+  call_stack = Array.make 4 0;
+  globals = Array.make 4 (i 0);
+  calltable = Array.make 4 (-1);
+  calltable_types = Array.make 4 0L;
+  (*
+  stack = Array.make !Flags.stack_size (i 0);
+  memory = Array.make (!Flags.memory_size*1024*8) 0L;
   call_stack = Array.make (!Flags.call_size) 0;
   globals = Array.make (!Flags.globals_size) (i 0);
   calltable = Array.make (!Flags.table_size) (-1);
   calltable_types = Array.make (!Flags.table_size) 0L;
+  *)
   pc = 0;
   stack_ptr = 0;
   memsize = 0;
@@ -596,6 +603,10 @@ let rec get_datas vm ptr count =
   let len = get_memory_int vm (ptr+4) in
   (get_vm_bytes vm (get_memory_int vm ptr) len) :: get_datas vm (ptr+8) (count-1)
 
+let value_to_float = function
+ | F32 f -> F32.to_float f
+ | _ -> 0.0
+
 let vm_step vm = match vm.code.(vm.pc) with
  | BIN op ->
    inc_pc vm;
@@ -660,6 +671,10 @@ let vm_step vm = match vm.code.(vm.pc) with
  | STUB "env . _debugSeek" ->
    let chr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    trace ("seeking at " ^ string_of_int chr);
+   inc_pc vm
+ | STUB "rintf" ->
+   let chr = value_to_float (vm.stack.(vm.stack_ptr - 1)) in
+   prerr_endline ("rintf " ^ string_of_float chr);
    inc_pc vm
  | STUB str ->
    prerr_endline ("STUB " ^ str);
