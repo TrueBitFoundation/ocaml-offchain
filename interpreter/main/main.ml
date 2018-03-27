@@ -91,6 +91,7 @@ let argspec = Arg.align
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
   "-compile", Arg.Set do_compile, " Compiles wasm file to C";
   "-hash-file", Arg.String Run.hash_file, " return the root hash of a file";
+  "-gas-limit", Arg.String (fun str -> Flags.gas_limit := Int64.of_string str), " set gas limit. Use with flag -add-globals";
 
   "-trace-from", Arg.Int (fun n -> Flags.trace_from := n), " start tracing from a step";
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
