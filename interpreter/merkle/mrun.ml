@@ -819,8 +819,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
-   prerr_endline ("output size " ^ string_of_int s2);
-   prerr_endline ("create with size " ^ string_of_int s1);
+(*   prerr_endline ("output size " ^ string_of_int s2);
+   prerr_endline ("create with size " ^ string_of_int s1); *)
    vm.input.file_size.(s2) <- s1;
    vm.input.file_data.(s2) <- Bytes.make s1 (Char.chr 0);
    vm.stack_ptr <- vm.stack_ptr - 2

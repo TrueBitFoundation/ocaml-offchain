@@ -10,82 +10,6 @@ let trace = Merkle.trace
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
 
-let _ =
-  prerr_endline (to_hex (bytes_to_root 
-    (Bytes.of_string (String.make 1 '\169' ^ String.make 31 '\000'))))
-
-(*
-let write_register vm regs v = function
- | NoOut -> ()
- | GlobalOut -> vm.globals.(value_to_int regs.reg1) <- v
- | CallOut -> vm.call_stack.(vm.call_ptr) <- value_to_int v
- | CallTableOut -> vm.calltable.(value_to_int regs.ireg) <- value_to_int v
- | CallTypeOut -> vm.calltable_types.(value_to_int regs.ireg) <- value_to_int64 v
- | MemoryOut1 (_,sz) ->
-    let loc = value_to_int regs.reg1+value_to_int regs.ireg in
-    let mem = get_memory vm.memory loc in
-    memop mem v (Int64.of_int (loc-(loc/8)*8)) sz;
-    vm.memory.(loc/8) <- fst (Byteutil.Decode.mini_memory mem);
-    trace ("Stored " ^ Int64.to_string vm.memory.(loc/8))
- | MemoryOut2 (_,sz) ->
-    let loc = value_to_int regs.reg1+value_to_int regs.ireg in
-    let mem = get_memory vm.memory loc in
-    memop mem v (Int64.of_int (loc-(loc/8)*8)) sz;
-    vm.memory.(loc/8+1) <- snd (Byteutil.Decode.mini_memory mem)
- | StackOut0 ->
-    trace ("push to stack: " ^ string_of_value v);
-    vm.stack.(vm.stack_ptr) <- v
- | StackOut1 ->
-    trace ("replace top of stack: " ^ string_of_value v);
-    vm.stack.(vm.stack_ptr-1) <- v
- | StackOut2 ->
-    trace ("pop to stack: " ^ string_of_value v);
-    vm.stack.(vm.stack_ptr-2) <- v
- | StackOutReg1 -> vm.stack.(vm.stack_ptr-value_to_int regs.reg1) <- v
- | InputSizeOut ->
-   let s1 = value_to_int regs.reg1 in
-   vm.input.file_size.(s1) <- value_to_int v
- | InputCreateOut ->
-   let s1 = value_to_int regs.reg1 in
-   trace ("Creating bytes " ^ string_of_int (value_to_int v) ^ " to position " ^ string_of_int s1);
-   trace ("Create bytes " ^ string_of_int (value_to_int v) ^ " to position " ^ string_of_int s1);
-   trace ("Before " ^ to_hex (map_hash bytes_to_root vm.input.file_data));
-   vm.input.file_data.(s1) <- Bytes.make (value_to_int v) '\000';
-   trace ("After " ^ to_hex (map_hash bytes_to_root vm.input.file_data));
-   trace ("File hash is " ^ to_hex (bytes_to_root vm.input.file_data.(s1)))
- | InputNameOut ->
-   let s2 = value_to_int regs.reg1 in
-   let s1 = value_to_int regs.reg2 in
-   set_input_name vm s2 s1 v
- | InputDataOut ->
-   let s2 = value_to_int regs.reg1 in
-   let s1 = value_to_int regs.reg2 in
-   Bytes.set vm.input.file_data.(s2) s1 (Char.chr (value_to_int v))
- | SetStack ->
-   let sz = pow2 (value_to_int v) in
-   vm.stack <- Array.make sz (i 0)
- | SetCallStack ->
-   let sz = pow2 (value_to_int v) in
-   vm.call_stack <- Array.make sz 0
- | SetTable ->
-   let sz = pow2 (value_to_int v) in
-   vm.calltable <- Array.make sz (-1)
- | SetTableTypes ->
-   let sz = pow2 (value_to_int v) in
-   vm.calltable_types <- Array.make sz 0L
- | SetMemory ->
-   let sz = pow2 (value_to_int v) in
-   vm.memory <- Array.make sz 0L
- | SetGlobals ->
-   let sz = pow2 (value_to_int v) in
-   vm.globals <- Array.make sz (i 0)
- | CustomFileWrite ->
-   (* Will this actually work? *)
-   let file_num = value_to_int regs.reg1 in
-   let dta, sz = process_custom vm (value_to_int regs.reg1) (value_to_int regs.ireg) in
-   regs.reg2 <- i sz;
-   vm.input.file_data.(file_num) <- dta
-*)
 
 let machine_to_string m =
   "{" ^
@@ -455,7 +379,6 @@ let write_root_bin vm = function
  | InputCreateOut -> vm.bin_input_data
  | CallTableOut -> vm.bin_calltable
  | CallTypeOut -> vm.bin_calltable_types
- | InputSizeOut -> vm.bin_input_size
  | _ -> assert false
 
 let check_read_proof regs vm proof = function
