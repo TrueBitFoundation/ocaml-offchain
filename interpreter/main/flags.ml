@@ -20,6 +20,8 @@ let checkstep = ref (-1)
 let checkfinal = ref (-1)
 let checkerror = ref (-1)
 
+let gas_limit = ref 100000000000L
+
 let init = ref false
 let init_vm = ref false
 let result = ref false

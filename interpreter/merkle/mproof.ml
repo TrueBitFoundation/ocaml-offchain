@@ -5,9 +5,11 @@ open Mrun
 open Mbinary
 open Byteutil
 
+
 let trace = Merkle.trace
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
+
 
 let machine_to_string m =
   "{" ^
@@ -64,8 +66,14 @@ let write_position vm regs = function
  | StackOut1 -> vm.stack_ptr-1
  | StackOutReg1 -> vm.stack_ptr-value_to_int regs.reg1
  | StackOut2 -> vm.stack_ptr-2
- | InputSizeOut -> value_to_int regs.reg1
- | InputCreateOut -> value_to_int regs.reg1
+ | InputSizeOut ->
+    let res = value_to_int regs.reg1 in
+    trace ("size position " ^ string_of_int res);
+    res
+ | InputCreateOut ->
+    let res = value_to_int regs.reg1 in
+    trace ("create position " ^ string_of_int res);
+    res
  | CallTableOut -> value_to_int regs.ireg
  | CallTypeOut -> value_to_int regs.ireg
  | CustomFileWrite -> value_to_int regs.reg1
@@ -140,14 +148,14 @@ let get_write_location m loc =
  | CallTypeOut -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types)
  | CallTableOut -> LocationProof (loc_proof pos u256 vm.calltable)
  | InputSizeOut -> LocationProof (loc_proof pos u256 vm.input.file_size)
- | InputCreateOut -> LocationProof (loc_proof pos string_to_root vm.input.file_data)
+ | InputCreateOut -> LocationProof (loc_proof pos bytes_to_root vm.input.file_data)
  | InputNameOut ->
    LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
  | InputDataOut ->
    LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
  | CustomFileWrite ->
    let dta, sz = process_custom vm (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.ireg) in
-   CustomProof (sz, string_to_root dta, loc_proof pos string_to_root vm.input.file_data, dta)
+   CustomProof (sz, string_to_root dta, loc_proof pos bytes_to_root vm.input.file_data, dta)
 
 let make_register_proof1 m =
   (machine_to_bin m, vm_to_bin m.m_vm, get_read_location m m.m_microp.read_reg1)
@@ -335,8 +343,10 @@ let write_position_bin vm regs = function
  | StackOut1 -> vm.bin_stack_ptr-1
  | StackOutReg1 -> vm.bin_stack_ptr-value_to_int regs.reg1
  | StackOut2 -> vm.bin_stack_ptr-2
- | InputSizeOut -> value_to_int regs.reg1
- | InputCreateOut -> value_to_int regs.reg1
+ | InputSizeOut ->
+    value_to_int regs.reg1
+ | InputCreateOut ->
+    value_to_int regs.reg1
  | CallTableOut -> value_to_int regs.ireg
  | CallTypeOut -> value_to_int regs.ireg
  | _ -> 0
@@ -353,6 +363,7 @@ let read_root_bin vm = function
  | MemoryIn2 -> vm.bin_memory
  | TableIn -> vm.bin_calltable
  | TableTypeIn -> vm.bin_calltable_types
+ | InputSizeIn -> vm.bin_input_size
  | _ -> assert false
 
 let write_root_bin vm = function
@@ -500,6 +511,10 @@ let merkle_change_memory1 regs nv sz = function
    get_root loc lst
  | _ -> assert false
 
+let get_proof_root = function
+ | LocationProof (loc, lst) -> get_root loc lst
+ | _ -> assert false
+
 let merkle_change_memory2 regs nv sz = function
  | LocationProof (loc, lst) ->
    let old = get_leaf loc lst in
@@ -514,8 +529,13 @@ let merkle_change_memory2 regs nv sz = function
  | _ -> assert false
 
 let rec make_root v zero =
-  if v > 1 then make_root v (keccak zero zero)
+  if v > 0 then make_root (v/2) (keccak zero zero)
   else zero
+
+(*
+let _ =
+  prerr_endline (to_hex (make_root 1 (String.make 16 '\000')))
+*)
 
 let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 
@@ -558,7 +578,11 @@ let write_register_bin proof vm regs v = function
  | InputSizeOut -> {vm with bin_input_size=merkle_change v proof}
  | CallTableOut -> {vm with bin_calltable=merkle_change v proof}
  | CallTypeOut -> {vm with bin_calltable_types=merkle_change v proof}
- | InputCreateOut -> {vm with bin_input_data=merkle_change (make_root (Int64.to_int (Decode.word v)) (u256 0)) proof}
+ | InputCreateOut ->
+   let file = make_root (Int64.to_int (Decode.word v) / 32) (String.make 16 '\000') in
+   let data = merkle_change file proof in
+   trace ("data: " ^ to_hex data ^ " file: " ^ to_hex file ^ " " ^ to_hex (get_proof_root proof));
+   {vm with bin_input_data=data}
  | CustomFileWrite ->
    {vm with bin_input_data=merkle_change v proof}
  | MemoryOut1 (_,sz) -> {vm with bin_memory=merkle_change_memory1 regs v sz proof}

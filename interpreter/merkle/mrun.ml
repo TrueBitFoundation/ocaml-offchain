@@ -314,7 +314,8 @@ let write_register vm regs v = function
    vm.input.file_size.(s1) <- value_to_int v
  | InputCreateOut ->
    let s1 = value_to_int regs.reg1 in
-   vm.input.file_data.(s1) <- Bytes.create (value_to_int v)
+   trace ("Create bytes " ^ string_of_int (value_to_int v) ^ " to position " ^ string_of_int s1);
+   vm.input.file_data.(s1) <- Bytes.make (value_to_int v) '\000'
  | InputNameOut ->
    let s2 = value_to_int regs.reg1 in
    let s1 = value_to_int regs.reg2 in
@@ -497,7 +498,7 @@ let get_code = function
  | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
  | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputNameIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
- | OUTPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; write1 = (Reg2, InputSizeOut); write2 = (Reg2, InputCreateOut); stack_ch=StackDec2}
+ | OUTPUTSIZE -> {noop with read_reg2=StackIn0; read_reg1=StackIn1; write1 = (Reg2, InputSizeOut); write2 = (Reg2, InputCreateOut); stack_ch=StackDec2}
  | OUTPUTNAME -> {noop with immed=i 2; read_reg1=StackIn2; read_reg2=StackIn1; read_reg3=StackIn0; write1 = (Reg3, InputNameOut); stack_ch=StackDecImmed}
  | OUTPUTDATA -> {noop with immed=i 2; read_reg1=StackIn2; read_reg2=StackIn1; read_reg3=StackIn0; write1 = (Reg3, InputDataOut); stack_ch=StackDecImmed}
  | LABEL _ -> raise VmError (* these should have been processed away *)
@@ -818,6 +819,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    let s1 = value_to_int vm.stack.(vm.stack_ptr-1) in
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
+(*   prerr_endline ("output size " ^ string_of_int s2);
+   prerr_endline ("create with size " ^ string_of_int s1); *)
    vm.input.file_size.(s2) <- s1;
    vm.input.file_data.(s2) <- Bytes.make s1 (Char.chr 0);
    vm.stack_ptr <- vm.stack_ptr - 2
