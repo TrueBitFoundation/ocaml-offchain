@@ -11,6 +11,8 @@ type input = {
   file_size : int array;
 }
 
+let magic_pc = 0xffffffffff
+
 type vm = {
   code : inst array;
   input : input;
@@ -22,11 +24,11 @@ type vm = {
   mutable calltable : int array;
   mutable calltable_types : Int64.t array;
 
-  mutable pc : int;
+  mutable pc : int; (* in the end or error state, have magic value 0xffffffffff (40 bits) *)
   mutable stack_ptr : int;
   mutable call_ptr : int;
   mutable memsize : int;
-  
+
   mutable step : int; (* use for debugging *)
 }
 
@@ -488,7 +490,7 @@ let get_code = function
  | NOP -> noop
  | STUB _ -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
- | EXIT -> {noop with alu_code=Exit}
+ | EXIT -> {noop with immed=I64 (Int64.of_int magic_pc); read_reg1 = Immed; pc_ch=StackReg}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD x -> {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
@@ -688,7 +690,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.calltable_types.(x) <- value_to_int64 vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
- | EXIT -> raise VmTrap
+ | EXIT -> vm.pc <- magic_pc
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
@@ -912,7 +914,9 @@ let store_memory_limit addr (op:'a memop) =
   | None -> x - 1 + type_size op.ty
   | Some sz -> x - 1 + size_size sz
 
-let test_errors vm = match vm.code.(vm.pc) with
+let test_errors vm =
+ if vm.pc = magic_pc then raise VmTrap;
+ match vm.code.(vm.pc) with
  | PUSH _ | DUP _ ->
    if vm.stack_ptr < 0 then raise (Eval.Exhaustion (Source.no_region, "stack underflow"))
    else if Array.length vm.stack <= vm.stack_ptr then raise (Eval.Exhaustion (Source.no_region, "call stack exhausted"))

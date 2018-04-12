@@ -636,7 +636,16 @@ let array_to_string arr =
   Buffer.add_string res "]";
   Buffer.contents res
 
-(* let _ = prerr_endline (to_hex (microp_word (get_code Merkle.EXIT))) *)
+(*
+
+let _ =
+  let arr = Array.make 2 (-1L) in
+  prerr_endline (to_hex (u256 (-1)));
+  prerr_endline (to_hex (get_value (I64 (Int64.of_int (-1)))))
+
+let _ = prerr_endline (to_hex (microp_word (get_code Merkle.EXIT)))
+
+*)
 
 let whole_vm_to_string vm =
   "{" ^
