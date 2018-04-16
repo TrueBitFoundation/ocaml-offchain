@@ -171,11 +171,11 @@ let make_write_proof m wr =
 
 type micro_proof = {
   fetch_code_proof : vm_bin * microp * w256 list;
-  init_regs_proof : machine_bin;
+  init_regs_proof : machine_bin * vm_bin;
   read_register_proof1 : machine_bin * vm_bin * location_proof;
   read_register_proof2 : machine_bin * vm_bin * location_proof;
   read_register_proof3 : machine_bin * vm_bin * location_proof;
-  alu_proof : machine_bin;
+  alu_proof : machine_bin * vm_bin;
   write_proof1 : machine_bin * vm_bin * location_proof;
   write_proof2 : machine_bin * vm_bin * location_proof;
   update_ptr_proof1 : machine_bin * vm_bin;
@@ -190,9 +190,9 @@ let micro_step_proofs vm =
   let op = get_code vm.code.(vm.pc) in
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
-  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op}, vm_to_bin vm in
   trace ("init regs proof");
-  ignore (hash_machine_bin init_regs_proof);
+  (* ignore (hash_machine_bin init_regs_proof); *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
@@ -203,7 +203,7 @@ let micro_step_proofs vm =
   let read_register_proof3 = make_register_proof3 m in
   regs.reg3 <- read_register vm regs op.read_reg3;
   (* ALU *)
-  let alu_proof = machine_to_bin m in
+  let alu_proof = (machine_to_bin m, vm_to_bin vm) in
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
   (* Write registers *)
   let write_proof1 = make_write_proof m op.write1 in
@@ -230,7 +230,7 @@ let micro_step_proofs_with_error vm =
   let fetch_code_proof = make_fetch_code vm in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op} in
+  let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op}, vm_to_bin vm in
   (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
   let read_register_proof1 = make_register_proof1 m in
@@ -240,7 +240,7 @@ let micro_step_proofs_with_error vm =
   let read_register_proof3 = make_register_proof3 m in
   regs.reg3 <- read_register vm regs op.read_reg3;
   (* ALU *)
-  let alu_proof = machine_to_bin m in
+  let alu_proof = machine_to_bin m, vm_to_bin vm in
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
   (* Insert error *)
   set_input_name vm 0 10 (i 1);
@@ -691,12 +691,12 @@ let print_fetch (a, _, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (
 let check_proof proof =
   let vm1, _, proof1 = proof.fetch_code_proof in
   let state1 = hash_vm_bin vm1 in
-  trace ("STATE1: " ^ machine_to_string (proof.init_regs_proof));
-  let state2 = hash_machine_bin proof.init_regs_proof in
+(*  trace ("STATE1: " ^ machine_to_string (proof.init_regs_proof)); *)
+  let state2 = hash_machine_bin (fst proof.init_regs_proof) in
   if check_fetch state1 state2 proof.fetch_code_proof then trace "Fetch Success"
   else trace "Fetch Failure";
   let state3 = hash_machine_bin (t1 proof.read_register_proof1) in
-  if check_init_registers state2 state3 proof.init_regs_proof then trace "Init Success"
+  if check_init_registers state2 state3 (fst proof.init_regs_proof) then trace "Init Success"
   else trace "Init Failure";
   let state4 = hash_machine_bin (t1 proof.read_register_proof2) in
   if check_read1_proof state3 state4 proof.read_register_proof1 then trace "Read R1 Success"
@@ -704,11 +704,11 @@ let check_proof proof =
   let state5 = hash_machine_bin (t1 proof.read_register_proof3) in
   if check_read2_proof state4 state5 proof.read_register_proof2 then trace "Read R2 Success"
   else trace "Read R2 Failure";
-  let state6 = hash_machine_bin proof.alu_proof in
+  let state6 = hash_machine_bin (fst proof.alu_proof) in
   if check_read3_proof state5 state6 proof.read_register_proof3 then trace "Read R3 Success"
   else trace "Read R3 Failure";
   let state7 = hash_machine_bin (t1 proof.write_proof1) in
-  if check_alu_proof state6 state7 proof.alu_proof then trace "ALU Success"
+  if check_alu_proof state6 state7 (fst proof.alu_proof) then trace "ALU Success"
   else trace "ALU Failure";
   let state8 = hash_machine_bin (t1 proof.write_proof2) in
   if check_write1_proof state7 state8 proof.write_proof1 then trace "Write 1 Success"
@@ -733,11 +733,11 @@ let check_proof proof =
   Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));
   Printf.printf "  \"fetch\": { \"vm\": %s, \"location\": %s },\n"
     (vm_to_string vm1) (list_to_string proof1);
-  Printf.printf "  \"init\": %s,\n" (machine_to_string proof.init_regs_proof);
+  Printf.printf "  \"init\": %s,\n" (proof2_to_string proof.init_regs_proof);
   Printf.printf "  \"reg1\": %s,\n" (proof3_to_string proof.read_register_proof1);
   Printf.printf "  \"reg2\": %s,\n" (proof3_to_string proof.read_register_proof2);
   Printf.printf "  \"reg3\": %s,\n" (proof3_to_string proof.read_register_proof3);
-  Printf.printf "  \"alu\": %s,\n" (machine_to_string proof.alu_proof);
+  Printf.printf "  \"alu\": %s,\n" (proof2_to_string proof.alu_proof);
   Printf.printf "  \"write1\": %s,\n" (proof3_to_string proof.write_proof1);
   Printf.printf "  \"write2\": %s,\n" (proof3_to_string proof.write_proof2);
   Printf.printf "  \"pc\": %s,\n" (proof2_to_string proof.update_ptr_proof1);
