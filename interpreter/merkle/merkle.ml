@@ -495,7 +495,7 @@ let compile_test m func vs init inst =
        [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
      if mname = "env" && String.length fname > 8 && String.sub fname 0 8 = "_invoke_" then
        let number = String.sub fname 8 (String.length fname - 8) in
-       try [CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number))); RETURN]
+       try [ (* STUB fname; *) CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number))); RETURN]
        with Not_found ->
          prerr_endline ("Warning: cannot find dynamic call number " ^ number);
          [RETURN] else
