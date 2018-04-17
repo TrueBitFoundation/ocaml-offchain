@@ -185,31 +185,50 @@ type micro_proof = {
   finalize_proof : vm_bin;
 }
 
+let wrap_proof_fetch vm = 
+  try
+    let op = get_code vm.code.(vm.pc) in
+    let fetch_code_proof = make_fetch_code vm in
+    op, fetch_code_proof
+  with _ -> noop, (vm_to_bin vm, noop, [])
+
+let wrap_proof3 m vm f =
+  try f ()
+  with _ -> (machine_to_bin m, vm_to_bin vm, SimpleProof)
+
 let micro_step_proofs vm =
   (* fetch code *)
-  let op = get_code vm.code.(vm.pc) in
-  let fetch_code_proof = make_fetch_code vm in
+  let op, fetch_code_proof = wrap_proof_fetch vm in
   (* init registers *)
   let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op}, vm_to_bin vm in
-  trace ("init regs proof");
-  (* ignore (hash_machine_bin init_regs_proof); *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
-  let read_register_proof1 = make_register_proof1 m in
-  regs.reg1 <- read_register vm regs op.read_reg1;
-  let read_register_proof2 = make_register_proof2 m in
-  regs.reg2 <- read_register vm regs op.read_reg2;
-  let read_register_proof3 = make_register_proof3 m in
-  regs.reg3 <- read_register vm regs op.read_reg3;
+  (* read registers *)
+  let read_register_proof1 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof1 m in
+      regs.reg1 <- read_register vm regs op.read_reg1;
+      proof) in
+  let read_register_proof2 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof2 m in
+      regs.reg2 <- read_register vm regs op.read_reg2;
+      proof) in
+  let read_register_proof3 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof3 m in
+      regs.reg3 <- read_register vm regs op.read_reg3;
+      proof) in
   (* ALU *)
   let alu_proof = (machine_to_bin m, vm_to_bin vm) in
-  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  ( try regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+    with _ -> vm.pc <- magic_pc );
   (* Write registers *)
-  let write_proof1 = make_write_proof m op.write1 in
-  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
-  let write_proof2 = make_write_proof m op.write2 in
-  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  let write_proof1 = wrap_proof3 m vm (fun () ->
+    let proof = make_write_proof m op.write1 in
+    write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+    proof) in
+  let write_proof2 = wrap_proof3 m vm (fun () ->
+    let proof = make_write_proof m op.write2 in
+    write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+    proof) in
   (* update pointers *)
   let update_ptr_proof1 = (machine_to_bin m, vm_to_bin vm) in
   vm.pc <- handle_ptr regs vm.pc op.pc_ch;
