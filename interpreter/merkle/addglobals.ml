@@ -69,8 +69,8 @@ let add_import taken special imports map map2 num imp =
 let int_global i = GetGlobal {it=Int32.of_int i; at=no_region}
 
 let int_const y = Const (elem (Values.I32 (Int32.of_int y)))
-
 let int64_const y = Const (elem (Values.I64 y))
+let f64_const y = Const (elem (Values.F64 y))
 
 let int_binary i =
   let res = Bytes.create 4 in
@@ -103,14 +103,12 @@ let add_i64_global m name tmem =
     globals=m.globals@[elem {value=elem [elem (int64_const tmem)]; gtype=GlobalType (I64Type, Immutable)}];
     exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
 
-(*
-let add_total_memory m tmem =
+let add_f64_global m name tmem =
   let open Types in
   let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
   do_it (fun m -> {m with
-    globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode "TOTAL_MEMORY"; edesc=elem (GlobalExport (elem idx))}]}) m
-*)
+    globals=m.globals@[elem {value=elem [elem (f64_const tmem)]; gtype=GlobalType (F64Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
 
 let has_import m name =
   List.exists (fun im -> Utf8.encode im.it.item_name = name) m.it.imports
@@ -118,8 +116,8 @@ let has_import m name =
 let add_globals m fn =
   let globals, mem, tmem = load_file fn in
   let m = add_i32_global m "TOTAL_MEMORY" tmem in
-(*  let m = add_i64_global m "GAS" 0L in
-  let m = add_i64_global m "GAS_LIMIT" (!Flags.gas_limit) in *)
+  let m = add_f64_global m "GAS" (F64.of_float 0.0) in
+  let m = add_f64_global m "GAS_LIMIT" (F64.of_float (Int64.to_float !Flags.gas_limit)) in
   (* Can easily add new globals *)
   let m = if has_import m "DYNAMICTOP_PTR" then m else
     try add_i32_global m "DYNAMICTOP_PTR" (List.assoc "DYNAMICTOP_PTR" globals)

@@ -513,7 +513,7 @@ let compile_test m func vs init inst =
        try
          let gas = find_global_index (elem m) inst (Utf8.decode "GAS") in
          let gas_limit = find_global_index (elem m) inst (Utf8.decode "GAS_LIMIT") in
-         [LOADGLOBAL gas; BIN (I64 I64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (I64 I64Op.GtS); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
+         [LOADGLOBAL gas; BIN (F64 F64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (F64 F64Op.Gt); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
        with Not_found -> [ STUB "env . _debugInt"; DROP 1; RETURN] else
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
