@@ -391,6 +391,26 @@ let setup_vm inst mdle func vs =
 (*  prerr_endline "Initialized"; *)
   vm
 
+let handle_exit vm =
+  let open Mrun in
+  let vm = vm in
+  ( if !task_number - 1 = !Flags.case then match !Flags.output_file_proof with
+    | Some x ->
+       let loc = Mproof.find_file vm x in
+       Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
+    | None -> () );
+  if !task_number - 1 = !Flags.case && !Flags.output_all_file_proofs then begin
+       let lst = Mproof.find_files vm in
+       let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
+       Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst))
+  end;
+  if  !task_number - 1 = !Flags.case then output_files vm;
+  if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) vm.step;
+  if !task_number = !Flags.case + 1 && !Flags.output_proof then begin
+     let vm_bin = Mbinary.vm_to_bin vm in
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
+  end
+
 let run_test inst mdle func vs =
   let open Mrun in
   let vm = setup_vm inst mdle func vs in
@@ -441,24 +461,7 @@ let run_test inst mdle func vs =
     raise (Failure "takes too long")
   end
   with VmTrap -> (* check stack pointer, get values *)
-    (* prerr_endline ("Steps: " ^ string_of_int !last_step); *)
-    ( if !task_number - 1 = !Flags.case then match !Flags.output_file_proof with
-    | Some x ->
-       let loc = Mproof.find_file vm x in
-       Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
-    | None -> () );
-    if !task_number - 1 = !Flags.case && !Flags.output_all_file_proofs then begin
-       let lst = Mproof.find_files vm in
-       let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
-       Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst))
-    end;
-    if  !task_number - 1 = !Flags.case then output_files vm;
-    if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) vm.step;
-    if !task_number = !Flags.case + 1 && !Flags.output_proof then
-    ( let vm_bin = Mbinary.vm_to_bin vm in
-      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm) );
-(*  trace (Printexc.to_string a);
-    Printexc.print_backtrace stderr; *)
+    handle_exit vm;
     values_from_arr vm.stack 0 vm.stack_ptr
    | a ->
    (* Print error result *)
@@ -471,7 +474,8 @@ let run_test inst mdle func vs =
       prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
       test_errors vm;
     end;
-    if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.u256 0)) (vm.step + 1);
+    vm.pc <- magic_pc;
+    handle_exit vm;
    ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
