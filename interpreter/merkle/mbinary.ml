@@ -5,7 +5,7 @@ open Ast
 open Mrun
 (* open Types *)
 
-let u256 i = get_value (I32 (Int32.of_int i))
+let u256 i = get_value (I64 (Int64.of_int i))
 
 let op x = Char.chr x
 

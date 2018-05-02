@@ -322,6 +322,7 @@ let hash_file fname =
 let add_input vm i fname =
   let open Mrun in
   vm.input.file_name.(i) <- terminate fname;
+  let fname = if !Flags.input_out then fname ^ ".out" else fname in
   let ch = open_in_bin fname in
   let sz = in_channel_length ch in
   vm.input.file_size.(i) <- sz;
@@ -419,7 +420,8 @@ let run_test inst mdle func vs =
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
   if !task_number = !Flags.case && !Flags.input_proof then
     ( let vm_bin = Mbinary.vm_to_bin vm in
-      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) );
+      Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin));
+      exit 0 );
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->
@@ -452,11 +454,11 @@ let run_test inst mdle func vs =
            if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
-      end else Mrun.vm_step vm;
+      end else ( test_errors vm ; Mrun.vm_step vm );
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 0 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
-      test_errors vm
+      (* test_errors vm *)
     done;
     raise (Failure "takes too long")
   end

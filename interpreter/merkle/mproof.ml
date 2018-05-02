@@ -26,6 +26,8 @@ let machine_to_string m =
 type location_proof =
  | SimpleProof
  | LocationProof of (int * w256 list)
+ | OobProof of w256 list
+ | OobProof2 of (int * (w256 list * w256 list))
  | LocationProof2 of (int * int * (w256 list * w256 list)) (* loc1, loc2, proof1, proof2 *)
  | CustomProof of (int * w256 * (int * w256 list) * bytes)
 
@@ -84,6 +86,20 @@ let loc_proof loc f arr = (loc, map_location_proof f arr loc)
 let loc_proof2 loc1 loc2 arr = (loc1, loc2, location_proof2 arr loc1 loc2)
 let loc_proof_data loc1 loc2 arr = (loc1, loc2, location_proof_data arr loc1 loc2)
 
+let mk_loc_proof loc f arr =
+  if Array.length arr > loc then LocationProof (loc, map_location_proof f arr loc)
+  else OobProof (map_location_proof f arr 0)
+
+let mk_loc_proof2 loc1 loc2 arr =
+  if loc1 >= 1024 then OobProof (fst (location_proof2 arr 0 0))
+  else if loc2 >= Bytes.length arr.(loc1) then OobProof2 (loc1, location_proof2 arr loc1 0)
+  else LocationProof2 (loc1, loc2, location_proof2 arr loc1 loc2)
+
+let mk_loc_proof_data loc1 loc2 arr =
+  if loc1 >= 1024 then OobProof (fst (location_proof_data arr 0 0))
+  else if loc2 >= Bytes.length arr.(loc1) then OobProof2 (loc1, location_proof_data arr loc1 0)
+  else LocationProof2 (loc1, loc2, location_proof_data arr loc1 loc2)
+
 let get_read_location m loc =
  let pos = read_position m.m_vm m.m_regs loc in
  let vm = m.m_vm in
@@ -93,22 +109,22 @@ let get_read_location m loc =
  | ReadPc -> SimpleProof
  | ReadStackPtr -> SimpleProof
  | MemsizeIn -> SimpleProof
- | GlobalIn -> LocationProof (loc_proof pos get_value vm.globals)
- | StackIn0 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackIn1 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackIn2 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackInReg -> LocationProof (loc_proof pos get_value vm.stack)
- | StackInReg2 -> LocationProof (loc_proof pos get_value vm.stack)
- | MemoryIn1 -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
- | MemoryIn2 -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
- | TableIn -> LocationProof (loc_proof pos u256 vm.calltable)
- | TableTypeIn -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types)
- | CallIn -> LocationProof (loc_proof pos u256 vm.call_stack)
- | InputSizeIn -> LocationProof (loc_proof pos u256 vm.input.file_size)
+ | GlobalIn -> mk_loc_proof pos get_value vm.globals
+ | StackIn0 -> mk_loc_proof pos get_value vm.stack
+ | StackIn1 -> mk_loc_proof pos get_value vm.stack
+ | StackIn2 -> mk_loc_proof pos get_value vm.stack
+ | StackInReg -> mk_loc_proof pos get_value vm.stack
+ | StackInReg2 -> mk_loc_proof pos get_value vm.stack
+ | MemoryIn1 -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.memory
+ | MemoryIn2 -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.memory
+ | TableIn -> mk_loc_proof pos u256 vm.calltable
+ | TableTypeIn -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types
+ | CallIn -> mk_loc_proof pos u256 vm.call_stack
+ | InputSizeIn -> mk_loc_proof pos u256 vm.input.file_size
  | InputNameIn ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_name)
+   mk_loc_proof2 (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_name
  | InputDataIn ->
-   LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data)
+   mk_loc_proof_data (value_to_int m.m_regs.reg2) (value_to_int m.m_regs.reg1) vm.input.file_data
 
 let find_file vm (name:string) =
   let res = ref SimpleProof in
@@ -137,22 +153,20 @@ let get_write_location m loc =
  | SetMemory -> SimpleProof
  | SetTableTypes -> SimpleProof
  | SetGlobals -> SimpleProof
- | StackOutReg1 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackOut0 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackOut1 -> LocationProof (loc_proof pos get_value vm.stack)
- | StackOut2 -> LocationProof (loc_proof pos get_value vm.stack)
- | MemoryOut1 _ -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
- | MemoryOut2 _ -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.memory)
- | CallOut -> LocationProof (loc_proof pos u256 vm.call_stack)
- | GlobalOut -> LocationProof (loc_proof pos get_value vm.globals)
- | CallTypeOut -> LocationProof (loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types)
- | CallTableOut -> LocationProof (loc_proof pos u256 vm.calltable)
- | InputSizeOut -> LocationProof (loc_proof pos u256 vm.input.file_size)
- | InputCreateOut -> LocationProof (loc_proof pos bytes_to_root vm.input.file_data)
- | InputNameOut ->
-   LocationProof2 (loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name)
- | InputDataOut ->
-   LocationProof2 (loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data)
+ | StackOutReg1 -> mk_loc_proof pos get_value vm.stack
+ | StackOut0 -> mk_loc_proof pos get_value vm.stack
+ | StackOut1 -> mk_loc_proof pos get_value vm.stack
+ | StackOut2 -> mk_loc_proof pos get_value vm.stack
+ | MemoryOut1 _ -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.memory
+ | MemoryOut2 _ -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.memory
+ | CallOut -> mk_loc_proof pos u256 vm.call_stack
+ | GlobalOut -> mk_loc_proof pos get_value vm.globals
+ | CallTypeOut -> mk_loc_proof pos (fun i -> get_value (I64 i)) vm.calltable_types
+ | CallTableOut -> mk_loc_proof pos u256 vm.calltable
+ | InputSizeOut -> mk_loc_proof pos u256 vm.input.file_size
+ | InputCreateOut -> mk_loc_proof pos bytes_to_root vm.input.file_data
+ | InputNameOut -> mk_loc_proof2 (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_name
+ | InputDataOut -> mk_loc_proof_data (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.reg2) vm.input.file_data
  | CustomFileWrite ->
    let dta, sz = process_custom vm (value_to_int m.m_regs.reg1) (value_to_int m.m_regs.ireg) in
    CustomProof (sz, string_to_root dta, loc_proof pos bytes_to_root vm.input.file_data, dta)
@@ -168,6 +182,11 @@ let make_register_proof3 m =
 
 let make_write_proof m wr =
   (machine_to_bin m, vm_to_bin m.m_vm, get_write_location m (snd wr))
+
+let is_oob = function
+ | (_, _, OobProof _) -> true
+ | (_, _, OobProof2 _) -> true
+ | _ -> false
 
 type micro_proof = {
   fetch_code_proof : vm_bin * microp * w256 list;
@@ -185,40 +204,70 @@ type micro_proof = {
   finalize_proof : vm_bin;
 }
 
+let wrap_proof_fetch vm = 
+  try
+    let op = get_code vm.code.(vm.pc) in
+    let fetch_code_proof = make_fetch_code vm in
+    op, fetch_code_proof
+  with _ ->
+    ( let proof = (vm_to_bin vm, noop, []) in
+      vm.pc <- magic_pc;
+      noop, proof )
+
+let wrap_proof3 m vm f =
+  try if vm.pc <> magic_pc then f () else raise Not_found
+  with _ -> (
+    let proof = (machine_to_bin m, vm_to_bin vm, SimpleProof) in
+    vm.pc <- magic_pc; 
+    proof )
+
 let micro_step_proofs vm =
   (* fetch code *)
-  let op = get_code vm.code.(vm.pc) in
-  let fetch_code_proof = make_fetch_code vm in
+  let op, fetch_code_proof = wrap_proof_fetch vm in
   (* init registers *)
   let init_regs_proof = {bin_vm=hash_vm vm; bin_regs={reg1=i 0; reg2=i 0; reg3=i 0; ireg=i 0}; bin_microp=op}, vm_to_bin vm in
-  trace ("init regs proof");
-  (* ignore (hash_machine_bin init_regs_proof); *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
-  (* read registers *)
   let m = {m_vm=vm; m_regs=regs; m_microp=op} in
-  let read_register_proof1 = make_register_proof1 m in
-  regs.reg1 <- read_register vm regs op.read_reg1;
-  let read_register_proof2 = make_register_proof2 m in
-  regs.reg2 <- read_register vm regs op.read_reg2;
-  let read_register_proof3 = make_register_proof3 m in
-  regs.reg3 <- read_register vm regs op.read_reg3;
+  (* read registers *)
+  let read_register_proof1 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof1 m in
+      if is_oob proof then vm.pc <- magic_pc
+      else regs.reg1 <- read_register vm regs op.read_reg1;
+      proof) in
+  let read_register_proof2 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof2 m in
+      if is_oob proof then vm.pc <- magic_pc
+      else regs.reg2 <- read_register vm regs op.read_reg2;
+      proof) in
+  let read_register_proof3 = wrap_proof3 m vm (fun () ->
+      let proof = make_register_proof3 m in
+      if is_oob proof then vm.pc <- magic_pc
+      else regs.reg3 <- read_register vm regs op.read_reg3;
+      proof) in
   (* ALU *)
   let alu_proof = (machine_to_bin m, vm_to_bin vm) in
-  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  ( try regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+    with _ -> vm.pc <- magic_pc );
   (* Write registers *)
-  let write_proof1 = make_write_proof m op.write1 in
-  write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
-  let write_proof2 = make_write_proof m op.write2 in
-  write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+  let write_proof1 = wrap_proof3 m vm (fun () ->
+    let proof = make_write_proof m op.write1 in
+    if is_oob proof then vm.pc <- magic_pc
+    else write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
+    proof) in
+  let write_proof2 = wrap_proof3 m vm (fun () ->
+    let proof = make_write_proof m op.write2 in
+    if is_oob proof then vm.pc <- magic_pc
+    else write_register vm regs (get_register regs (fst op.write2)) (snd op.write2);
+    proof) in
   (* update pointers *)
   let update_ptr_proof1 = (machine_to_bin m, vm_to_bin vm) in
-  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+  if vm.pc <> magic_pc then vm.pc <- handle_ptr regs vm.pc op.pc_ch;
   let update_ptr_proof2 = (machine_to_bin m, vm_to_bin vm) in
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+  if vm.pc <> magic_pc then vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
   let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
-  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+  if vm.pc <> magic_pc then vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  if vm.pc <> magic_pc && op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
   let finalize_proof = vm_to_bin vm in
   {fetch_code_proof; init_regs_proof; 
    read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
@@ -292,10 +341,10 @@ let check_init_registers state1 state2 m =
   state2 = hash_machine_bin {m with bin_regs=regs}
 
 let value_from_proof = function
- | SimpleProof -> raise EmptyArray
  | LocationProof (loc, lst) -> get_leaf loc lst
  | CustomProof (_, _, (loc, lst), _) -> get_leaf loc lst
  | LocationProof2 (_, loc2, (_, lst2)) -> get_leaf loc2 lst2
+ | _ -> raise EmptyArray
 
 let read_from_proof regs vm proof = function
  | NoIn -> get_value (i 0)
@@ -496,7 +545,7 @@ let merkle_change nv = function
  | LocationProof (loc, lst) ->
    let lst = set_leaf loc nv lst in
    get_root loc lst
- | _ -> assert false
+ | _ -> (* assert false *) u256 0
 
 let merkle_change_memory1 regs nv sz = function
  | LocationProof (loc, lst) ->
@@ -542,11 +591,15 @@ let list_to_string lst = "[" ^ String.concat ", " (List.map to_hex lst) ^ "]"
 let loc_to_string = function
  | SimpleProof -> "{ \"location\": 0, \"list\": [] }"
  | LocationProof (loc,lst) -> "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ " }"
+ | OobProof lst -> "{ \"oob\": true, \"list\": " ^ list_to_string lst ^ " }"
  | CustomProof (result_size, result_state, (loc,lst), dta) ->
     "{ \"location\": " ^ string_of_int loc ^ ", \"list\": " ^ list_to_string lst ^ ", \"result_size\": " ^ string_of_int result_size ^ ", \"result_state\": " ^ to_hex result_state ^ ", \"data\": " ^ to_hex (Bytes.to_string dta) ^ "}"
  | LocationProof2 (loc1, loc2, (lst1, lst2)) ->
     "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
     " \"location2\": " ^ string_of_int loc2 ^ ", \"list2\": " ^ list_to_string lst2 ^ " }"
+ | OobProof2 (loc1, (lst1, lst2)) ->
+    "{ \"location1\": " ^ string_of_int loc1 ^ ", \"list1\": " ^ list_to_string lst1 ^ ", " ^
+    " \"oob\": true, \"list2\": " ^ list_to_string lst2 ^ " }"
 
 let rec make_zero n =
   if n = 0 then u256 0 else

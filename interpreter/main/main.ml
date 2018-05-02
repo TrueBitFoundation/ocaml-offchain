@@ -125,6 +125,7 @@ let argspec = Arg.align
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
   "-output-proofs", Arg.Set Flags.output_all_file_proofs, " output proofs for all output files that are in the final state";
   "-input", Arg.Set Flags.input_proof, " output information about input";
+  "-input2", Arg.Set Flags.input_out, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";
   "-sbrk-offset", Arg.Int (fun n -> Flags.sbrk_offset := Int32.of_int n), " memory offset used by sbrk";
   "-output-step", Arg.Int (fun x -> Flags.output_file_at := x), " for which step the file will be output";
