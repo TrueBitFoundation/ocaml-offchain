@@ -351,7 +351,7 @@ let write_register vm regs v = function
    regs.reg2 <- i sz;
    vm.input.file_data.(file_num) <- dta
 
-let setup_memory vm m instance =
+let setup_memory vm m instance = () (*
   let open Ast in
   let open Types in
   let open Source in
@@ -359,6 +359,7 @@ let setup_memory vm m instance =
     trace ("Memory size " ^ Int32.to_string min);
     vm.memsize <- Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
   if !Flags.run_wasm then vm.memsize <- 100000000
+*)
 
 let init_memory m instance =
   let open Ast in

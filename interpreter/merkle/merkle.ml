@@ -417,11 +417,12 @@ let generic_stub m inst mname fname =
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
 let vm_init () =
-  [ SETSTACK !Flags.stack_size;
+  let init = [ SETSTACK !Flags.stack_size;
     SETMEMORY !Flags.memory_size;
     SETCALLSTACK !Flags.call_size;
     SETGLOBALS !Flags.globals_size;
-    SETTABLE !Flags.table_size ]
+    SETTABLE !Flags.table_size ] in
+  if !Flags.run_wasm then [PUSH (i 100000000); GROW] @ init else init  
 
 let elem x = {it=x; at=no_region}
 
