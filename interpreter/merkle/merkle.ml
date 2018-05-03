@@ -416,8 +416,20 @@ let generic_stub m inst mname fname =
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
-let vm_init () =
-  [ SETSTACK !Flags.stack_size;
+let mem_init_size m =
+  if !Flags.run_wasm then 100000000 else
+  let open Ast in
+  let open Types in
+  let open Source in
+  let res = ref 0 in
+  List.iter (function MemoryType {min; _} ->
+    trace ("Memory size " ^ Int32.to_string min);
+    res := Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
+  !res
+
+let vm_init m =
+  [ PUSH (i (mem_init_size m)); GROW;
+    SETSTACK !Flags.stack_size;
     SETMEMORY !Flags.memory_size;
     SETCALLSTACK !Flags.call_size;
     SETGLOBALS !Flags.globals_size;

@@ -375,18 +375,83 @@ let do_set_leaf loc f = function
 let get_hash arr = (List.hd (List.rev (make_levels arr))).(0)
 *)
 
+let cache = Hashtbl.create 10000
+let cache16 = Hashtbl.create 10000
+
+let get_key arr idx len =
+  let res = Buffer.create (len*32) in
+  for i = idx to idx+len-1 do
+       Buffer.add_string res (if i < Array.length arr then arr.(i) else zeroword)
+  done;
+  Buffer.contents res
+
+let get_key_f f arr idx len =
+  let res = Buffer.create (len*32) in
+  for i = idx to idx+len-1 do
+      Buffer.add_string res (if i < Array.length arr then f arr.(i) else zeroword)
+  done;
+  Buffer.contents res
+
+(*
+let get_key arr idx len =
+  let res = ref [] in
+  for i = idx to idx+len-1 do
+       res := (if i < Array.length arr then arr.(i) else zeroword) :: !res
+  done;
+  !res
+
+let get_key_f f arr idx len =
+  let res = ref [] in
+  for i = idx to idx+len-1 do
+       res := (if i < Array.length arr then f arr.(i) else zeroword) :: !res
+  done;
+  !res
+*)
+
+let cache_const = 5
+
+let rec makeMerkle16 arr idx level =
+   if level > cache_const then keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) else
+   let key = get_key arr idx (pow2 level) in
+   try Hashtbl.find cache16 key
+   with Not_found ->
+     let res = 
+       if level = 0 then ( if idx < Array.length arr then arr.(idx) else zeroword )
+       else keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) in
+     Hashtbl.add cache16 key res;
+     res
+
 let rec makeMerkle arr idx level =
-   if level = 0 then ( if idx < Array.length arr then arr.(idx) else zeroword )
-   else keccak (makeMerkle arr idx (level-1)) (makeMerkle arr (idx+pow2 (level-1)) (level-1))
+   if level > cache_const then keccak (makeMerkle arr idx (level-1)) (makeMerkle arr (idx+pow2 (level-1)) (level-1)) else
+   let key = get_key arr idx (pow2 level) in
+   try Hashtbl.find cache key
+   with Not_found ->
+     let res = 
+       if level = 0 then ( if idx < Array.length arr then arr.(idx) else zeroword )
+       else keccak (makeMerkle arr idx (level-1)) (makeMerkle arr (idx+pow2 (level-1)) (level-1)) in
+     Hashtbl.add cache key res;
+     res
 
 let rec mapMerkle f arr idx level =
-   if level = 0 then ( if idx < Array.length arr then f arr.(idx) else zeroword )
-   else keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1))
+   if level > cache_const then keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1)) else
+   let key = get_key_f f arr idx (pow2 level) in
+   try Hashtbl.find cache key
+   with Not_found ->
+     let res = 
+       if level = 0 then ( if idx < Array.length arr then f arr.(idx) else zeroword )
+       else keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1)) in
+     Hashtbl.add cache key res;
+     res
+(*   if level = 0 then ( if idx < Array.length arr then f arr.(idx) else zeroword )
+   else keccak (mapMerkle f arr idx (level-1)) (mapMerkle f arr (idx+pow2 (level-1)) (level-1)) *)
 
 let rec depth x = if x <= 1 then 0 else 1 + depth (x/2)
 
 let get_hash (arr: w256 array) =
   makeMerkle arr 0 (depth (Array.length arr*2-1))
+
+let get_hash16 (arr: w256 array) =
+  makeMerkle16 arr 0 (depth (Array.length arr*2-1))
 
 let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
 
@@ -441,7 +506,7 @@ let bytes_to_array32 str =
   done;
   res
 
-let bytes_to_array str =
+let bytes_to_array16 str =
   let cells = max ((Bytes.length str + 15) / 16) 2 in
   let res = Array.make cells (u256 0) in
   let str_e = Bytes.cat str zeros in
@@ -450,8 +515,10 @@ let bytes_to_array str =
   done;
   res
 
+let bytes_to_array = bytes_to_array16
+
 let bytes_to_root str =
-  get_hash (bytes_to_array str)
+  get_hash16 (bytes_to_array str)
 
 (* probably most simple to just generate two proofs *)
 let location_proof2 arr loc1 loc2 =

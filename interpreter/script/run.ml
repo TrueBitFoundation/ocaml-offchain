@@ -381,13 +381,13 @@ let setup_vm inst mdle func vs =
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
   trace ("Initing " ^ string_of_int (List.length mem_init));
-  let inits = vm_init() @ table_init@mem_init@g_init@init2@init@cxx_init in
+  let inits = vm_init mdle @ table_init@mem_init@g_init@init2@init@cxx_init in
   trace "Compiling";
   let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
   trace "Compiled";
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init ()));
+  Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init mdle));
   List.iteri (add_input vm) !Flags.input_files;
 (*  prerr_endline "Initialized"; *)
   vm
@@ -455,7 +455,7 @@ let run_test inst mdle func vs =
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end else ( test_errors vm ; Mrun.vm_step vm );
-      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 0 10 (Values.I32 1l) ); 
+      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
       (* test_errors vm *)
