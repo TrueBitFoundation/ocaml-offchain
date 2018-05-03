@@ -310,6 +310,7 @@ let keccak w1 w2 =
   hash#result
 
 let zeroword = get_value (I32 0l)
+let zeroword16 = String.sub zeroword 0 16
 
 let make_level arr n =
   let res = Array.make (n/2) zeroword in
@@ -385,6 +386,14 @@ let get_key arr idx len =
   done;
   Buffer.contents res
 
+let get_key16 arr idx len =
+  let res = Buffer.create (len*32) in
+  for i = idx to idx+len-1 do
+(*       Buffer.add_string res (if i < Array.length arr then arr.(i) else ( prerr_endline ( "hmm " ^  string_of_int i ^  " len " ^  string_of_int (Array.length arr) ) ; zeroword16 ) ) *)
+       Buffer.add_string res (if i < Array.length arr then arr.(i) else zeroword16 )
+  done;
+  Buffer.contents res
+
 let get_key_f f arr idx len =
   let res = Buffer.create (len*32) in
   for i = idx to idx+len-1 do
@@ -400,6 +409,13 @@ let get_key arr idx len =
   done;
   !res
 
+let get_key16 arr idx len =
+  let res = ref [] in
+  for i = idx to idx+len-1 do
+       res := (if i < Array.length arr then arr.(i) else ( prerr_endline ( "hmm " ^  string_of_int i ) ; zeroword16 ) ) :: !res
+  done;
+  !res
+
 let get_key_f f arr idx len =
   let res = ref [] in
   for i = idx to idx+len-1 do
@@ -408,15 +424,21 @@ let get_key_f f arr idx len =
   !res
 *)
 
-let cache_const = 5
+let cache_const = 0
 
 let rec makeMerkle16 arr idx level =
+   (* prerr_endline (string_of_int idx ^ " level " ^ string_of_int level); *)
    if level > cache_const then keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) else
-   let key = get_key arr idx (pow2 level) in
-   try Hashtbl.find cache16 key
+   (* let _ = prerr_endline ("find level " ^ string_of_int level ^ " idx " ^ string_of_int idx) in *)
+   let key = get_key16 arr idx (pow2 level) in
+   try
+      let res = Hashtbl.find cache16 key in
+(*      prerr_endline ("Cache level " ^ string_of_int level);
+      prerr_endline ("Cache " ^ w256_to_string key ^ " -> " ^ w256_to_string res); *)
+      res
    with Not_found ->
      let res = 
-       if level = 0 then ( if idx < Array.length arr then arr.(idx) else zeroword )
+       if level = 0 then ( if idx < Array.length arr then arr.(idx) else ( (* prerr_endline "here" ; *) zeroword16 ) )
        else keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) in
      Hashtbl.add cache16 key res;
      res
