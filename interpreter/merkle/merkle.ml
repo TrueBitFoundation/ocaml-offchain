@@ -385,7 +385,7 @@ let find_initializers mdle =
          (* Run.trace ("initializer " ^ name); *)
          name :: rest
        end else
-     if String.length name > 22 && String.sub name 0 22 = "___cxx_global_var_init" then
+     if String.length name >= 22 && String.sub name 0 22 = "___cxx_global_var_init" then
        begin
          (* Run.trace ("initializer " ^ name); *)
          name :: rest
