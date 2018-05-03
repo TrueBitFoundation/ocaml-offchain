@@ -5,7 +5,6 @@ open Mrun
 open Mbinary
 open Byteutil
 
-
 let trace = Merkle.trace
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
@@ -292,7 +291,7 @@ let micro_step_proofs_with_error vm =
   let alu_proof = machine_to_bin m, vm_to_bin vm in
   regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
   (* Insert error *)
-  set_input_name vm 0 10 (i 1);
+  set_input_name vm 1023 10 (i 1);
   (* Write registers *)
   let write_proof1 = make_write_proof m op.write1 in
   write_register vm regs (get_register regs (fst op.write1)) (snd op.write1);
