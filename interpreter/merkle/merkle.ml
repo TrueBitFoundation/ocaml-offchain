@@ -94,6 +94,7 @@ type context = {
   f_types : (Int32.t, func_type) Hashtbl.t;
   f_types2 : (Int32.t, func_type) Hashtbl.t;
   block_return : control list;
+  mdle : Ast.module_';
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
@@ -236,7 +237,31 @@ and compile_block ctx = function
 
 (* Initialize local variables with correct types *)
 
-let compile_func ctx func =
+let type_to_str = function
+ | I32Type -> "i32"
+ | I64Type -> "i64"
+ | F32Type -> "f32"
+ | F64Type -> "f64"
+
+let find_export_name m num =
+  let rec get_exports = function
+   | [] -> "internal function"
+   | {it=im; _} :: tl ->
+     match im.edesc.it with
+     | FuncExport {it=tvar; _} -> if Int32.to_int tvar = num then Utf8.encode im.name else get_exports tl
+     | _ -> get_exports tl in
+  get_exports m.exports
+
+let debug_exports m =
+  let rec get_exports = function
+   | [] -> ()
+   | {it=im; _} :: tl ->
+     match im.edesc.it with
+     | FuncExport {it=tvar; _} -> prerr_endline ("Export " ^ Int32.to_string tvar ^ " is " ^ Utf8.encode im.name) ; get_exports tl
+     | _ -> get_exports tl in
+  get_exports m.exports
+
+let compile_func ctx idx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
   trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
@@ -244,6 +269,7 @@ let compile_func ctx func =
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
 (*  trace ("---- function end " ^ string_of_int ctx.ptr); *)
   ctx,
+  ( if !Flags.trace then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
   List.map (fun x -> PUSH (default_value x)) func.it.locals @
   body @
   List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP 1]) ret) @
@@ -271,7 +297,7 @@ let resolve_inst2 tab = function
  | CALL l -> CALL (Hashtbl.find tab l)
  | a -> a
 
-let empty_ctx = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1}
+let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle}
 
 let make_tables m =
   let ftab = Hashtbl.create 10 in
@@ -367,13 +393,13 @@ let make_args mdle inst lst =
    PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
   List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4 + !Flags.memory_offset); sz=None}]) lst)
 
-let init_system mdle inst =
-  try [CALL (find_function_index mdle inst (Utf8.decode "_initSystem"))]
-  with Not_found -> []
-
 let simple_call mdle inst name =
   try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name))]
   with Not_found -> []
+
+let init_system mdle inst =
+  simple_call mdle inst "__post_instantiate" @
+  simple_call mdle inst "_initSystem"
 
 let find_initializers mdle =
   let rec do_find = function
@@ -444,6 +470,7 @@ let flatten_tl lst =
   do_flatten [] (List.rev lst)
 
 let compile_test m func vs init inst =
+  (* debug_exports m; *)
   trace ("????");
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
@@ -534,9 +561,9 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
      if mname = "env" && Hashtbl.mem custom_calls fname then [CUSTOM (Hashtbl.find custom_calls fname); RETURN] else
      generic_stub m inst mname fname ) f_imports in
-  let module_codes = List.map (fun f ->
+  let module_codes = List.mapi (fun i f ->
      if f = func then trace "*************** CURRENT ";
-     compile_func {empty_ctx with f_types2=ttab; f_types=ftab} f) m.funcs in
+     compile_func {(empty_ctx m) with f_types2=ttab; f_types=ftab} (i + List.length f_imports) f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc l_acc = function
    | [] -> acc

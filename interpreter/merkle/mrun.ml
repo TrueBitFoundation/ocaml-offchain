@@ -844,6 +844,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
+   let s1 = if s1 < 0 then s1 + 256 else s1 in
    Bytes.set vm.input.file_data.(s3) s2 (Char.chr s1)
  | LOADGLOBAL x ->
    inc_pc vm;

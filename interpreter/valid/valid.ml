@@ -542,7 +542,7 @@ let check_export (c : context) (set : NameSet.t) (ex : export) : NameSet.t =
     require (mut = Immutable) edesc.at
       "mutable globals cannot be exported (yet)"
   );
-  require (not (NameSet.mem name set)) ex.at "duplicate export name";
+  require (not (NameSet.mem name set)) ex.at ("duplicate export name " ^ Utf8.encode name);
   NameSet.add name set
 
 let check_module (m : module_) =
