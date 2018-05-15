@@ -124,6 +124,7 @@ let argspec = Arg.align
   "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
   "-output-proofs", Arg.Set Flags.output_all_file_proofs, " output proofs for all output files that are in the final state";
+  "-input-proofs", Arg.Set Flags.input_all_file_proofs, " input proofs for all output files that are in the final state";
   "-input", Arg.Set Flags.input_proof, " output information about input";
   "-input2", Arg.Set Flags.input_out, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";

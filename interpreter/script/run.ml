@@ -422,6 +422,12 @@ let run_test inst mdle func vs =
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin));
       exit 0 );
+  if !task_number = !Flags.case && !Flags.input_all_file_proofs then begin
+       let lst = Mproof.find_files vm in
+       let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
+       Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst));
+       exit 0
+  end;
   if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
   ( if !task_number = !Flags.case then match !Flags.input_file_proof with
   | Some x ->

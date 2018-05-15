@@ -56,6 +56,7 @@ let output_file_number = ref (-1)
 let input_file_proof : string option ref = ref None
 let output_file_proof : string option ref = ref None
 let output_all_file_proofs = ref false
+let input_all_file_proofs = ref false
 
 let input_proof = ref false
 let input_out = ref false
