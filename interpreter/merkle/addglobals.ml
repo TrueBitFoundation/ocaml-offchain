@@ -26,9 +26,9 @@ let remap_global map gmap gmap2 ftmap x =
   let res = {x with it={x.it with value = {x.it.value with it=List.map (remap_func map gmap gmap2 ftmap) x.it.value.it}}} in
   res
 
-let do_it f x = {x with it=f x.it}
+let do_it x f = {x with it=f x.it}
 
-let remap_elem_segments map gmap gmap2 ftmap el = do_it (fun (x:'a segment') -> {x with offset=do_it (List.map (remap_func map gmap gmap2 ftmap)) x.offset}) el
+let remap_elem_segments map gmap gmap2 ftmap el = do_it el (fun (x:'a segment') -> {x with offset=do_it x.offset (List.map (remap_func map gmap gmap2 ftmap))})
 
 let conv_to_int x =
   if Char.code x.[0] = 34 then int_of_string (String.sub x 1 (String.length x - 2))
@@ -92,23 +92,23 @@ let generate_data (addr, i) : string segment =
 let add_i32_global m name tmem =
   let open Types in
   let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it (fun m -> {m with
+  do_it m (fun m -> {m with
     globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
 
 let add_i64_global m name tmem =
   let open Types in
   let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it (fun m -> {m with
+  do_it m (fun m -> {m with
     globals=m.globals@[elem {value=elem [elem (int64_const tmem)]; gtype=GlobalType (I64Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
 
 let add_f64_global m name tmem =
   let open Types in
   let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it (fun m -> {m with
+  do_it m (fun m -> {m with
     globals=m.globals@[elem {value=elem [elem (f64_const tmem)]; gtype=GlobalType (F64Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]}) m
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
 
 let has_import m name =
   List.exists (fun im -> Utf8.encode im.it.item_name = name) m.it.imports
@@ -164,4 +164,8 @@ let add_globals m fn =
      imports = List.rev !g_imports @ func_imports m @ other_imports m;
      exports = exports_a;
      elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems}}
+
+let export_global m idx name =
+   do_it m (fun m -> {m with exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem (Int32.of_int idx)))}]})
+
 

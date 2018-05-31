@@ -25,7 +25,7 @@ let convert_const num = function
  | [{it=Const {it=I32 x; _}; _}] ->
    let res = Int32.add num x in
    [elem (Const (elem (I32 res)))]
- | lst -> [elem (Const (elem (I32 num))); elem (Binary (I32 I32Op.Add))] @ lst
+ | lst -> [elem (Const (elem (I32 num))); elem (Binary (I32 I32Op.Add))] @ lst (* ???? *)
 
 let convert_mem num (seg:string segment) = do_it seg (fun seg -> {seg with offset=do_it seg.offset (convert_const num)})
 
