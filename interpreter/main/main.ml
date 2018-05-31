@@ -104,6 +104,7 @@ let argspec = Arg.align
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-debug-error", Arg.Set Flags.debug_error, " try to find out why the interpreter failed";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
+  "-asmjs", Arg.Set Flags.asmjs, " pre-processing for asm.js";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
   "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";

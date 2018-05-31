@@ -319,6 +319,8 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
+let elem x = {it=x; at=no_region}
+
 let func_imports m =
   let rec do_get = function
    | [] -> []
@@ -397,8 +399,24 @@ let simple_call mdle inst name =
   try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name))]
   with Not_found -> []
 
+let init_fs_stack mdle inst =
+(*  let stack_ptr = List.length (global_imports (elem mdle)) + 2 in
+  prerr_endline ("Imported globals " ^ string_of_int (List.length (global_imports (elem mdle))));
+  prerr_endline ("All globals " ^ string_of_int (List.length mdle.globals));
+  let stack_max = List.length (global_imports (elem mdle)) + 3 in *)
+  prerr_endline ("Warning: asm.js initialization is very dependant on the filesystem.wasm");
+  let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
+  let stack_ptr = len - 20 in
+  let stack_max = stack_ptr + 1 in
+  let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
+  [PUSH (i 1024); CALL malloc; DUP 1; DUP 1;
+   STOREGLOBAL stack_ptr;
+   BIN (I32 I32Op.Add);
+   STOREGLOBAL stack_max]
+
 let init_system mdle inst =
   simple_call mdle inst "__post_instantiate" @
+  (if !Flags.asmjs then init_fs_stack mdle inst else [] ) @
   simple_call mdle inst "_initSystem"
 
 let find_initializers mdle =
@@ -460,8 +478,6 @@ let vm_init m =
     SETCALLSTACK !Flags.call_size;
     SETGLOBALS !Flags.globals_size;
     SETTABLE !Flags.table_size ]
-
-let elem x = {it=x; at=no_region}
 
 let flatten_tl lst =
   let rec do_flatten acc = function

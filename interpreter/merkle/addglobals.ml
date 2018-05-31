@@ -166,6 +166,7 @@ let add_globals m fn =
      elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems}}
 
 let export_global m idx name =
+   let idx = idx + List.length (global_imports m) in
    do_it m (fun m -> {m with exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem (Int32.of_int idx)))}]})
 
 

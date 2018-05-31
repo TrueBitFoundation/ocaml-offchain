@@ -26,6 +26,8 @@ let init = ref false
 let init_vm = ref false
 let result = ref false
 
+let asmjs = ref false
+
 (*
 let memory_size = ref 2
 let table_size = ref 64
