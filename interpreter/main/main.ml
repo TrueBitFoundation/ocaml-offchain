@@ -19,7 +19,6 @@ let add_custom_judge str =
        Hashtbl.add Mrun.custom_lookup num (load_lookup command)
     end
     else Hashtbl.add Mrun.custom_command num command
-       
   | _ -> prerr_endline "bad format for custom judge"
 
 let configure () =
