@@ -566,6 +566,10 @@ let compile_test m func vs init inst =
         with Not_found -> [STUB "setTempRet0"; DROP 1; RETURN] else
 (*     if mname = "env" && fname = "_rintf" then [UNA (F32 F32Op.Nearest); RETURN] else *)
      if mname = "env" && fname = "_rintf" then [STUB "rintf"; RETURN] else
+     if mname = "env" && fname = "_sqrt" then [STUB "sqrt"; UNA (F64 F64Op.Sqrt); RETURN] else
+     if mname = "env" && fname = "_fabsf" then [STUB "fabsf"; UNA (F32 F32Op.Abs); RETURN] else
+     if mname = "env" && fname = "_cosf" then [STUB "cosf"; RETURN] else
+     if mname = "env" && fname = "_sinf" then [STUB "sinf"; RETURN] else
      if mname = "env" && fname = "usegas" then
        try
          let gas = find_global_index (elem m) inst (Utf8.decode "GAS") in
