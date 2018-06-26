@@ -26,6 +26,8 @@ let init = ref false
 let init_vm = ref false
 let result = ref false
 
+let asmjs = ref false
+
 (*
 let memory_size = ref 2
 let table_size = ref 64
@@ -56,6 +58,7 @@ let output_file_number = ref (-1)
 let input_file_proof : string option ref = ref None
 let output_file_proof : string option ref = ref None
 let output_all_file_proofs = ref false
+let input_all_file_proofs = ref false
 
 let input_proof = ref false
 let input_out = ref false

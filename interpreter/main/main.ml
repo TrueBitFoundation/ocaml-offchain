@@ -19,7 +19,6 @@ let add_custom_judge str =
        Hashtbl.add Mrun.custom_lookup num (load_lookup command)
     end
     else Hashtbl.add Mrun.custom_command num command
-       
   | _ -> prerr_endline "bad format for custom judge"
 
 let configure () =
@@ -57,6 +56,10 @@ let critical_mode = ref false
 let buildstack_mode = ref false
 let elim_globals_mode = ref false
 
+let export_global_mode : int option ref = ref None
+
+let export_name = ref "DEFAULT_NAME"
+
 let argspec = Arg.align
 [
   "-", Arg.Set Flags.interactive,
@@ -81,6 +84,9 @@ let argspec = Arg.align
   
   "-merge", Arg.Set merge_mode, " merge files";
   "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
+  "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
+  "-name", Arg.String (fun s -> export_name := s), " name of element to export";
+
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
@@ -97,6 +103,7 @@ let argspec = Arg.align
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
   "-debug-error", Arg.Set Flags.debug_error, " try to find out why the interpreter failed";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
+  "-asmjs", Arg.Set Flags.asmjs, " pre-processing for asm.js";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
   "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";
@@ -124,6 +131,7 @@ let argspec = Arg.align
   "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
   "-output-proofs", Arg.Set Flags.output_all_file_proofs, " output proofs for all output files that are in the final state";
+  "-input-proofs", Arg.Set Flags.input_all_file_proofs, " input proofs for all output files that are in the final state";
   "-input", Arg.Set Flags.input_proof, " output information about input";
   "-input2", Arg.Set Flags.input_out, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";
@@ -149,16 +157,18 @@ let () =
       | a::b::_ ->
         Run.trace "found modules";
         let merged = Merge.merge b a in
-        (* Run.output_stdout (fun () -> merged); *)
-        if !Flags.trace then Run.output_stdout (fun () -> merged)
-        else Run.create_binary_file "merge.wasm" () (fun () -> merged)
+        Run.create_binary_file "merge.wasm" () (fun () -> merged)
       | _ -> ()
     end;
     ( match !globals_file, !lst with
     | Some fn, m :: _ ->
       let m = Addglobals.add_globals m fn in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "globals.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !export_global_mode, !lst with
+    | Some num, m :: _ ->
+      let m = Addglobals.export_global m num (!export_name) in
+      Run.create_binary_file "exported.wasm" () (fun () -> m)
     | _ -> () );
     ( match !elim_globals_mode, !lst with
     | true, m :: _ ->
@@ -181,32 +191,27 @@ let () =
     ( match !float_mode, !lst with
     | true, a :: b :: _ ->
       let m = Intfloat.process a b in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
     | _ -> () );
     ( match !shift_mem_mode, !lst with
     | Some num, m :: _ ->
       let m = Shiftmem.process m num in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "shiftmem.wasm" () (fun () -> m)
     | _ -> () );
     ( match !underscore_mode, !lst with
     | true, m :: _ ->
       let m = Underscore.process m in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "underscore.wasm" () (fun () -> m)
     | _ -> () );
     ( match !counter_mode, !lst with
     | true, m :: _ ->
       let m = Counter.process m in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "counter.wasm" () (fun () -> m)
     | _ -> () );
     ( match !test_counter_mode, !lst with
     | true, m :: _ ->
       let m = Evallocation.process m in
-      (* Run.output_stdout (fun () -> m); *)
       Run.create_binary_file "counter.wasm" () (fun () -> m)
     | _ -> () );
     ( match !handle_nan_mode, !lst with

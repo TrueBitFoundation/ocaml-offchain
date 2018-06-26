@@ -259,7 +259,9 @@ let process_custom vm x file_num =
      let dta = Bytes.sub fdata 0 fsize in
      let key = Byteutil.bytes_to_hex dta in
      let lookup = Hashtbl.find custom_lookup x in
-     let res = Hashtbl.find lookup key in
+     let res =
+        try Hashtbl.find lookup key
+        with Not_found -> ( prerr_endline ("Bad key: " ^ key);  "" ) in
      Byteutil.get_bytes_from_hex res, String.length res/2
    end else begin
      (*
@@ -682,7 +684,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    prerr_endline ("rintf " ^ string_of_float chr);
    inc_pc vm
  | STUB str ->
-   prerr_endline ("STUB " ^ str);
+   if not (!Flags.trace) then prerr_endline ("STUB " ^ str);
    inc_pc vm
  | INITCALLTABLE x ->
    inc_pc vm;
@@ -844,6 +846,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    let s2 = value_to_int vm.stack.(vm.stack_ptr-2) in
    let s3 = value_to_int vm.stack.(vm.stack_ptr-3) in
    vm.stack_ptr <- vm.stack_ptr - 3;
+   let s1 = if s1 < 0 then s1 + 256 else s1 in
    Bytes.set vm.input.file_data.(s3) s2 (Char.chr s1)
  | LOADGLOBAL x ->
    inc_pc vm;

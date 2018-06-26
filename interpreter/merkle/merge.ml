@@ -41,6 +41,7 @@ let drop_table exp = match exp.it.edesc.it with
    let str = Utf8.encode exp.it.name in
    str <> "_stackSave" &&
    str <> "_stackAlloc" &&
+   str <> "_runPostSets" &&
    str <> "_stackRestore"
 
 let drop_table_import exp = match exp.it.idesc.it with
@@ -60,6 +61,13 @@ let do_it f x = {x with it=f x.it}
 
 let remap_elements map el = do_it (fun x -> {x with init=List.map (remap_var map) x.init}) el
 
+(*
+let extra = ""
+let delim = "_"
+*)
+
+let extra = ""
+
 (* probably all funcs will have to stay *)
 let merge a b =
   let f_imports = ref [] in
@@ -78,13 +86,13 @@ let merge a b =
   let ftmap2 x = Int32.add x (Int32.of_int (List.length a.it.types)) in
   let reserve_export x =
     let name = Utf8.encode x.it.name in
-    let name = if name = "_malloc" then "_env__malloc" else name in
+    let name = if name = "_malloc" then extra ^ "_env__malloc" else name in
     Hashtbl.add taken_imports name 0l in
   List.iter reserve_export a.it.exports;
   List.iter reserve_export b.it.exports;
   let add_import taken taken_cur imports map num imp =
     (* check if import was already taken *)
-    let name = "_" ^ Utf8.encode imp.it.module_name ^ "_" ^ Utf8.encode imp.it.item_name in
+    let name = extra ^ "_" ^ Utf8.encode imp.it.module_name ^ "_" ^ Utf8.encode imp.it.item_name in
     if not (Hashtbl.mem taken name) || Hashtbl.mem taken_cur name then begin
       let loc = Int32.of_int (List.length !imports) in
       Hashtbl.add map (Int32.of_int num) loc;
