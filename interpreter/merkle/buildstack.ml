@@ -110,7 +110,7 @@ let determine_type tctx block =
 (*  prerr_endline (string_of_int (List.length lst)); *)
   match List.rev lst with
   | Some x :: _ -> x
-  | _ -> raise (Failure "typeing error")
+  | _ -> raise (Failure "typing error")
 
 let store_locals ctx =
    let num_locals = List.length ctx.tctx.Valid.locals in
