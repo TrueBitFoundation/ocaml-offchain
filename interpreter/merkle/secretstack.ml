@@ -24,6 +24,7 @@ type context = {
   f_types2 : (Int32.t, func_type) Hashtbl.t;
   block_return : control list;
   mutable marked : Int32.t list;
+  tctx : Valid.context;
 }
 
 let relabel lst =
@@ -37,6 +38,26 @@ let relabel lst =
     | If (ty, texp, fexp) -> If (ty, List.map compile texp, List.map compile fexp)
     | a -> a in
   List.map compile lst
+
+(* Associating instructions with types *)
+let assoc_types ctx func =
+  let res = Hashtbl.create 10 in
+  let ctx = Valid.func_context ctx func in
+  let rec compile pre (expr:instr) =
+     compile' pre expr.it;
+     let _, typ3 = Valid.type_seq ctx (pre@[expr]) in
+     Hashtbl.add res (Int32.of_int expr.at.right.line) typ3
+  and compile' pre = function
+    | Block (ty, lst) -> compile_list lst
+    | Loop (ty, lst) -> compile_list lst
+    | If (ty, texp, fexp) -> compile_list texp; compile_list fexp
+    | _ -> ()
+  and compile_list lst = compile_list_aux [] lst
+  and compile_list_aux pre = function
+    | a::tl -> compile pre a; compile_list_aux (pre@[a]) tl
+    | [] -> () in
+  compile_list func.it.body;
+  res
 
 (* the idea would be to add local variables so that there are never hidden elements in the stack when making a call *)
 
@@ -138,14 +159,39 @@ and compile_block ctx = function
     let ctx = compile_block ctx tl in
     ctx
 
+let tee_locals assoc func =
+  let rec compile (expr:instr) = List.map (fun e -> {expr with it=e}) (compile' (Int32.of_int expr.at.right.line) expr.it)
+  and compile' numm = function
+    | Block (ty, lst) -> [Block (ty, compile_list lst)]
+    | Loop (ty, lst) -> [Loop (ty, compile_list lst)]
+    | If (ty, texp, fexp) -> [If (ty, compile_list texp, compile_list fexp)]
+    | a ->
+       ( try
+           let (_, num) = List.assoc numm assoc in
+           [TeeLocal num; a]
+         with Not_found -> [a] )
+  and compile_list lst = List.flatten (List.map compile lst) in
+  compile_list func.it.body
+
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals));
   (* Just params are now in the stack *)
   let locals = List.length par + List.length func.it.locals in
-  let ctx = compile' {ctx with ptr=locals; locals=locals} 0l (Block (ret, relabel func.it.body)) in
+  let func = do_it func (fun f -> {f with body=relabel f.body}) in
+  let res = assoc_types (Valid.func_context ctx.tctx func) func in
+  let ctx = compile' {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
+  (* find types for marked expressions *)
+  let find_type expr =
+     try match Hashtbl.find res expr with
+      | Some x :: _ -> prerr_endline ("found type " ^ type_to_str x) ; x
+      | _ -> prerr_endline ("Warning: empty type") ; raise Not_found
+     with Not_found -> ( prerr_endline ("Warning: cannot find type") ; I32Type)
+     in
+  let marked = List.mapi (fun i x -> x, (find_type x, {it=Int32.of_int (i+locals); at=no_region})) ctx.marked in
+  ctx.marked <- [];
   trace ("---- function end " ^ string_of_int ctx.ptr);
-  func
+  do_it func (fun f -> {f with locals=f.locals@List.map (fun (_,(t,_)) -> t) marked; body=tee_locals marked func})
 
 let make_tables m =
   let ftab = Hashtbl.create 10 in
@@ -167,9 +213,13 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
-let process m =
-  do_it m (fun m ->
+let process m_ =
+  do_it m_ (fun m ->
      let ftab, ttab = make_tables m in
-     let ctx = {ptr=0; bptr=0; block_return=[]; f_types2=ttab; f_types=ftab; locals=0; stack=[]; marked=[]} in
+     let ctx = {
+        ptr=0; bptr=0; block_return=[]; 
+        f_types2=ttab; f_types=ftab;
+        locals=0; stack=[]; marked=[];
+        tctx = Valid.module_context m_ } in
      {m with funcs=List.map (fun x -> compile_func ctx x) m.funcs})
 
