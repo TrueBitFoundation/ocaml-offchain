@@ -168,7 +168,7 @@ let tee_locals assoc func =
     | a ->
        ( try
            let (_, num) = List.assoc numm assoc in
-           [TeeLocal num; a]
+           [a; TeeLocal num]
          with Not_found -> [a] )
   and compile_list lst = List.flatten (List.map compile lst) in
   compile_list func.it.body
@@ -184,9 +184,9 @@ let compile_func ctx func =
   (* find types for marked expressions *)
   let find_type expr =
      try match Hashtbl.find res expr with
-      | Some x :: _ -> prerr_endline ("found type " ^ type_to_str x) ; x
-      | _ -> prerr_endline ("Warning: empty type") ; raise Not_found
-     with Not_found -> ( prerr_endline ("Warning: cannot find type") ; I32Type)
+      | Some x :: _ -> trace ("found type " ^ type_to_str x ^ " for " ^ Int32.to_string expr) ; x
+      | _ -> trace ("Warning: empty type") ; raise Not_found
+     with Not_found -> ( trace ("Warning: cannot find type") ; I32Type)
      in
   let marked = List.mapi (fun i x -> x, (find_type x, {it=Int32.of_int (i+locals); at=no_region})) ctx.marked in
   ctx.marked <- [];
