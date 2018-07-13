@@ -156,10 +156,12 @@ function makeEnv(env) {
 
     var func_stack = [0]
     var loop_stack = [0]
+    var step_stack = [0]
     
     env.clearStack = function () {
         func_stack = [0]
         loop_stack = [0]
+        step_stack = [0]
     }
     
     var saved = {}
@@ -174,6 +176,7 @@ function makeEnv(env) {
         if (step == target) {
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
+            saved.step = step_stack.concat()
         }
         loop_stack[loop_stack.length-1]++
     }
@@ -184,16 +187,19 @@ function makeEnv(env) {
         if (step == target) {
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
+            saved.step = step_stack.concat()
         }
         func_stack.push(num)
         loop_stack.push(0)
+        step_stack.push(step)
         // console.log("push ", func_stack.length, num)
     }
-    
+
     env.popFuncCritical = function (num) {
         if (num == func_stack[func_stack.length-2]) {
             func_stack.length--
             loop_stack.length--
+            step_stack.length--
             // console.log("pop ", func_stack.length, num)
         }
         else {

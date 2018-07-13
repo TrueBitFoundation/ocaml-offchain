@@ -25,26 +25,9 @@ type ctx = {
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
 
-let rec inner_loops inst =
-  let loc = Int32.of_int inst.at.left.column in
-  match inst.it with
-  | Block (ty, lst) -> List.flatten (List.map inner_loops lst)
-  | Loop (ty, lst) -> loc :: List.flatten (List.map inner_loops lst)
-  | If (ty, l1, l2) -> List.flatten (List.map inner_loops l1) @ List.flatten (List.map inner_loops l2)
-  | a -> []
-
 (* for each block, find all loops, after block check if that loop exited *)
 
 let rec process_inst ctx inst =
-  (*
-  let loc = Int32.of_int inst.at.left.column in
-  let loop_locs = List.rev (inner_loops inst) in
-  let loops = List.flatten (List.map (fun loc -> List.map it [Const (it (I32 loc)); Call ctx.pop_loop]) loop_locs) in
-  if loop_locs <> [] then prerr_endline ("At location " ^ Int32.to_string loc ^ " loops " ^ String.concat ", " (List.map Int32.to_string loop_locs));
-  let mk_block inst =
-     if loop_locs = [] then [it inst] 
-     else List.map it [Const (it (I32 loc)); Call ctx.start_block; inst; Const (it (I32 loc)); Call ctx.end_block] in
-  *)
   let res = match inst.it with
   | Block (ty, lst) -> [Block (ty, List.flatten (List.map (process_inst ctx) lst))]
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
@@ -72,11 +55,8 @@ let process m =
        it (FuncType ([I32Type; I32Type], [I32Type]));
        ] in
     let ftypes_len = List.length m.types in
-(*    let get_type = it (Int32.of_int ftypes_len) in *)
     let set_type = it (Int32.of_int (ftypes_len+1)) in
     let pop_type = it (Int32.of_int (ftypes_len+2)) in
-(*    let push_call_type = it (Int32.of_int (ftypes_len+3)) in
-    let push_indirect_type = it (Int32.of_int (ftypes_len+4)) in *)
     (* add imports *)
     let added = [
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popFuncCritical"; idesc=it (FuncImport set_type)};
