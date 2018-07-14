@@ -5,6 +5,8 @@ Count steps, on each critical step, store local variables
 
 Perhaps before each step, we should count, instead of entering functions
 
+So also exits are handled
+
 *)
 
 open Ast
@@ -30,6 +32,11 @@ type ctx = {
   store_local_i64 : var;
   store_local_f32 : var;
   store_local_f64 : var;
+  
+  adjust_stack_i32 : var;
+  adjust_stack_i64 : var;
+  adjust_stack_f32 : var;
+  adjust_stack_f64 : var;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -143,10 +150,18 @@ let rec postfix = function
 
 let prefix lst = List.rev (List.map (fun (l, a) -> List.rev l, a) (postfix (List.rev lst)))
 
+let store_top ctx = function
+ | I32Type -> [Call ctx.adjust_stack_i32]
+ | F32Type -> [Call ctx.adjust_stack_f32]
+ | I64Type -> [SetGlobal ctx.g64; Const (it (I32 64l)); GetGlobal ctx.g64; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.adjust_stack_i64; GetGlobal ctx.g64]
+ | F64Type -> [Call ctx.adjust_stack_f64]
+
 let rec process_inst ctx inst =
-  let s_block = [
-     Call ctx.count; If ([], List.map it (store_locals ctx), [])
-  ] in
+  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
+  let e_block = function
+   | FuncType (_, []) -> [Call ctx.count; If ([], List.map it (store_locals ctx), [])]
+   | FuncType (_, [ty]) -> [Call ctx.count; If ([], List.map it (store_locals ctx @ store_top ctx ty), [])]
+   | _ -> raise (Failure "bad function return type") in
   let it x = {at=inst.at; it=x} in
   (* *)
   let res = match inst.it with
@@ -154,8 +169,8 @@ let rec process_inst ctx inst =
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
   | Loop (ty, lst) -> [Loop (ty, List.map it s_block @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
-  | Call x -> s_block @ [Call x]
-  | CallIndirect x -> s_block @ [CallIndirect x]
+  | Call x -> s_block @ [Call x] @ e_block (ctx.var_type x.it)
+  | CallIndirect x -> s_block @ [CallIndirect x] @ e_block (ctx.lookup_type x.it)
   | a -> [a] in
   List.map it res
 
@@ -195,13 +210,24 @@ let process m =
       it (FuncType ([I32Type], []));
       it (FuncType ([I32Type; F32Type], []));
       it (FuncType ([I32Type; F64Type], []));
+      
+      it (FuncType ([I32Type], [I32Type]));
+      it (FuncType ([], []));
+      it (FuncType ([F32Type], [F32Type]));
+      it (FuncType ([F64Type], [F64Type]));
       ] in
     let ftypes_len = List.length m.types in
     let count_type = it (Int32.of_int ftypes_len) in
-    let store_type_i32 = it (Int32.of_int (ftypes_len+9)) in
-    let store_type_i64 = it (Int32.of_int (ftypes_len+10)) in
-    let store_type_f32 = it (Int32.of_int (ftypes_len+11)) in
-    let store_type_f64 = it (Int32.of_int (ftypes_len+12)) in
+    let store_type_i32 = it (Int32.of_int (ftypes_len+1)) in
+    let store_type_i64 = it (Int32.of_int (ftypes_len+2)) in
+    let store_type_f32 = it (Int32.of_int (ftypes_len+3)) in
+    let store_type_f64 = it (Int32.of_int (ftypes_len+4)) in
+    
+    let adjust_stack_i32 = it (Int32.of_int (ftypes_len+5)) in
+    let adjust_stack_i64 = it (Int32.of_int (ftypes_len+6)) in
+    let adjust_stack_f32 = it (Int32.of_int (ftypes_len+7)) in
+    let adjust_stack_f64 = it (Int32.of_int (ftypes_len+8)) in
+    
     (* add imports *)
     let added = [
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "countStep"; idesc=it (FuncImport count_type)};
@@ -210,6 +236,10 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalI64"; idesc=it (FuncImport store_type_i64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF32"; idesc=it (FuncImport store_type_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeLocalF64"; idesc=it (FuncImport store_type_f64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI32"; idesc=it (FuncImport adjust_stack_i32)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI64"; idesc=it (FuncImport adjust_stack_i64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_stack_f32)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_stack_f64)}; (* for each type, need a different function *)
     ] in
     let imps = m.imports @ added in
     let pos_lst = path_table "critical.out" in
@@ -233,6 +263,10 @@ let process m =
       store_local_i64 = it (Int32.of_int (i_num+3));
       store_local_f32 = it (Int32.of_int (i_num+4));
       store_local_f64 = it (Int32.of_int (i_num+5));
+      adjust_stack_i32 = it (Int32.of_int (i_num+6));
+      adjust_stack_i64 = it (Int32.of_int (i_num+7));
+      adjust_stack_f32 = it (Int32.of_int (i_num+8));
+      adjust_stack_f64 = it (Int32.of_int (i_num+9));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       possible = (fun loc -> Hashtbl.mem pos_tab loc);

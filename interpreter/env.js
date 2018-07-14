@@ -180,8 +180,8 @@ function makeEnv(env) {
         }
         loop_stack[loop_stack.length-1]++
     }
-    
-    env.pushFuncCritical = function (num) {
+
+    env.enterFuncCritical = function () {
         step++
         if (step % 1000 == 0) console.log(step)
         if (step == target) {
@@ -189,9 +189,19 @@ function makeEnv(env) {
             saved.loop = loop_stack.concat()
             saved.step = step_stack.concat()
         }
+    }
+
+    env.pushFuncCritical = function (num) {
+        // step++
+        if (step % 1000 == 0) console.log(step)
         func_stack.push(num)
         loop_stack.push(0)
         step_stack.push(step)
+        if (step == target) {
+            saved.func = func_stack.concat()
+            saved.loop = loop_stack.concat()
+            saved.step = step_stack.concat()
+        }
         // console.log("push ", func_stack.length, num)
     }
 
@@ -204,6 +214,13 @@ function makeEnv(env) {
         }
         else {
             // console.log("cannot pop ", func_stack.length, num, func_stack)
+        }
+        step++
+        if (step % 1000 == 0) console.log(step)
+        if (step == target) {
+            saved.func = func_stack.concat()
+            saved.loop = loop_stack.concat()
+            saved.step = step_stack.concat()
         }
     }
     
