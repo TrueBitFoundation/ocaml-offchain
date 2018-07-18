@@ -740,10 +740,10 @@ let proof2_to_string (m, vm) =
 
 let print_fetch (a, _, b) = Printf.printf "{ \"vm\": %s, \"location\": %s }\n" (vm_to_string a) (list_to_string b)
 
+(*
 let check_proof proof =
   let vm1, _, proof1 = proof.fetch_code_proof in
   let state1 = hash_vm_bin vm1 in
-(*  trace ("STATE1: " ^ machine_to_string (proof.init_regs_proof)); *)
   let state2 = hash_machine_bin (fst proof.init_regs_proof) in
   if check_fetch state1 state2 proof.fetch_code_proof then trace "Fetch Success"
   else trace "Fetch Failure";
@@ -780,6 +780,42 @@ let check_proof proof =
   let state14 = hash_vm_bin proof.finalize_proof in
   if check_update_memsize state13 state14 proof.memsize_proof then trace "Memsize Success"
   else trace "Memsize Failure";
+  let states = [state1;state2;state3;state4;state5;state6;state7;state8;state9;state10;state12;state13;state14] in
+  Printf.printf "{\n";
+  Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));
+  Printf.printf "  \"fetch\": { \"vm\": %s, \"location\": %s },\n"
+    (vm_to_string vm1) (list_to_string proof1);
+  Printf.printf "  \"init\": %s,\n" (proof2_to_string proof.init_regs_proof);
+  Printf.printf "  \"reg1\": %s,\n" (proof3_to_string proof.read_register_proof1);
+  Printf.printf "  \"reg2\": %s,\n" (proof3_to_string proof.read_register_proof2);
+  Printf.printf "  \"reg3\": %s,\n" (proof3_to_string proof.read_register_proof3);
+  Printf.printf "  \"alu\": %s,\n" (proof2_to_string proof.alu_proof);
+  Printf.printf "  \"write1\": %s,\n" (proof3_to_string proof.write_proof1);
+  Printf.printf "  \"write2\": %s,\n" (proof3_to_string proof.write_proof2);
+  Printf.printf "  \"pc\": %s,\n" (proof2_to_string proof.update_ptr_proof1);
+  Printf.printf "  \"stack_ptr\": %s,\n" (proof2_to_string proof.update_ptr_proof2);
+  Printf.printf "  \"call_ptr\": %s,\n" (proof2_to_string proof.update_ptr_proof3);
+  Printf.printf "  \"memsize\": %s,\n" (proof2_to_string proof.memsize_proof);
+  Printf.printf "  \"final\": %s\n" (vm_to_string proof.finalize_proof);
+  Printf.printf "}\n";
+  ()
+*)
+
+let check_proof proof =
+  let vm1, _, proof1 = proof.fetch_code_proof in
+  let state1 = hash_vm_bin vm1 in
+  let state2 = hash_machine_bin (fst proof.init_regs_proof) in
+  let state3 = hash_machine_bin (t1 proof.read_register_proof1) in
+  let state4 = hash_machine_bin (t1 proof.read_register_proof2) in
+  let state5 = hash_machine_bin (t1 proof.read_register_proof3) in
+  let state6 = hash_machine_bin (fst proof.alu_proof) in
+  let state7 = hash_machine_bin (t1 proof.write_proof1) in
+  let state8 = hash_machine_bin (t1 proof.write_proof2) in
+  let state9 = hash_machine_bin (fst proof.update_ptr_proof1) in
+  let state10 = hash_machine_bin (fst proof.update_ptr_proof2) in
+  let state12 = hash_machine_bin (fst proof.update_ptr_proof3) in
+  let state13 = hash_machine_bin (fst proof.memsize_proof) in
+  let state14 = hash_vm_bin proof.finalize_proof in
   let states = [state1;state2;state3;state4;state5;state6;state7;state8;state9;state10;state12;state13;state14] in
   Printf.printf "{\n";
   Printf.printf "  \"states\": [%s],\n" (String.concat ", " (List.map to_hex states));

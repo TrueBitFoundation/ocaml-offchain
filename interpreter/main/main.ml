@@ -55,6 +55,7 @@ let handle_nan_mode = ref false
 let critical_mode = ref false
 let buildstack_mode = ref false
 let elim_globals_mode = ref false
+let secret_stack_mode = ref false
 
 let export_global_mode : int option ref = ref None
 
@@ -81,7 +82,8 @@ let argspec = Arg.align
   "-critical", Arg.Set critical_mode, " find the critical path to step";
   "-build-stack", Arg.Set buildstack_mode, " build the stack for critical path";
   "-elim-globals", Arg.Set elim_globals_mode, " change global variables to memory accesses";
-  
+  "-analyze-stack", Arg.Set secret_stack_mode, " remove extra elements from stack";
+
   "-merge", Arg.Set merge_mode, " merge files";
   "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
   "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
@@ -181,6 +183,12 @@ let () =
       let m = Critical.process m in
       Run.create_sexpr_file "critical.wast" () (fun () -> m);
       Run.create_binary_file "critical.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !secret_stack_mode, !lst with
+    | true, m :: _ ->
+      let m = Secretstack.process m in
+      Run.create_sexpr_file "secretstack.wast" () (fun () -> m);
+      Run.create_binary_file "secretstack.wasm" () (fun () -> m)
     | _ -> () );
     ( match !buildstack_mode, !lst with
     | true, m :: _ ->

@@ -269,7 +269,7 @@ let compile_func ctx idx func =
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
 (*  trace ("---- function end " ^ string_of_int ctx.ptr); *)
   ctx,
-  ( if !Flags.trace then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
+  ( if false (* !Flags.trace *) then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
   List.map (fun x -> PUSH (default_value x)) func.it.locals @
   body @
   List.flatten (List.mapi (fun i _ -> [DUP (List.length ret - i); SWAP (ctx.ptr-i+1); DROP 1]) ret) @
@@ -406,7 +406,7 @@ let init_fs_stack mdle inst =
   let stack_max = List.length (global_imports (elem mdle)) + 3 in *)
   prerr_endline ("Warning: asm.js initialization is very dependant on the filesystem.wasm");
   let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
-  let stack_ptr = len - 20 in
+  let stack_ptr = len - 20 in (* this is the difficult place *)
   let stack_max = stack_ptr + 1 in
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i 1024); CALL malloc; DUP 1; DUP 1;
@@ -416,7 +416,7 @@ let init_fs_stack mdle inst =
 
 let init_system mdle inst =
   simple_call mdle inst "__post_instantiate" @
-  (if !Flags.asmjs then init_fs_stack mdle inst else [] ) @
+  (if (try ignore (find_global_index {it=mdle; at=no_region} inst (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
   simple_call mdle inst "_initSystem"
 
 let find_initializers mdle =

@@ -405,6 +405,7 @@ let handle_exit vm =
        let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
        Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst))
   end;
+  if vm.step = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
   if  !task_number - 1 = !Flags.case then output_files vm;
   if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) vm.step;
   if !task_number = !Flags.case + 1 && !Flags.output_proof then begin
@@ -463,6 +464,7 @@ let run_test inst mdle func vs =
       end else ( test_errors vm ; Mrun.vm_step vm );
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
+      if vm.pc = magic_pc then raise VmTrap;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
       (* test_errors vm *)
     done;
@@ -482,6 +484,7 @@ let run_test inst mdle func vs =
       prerr_endline (string_of_int vm.pc ^ ": " ^ trace_step vm);
       test_errors vm;
     end;
+    vm.step <- vm.step + 1;
     vm.pc <- magic_pc;
     handle_exit vm;
    ( match a with
