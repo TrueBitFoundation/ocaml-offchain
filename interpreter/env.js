@@ -150,6 +150,8 @@ function makeEnv(env) {
         input.data[i][j] = c
     }
     
+    /* Finding critical path */
+    
     var stack = []
     var step = 0
     var target = 100000
@@ -167,7 +169,9 @@ function makeEnv(env) {
     var saved = {}
     
     env.printStack = function () {
-        console.log(JSON.stringify(saved))
+        var str = JSON.stringify(saved)
+        console.log(str)
+        fs.writeFileSync("critical.json", str)
     }
     
     env.enterLoopCritical = function () {
