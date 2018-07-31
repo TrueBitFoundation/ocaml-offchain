@@ -29,12 +29,13 @@ type ctx = {
 (* for each block, find all loops, after block check if that loop exited *)
 
 let rec process_inst ctx inst =
+  let loc = Int32.of_int inst.at.left.column in
   let res = match inst.it with
   | Block (ty, lst) -> [Block (ty, List.flatten (List.map (process_inst ctx) lst))]
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
   | Loop (ty, lst) -> [Loop (ty, List.map it [Call ctx.enter_loop] @ List.flatten (List.map (process_inst ctx) lst))]
-  | Call x -> [Call ctx.enter_func; Call x; Const (it (I32 ctx.loc)); Call ctx.pop]
-  | CallIndirect x -> [Call ctx.enter_func; CallIndirect x; Const (it (I32 ctx.loc)); Call ctx.pop]
+  | Call x -> [Const (it (I32 loc)); Call ctx.push_func; Call x; Const (it (I32 loc)); Call ctx.pop]
+  | CallIndirect x -> [Const (it (I32 loc)); Call ctx.push_func; CallIndirect x; Const (it (I32 loc)); Call ctx.pop]
   | a -> [a] in
   List.map it res
 
@@ -42,7 +43,7 @@ let process_function ctx f =
   let loc = Int32.of_int f.at.left.column in
   let ctx = {ctx with loc=loc} in
   do_it f (fun f ->
-    {f with body=List.map it [Const (it (I32 loc)); Call ctx.push_func] @ List.flatten (List.map (process_inst ctx) f.body)})
+    {f with body= (* List.map it [Const (it (I32 loc)); Call ctx.push_func] @ *) List.flatten (List.map (process_inst ctx) f.body)})
 
 let process m =
   do_it m (fun m ->

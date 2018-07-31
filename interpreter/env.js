@@ -170,7 +170,7 @@ function makeEnv(env) {
     
     env.printStack = function () {
         var str = JSON.stringify(saved)
-        console.log(str)
+        console.log(str, step)
         fs.writeFileSync("critical.json", str)
     }
     
@@ -178,6 +178,7 @@ function makeEnv(env) {
         step++
         if (step % 1000 == 0) console.log(step)
         if (step == target) {
+            step_stack.push(target)
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
             saved.step = step_stack.concat()
@@ -185,23 +186,26 @@ function makeEnv(env) {
         loop_stack[loop_stack.length-1]++
     }
 
+    /*
     env.enterFuncCritical = function () {
         step++
         if (step % 1000 == 0) console.log(step)
         if (step == target) {
+            step_stack.push(target)
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
             saved.step = step_stack.concat()
         }
-    }
+    }*/
 
     env.pushFuncCritical = function (num) {
-        // step++
+        step++
         if (step % 1000 == 0) console.log(step)
         func_stack.push(num)
         loop_stack.push(0)
         step_stack.push(step)
         if (step == target) {
+            step_stack.push(target)
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
             saved.step = step_stack.concat()
@@ -210,26 +214,107 @@ function makeEnv(env) {
     }
 
     env.popFuncCritical = function (num) {
-        if (num == func_stack[func_stack.length-2]) {
+        if (num == func_stack[func_stack.length-1]) {
             func_stack.length--
             loop_stack.length--
             step_stack.length--
             // console.log("pop ", func_stack.length, num)
         }
         else {
-            // console.log("cannot pop ", func_stack.length, num, func_stack)
+            console.log("cannot pop ", func_stack.length, num, func_stack)
         }
         step++
         if (step % 1000 == 0) console.log(step)
         if (step == target) {
+            step_stack.push(target)
             saved.func = func_stack.concat()
             saved.loop = loop_stack.concat()
             saved.step = step_stack.concat()
         }
     }
     
+    try {
+        var obj = JSON.parse(fs.readFileSync("critical.json"))
+        addStackEnv(env, obj)
+    }
+    catch (e) {}
+    
     ee = env
     
+}
+
+function getI64() {
+    var buffer = new ArrayBuffer(8)
+    var view = new Uint8Array(buffer)
+    for (var i = 0; i < 8; i++) {
+        view[i] = HEAP8[64+i]
+    }
+    return view
+}
+
+function addStackEnv(env, obj) {
+    var criticals = {}
+    obj.step.forEach(a => criticals[a] = true)
+
+    // Load critical steps
+    var step = 0
+
+    var stack = []
+
+    env.countStep = function () {
+        step++
+        if (step % 1000 == 0) console.log(step)
+        if (criticals[step]) console.log("critical", step)
+        return criticals[step] || false
+    }
+
+    env.testStep = function () {
+        return criticals[step+1] || false
+    }
+    
+    env.storeArg = function () {
+        return criticals[step+1] || false
+    }
+    
+    env.storeLocalI32 = function (idx, l) {
+        stack.push(l)
+    }
+
+    env.storeLocalF32 = function (idx, l) {
+        stack.push(l)
+    }
+
+    env.storeLocalF64 = function (idx, l) {
+        stack.push(l)
+    }
+
+    env.storeLocalI64 = function (idx) {
+        stack.push(getI64())
+    }
+
+    env.adjustStackI32 = function (l) {
+        if (criticals[step]) stack.push(l)
+        return l
+    }
+
+    env.adjustStackF32 = function (l) {
+        if (criticals[step]) stack.push(l)
+        return l
+    }
+
+    env.adjustStackF64 = function (l) {
+        if (criticals[step]) stack.push(l)
+        return l
+    }
+
+    env.adjustStackI64 = function (idx) {
+        if (criticals[step]) stack.push(getI64())
+    }
+
+    env.printStack = function () {
+        console.log(stack, step)
+    }
+
 }
 
 // var dta = JSON.parse(fs.readFileSync("info.json"))
@@ -306,6 +391,7 @@ async function run(binary, args) {
     var argv = allocArgs(m, args)
 
     console.log("calling main")
+    ee.printStack()
 
     e._main(args.length, argv)
     ee.clearStack()

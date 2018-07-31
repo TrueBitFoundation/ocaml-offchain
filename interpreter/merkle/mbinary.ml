@@ -469,14 +469,6 @@ let rec mapMerkle f arr idx level =
 
 let rec depth x = if x <= 1 then 0 else 1 + depth (x/2)
 
-let get_hash (arr: w256 array) =
-  makeMerkle arr 0 (depth (Array.length arr*2-1))
-
-let get_hash16 (arr: w256 array) =
-  makeMerkle16 arr 0 (depth (Array.length arr*2-1))
-
-let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
-
 let rec get_levels loc = function
  | [] -> raise EmptyArray
  | [a] -> []
@@ -494,9 +486,28 @@ let rec get_map_location_proof f arr idx loc level =
   if idx + sz > loc then mapMerkle f arr (idx+pow2 (level-1)) (level-1) :: get_map_location_proof f arr idx loc (level-1)
   else mapMerkle f arr idx (level-1) :: get_map_location_proof f arr (idx+pow2 (level-1)) loc (level-1)
 
+let get_hash (arr: w256 array) =
+  let h = makeMerkle arr 0 (depth (Array.length arr*2-1)) in
+(*  prerr_endline (w256_to_string h ^ " len " ^ string_of_int (Array.length arr)); *)
+  h
+
+let get_hash16 (arr: w256 array) =
+  let h = makeMerkle16 arr 0 (depth (Array.length arr*2-1)) in
+(*  prerr_endline (w256_to_string h ^ " len " ^ string_of_int (Array.length arr)); *)
+  h
+
+let map_hash f arr = mapMerkle f arr 0 (depth (Array.length arr*2-1))
+
 let map_location_proof f arr loc = List.rev (get_map_location_proof f arr 0 loc (depth (Array.length arr*2-1)))
 
 let location_proof arr loc = List.rev (get_location_proof arr 0 loc (depth (Array.length arr*2-1)))
+
+let get_hash arr = if Array.length arr = 0 then zeroword else Fastmerkle.get_hash arr
+let get_hash16 = Fastmerkle.get_hash16
+let map_hash = Fastmerkle.map_hash
+
+let location_proof = Fastmerkle.location_proof
+let map_location_proof = Fastmerkle.map_location_proof
 
 (* simple hash, not merkle root *)
 let hash_stack arr =
