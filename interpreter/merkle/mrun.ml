@@ -103,6 +103,7 @@ type alu_code =
  | Exit
  | Min
  | CheckJump
+ | CheckJumpZ
  | Nop
  | FixMemory of Types.value_type * (Memory.mem_size * Memory.extension) option
  | CheckJumpForward
@@ -479,6 +480,9 @@ let handle_alu r1 r2 r3 ireg = function
  | CheckJump ->
    trace ("check jump " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
    if value_bool r2 then r1 else i (value_to_int r3)
+ | CheckJumpZ ->
+   trace ("check jumpz " ^ string_of_value r2 ^ " jump to " ^ string_of_value r1 ^ " or " ^ string_of_value r3);
+   if not (value_bool r2) then r1 else i (value_to_int r3)
  | CheckJumpForward ->
    let idx = value_to_int r1 in
    let x = value_to_int ireg in
@@ -497,6 +501,7 @@ let get_code = function
  | EXIT -> {noop with immed=I64 (Int64.of_int magic_pc); read_reg1 = Immed; pc_ch=StackReg}
  | JUMP x -> {noop with immed=i x; read_reg1 = Immed; pc_ch=StackReg}
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
+ | JUMPZ x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJumpZ; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD x -> {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
  | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
@@ -628,6 +633,9 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.pc <- x
  | JUMPI x ->
    vm.pc <- (if value_bool (vm.stack.(vm.stack_ptr-1)) then x else vm.pc + 1);
+   vm.stack_ptr <- vm.stack_ptr - 1
+ | JUMPZ x ->
+   vm.pc <- (if not (value_bool (vm.stack.(vm.stack_ptr-1))) then x else vm.pc + 1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | DROP x ->
    inc_pc vm;
@@ -994,6 +1002,9 @@ let trace_step vm = match vm.code.(vm.pc) with
  | JUMPI x ->
    let x = vm.stack.(vm.stack_ptr-1) in
    "JUMPI " ^ (if value_bool x then " jump" else " no jump") ^ " " ^ string_of_value x
+ | JUMPZ x ->
+   let x = vm.stack.(vm.stack_ptr-1) in
+   "JUMPZ " ^ (if not (value_bool x) then " jump" else " no jump") ^ " " ^ string_of_value x
  | JUMPFORWARD x -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
@@ -1047,6 +1058,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | OUTPUTDATA -> "OUTPUTDATA"
  | JUMP x -> "JUMP"
  | JUMPI x -> "JUMPI"
+ | JUMPZ x -> "JUMPZ"
  | JUMPFORWARD x -> "JUMPFORWARD"
  | CALL x -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
