@@ -239,5 +239,38 @@ let get_stack_ch_byte = function
  | 0x08 -> StackDecImmed
  | _ -> assert false
 
-let load_microcode (fname:string) : microp list = []
+let get_code (w:string) =
+  let b n = Char.code w.[n] in
+  let imm = ref 0L in
+  for i = 0 to 8 do
+     let v = Int64.of_int (b (18-i)) in
+     imm := Int64.add v (Int64.mul 256L !imm)
+  done;
+  {
+  read_reg1=get_in_code_byte (b 31);
+  read_reg2=get_in_code_byte (b 30);
+  read_reg3=get_in_code_byte (b 29);
+  alu_code=get_alu_byte (b 28);
+  write1=(get_reg_byte (b 27), get_out_code_byte (b 26));
+  write2=(get_reg_byte (b 25), get_out_code_byte (b 24));
+  call_ch=get_stack_ch_byte (b 23);
+  stack_ch=get_stack_ch_byte (b 22);
+  pc_ch=get_stack_ch_byte (b 20);
+  mem_ch=if b 19 = 0 then true else false;
+  immed=I64 !imm;
+  }
+
+let load_microcode (fname:string) : microp list =
+  (* read file *)
+  let ch = open_in_bin fname in
+  let sz = in_channel_length ch in
+  let dta = Bytes.create sz in
+  really_input ch dta 0 sz;
+  (* split to pieces *)
+  let acc = ref [] in
+  for i = 0 to sz/32 - 1 do
+     acc := get_code (Bytes.sub_string dta (i*32) 32) :: !acc
+  done;
+  List.rev !acc
+
 
