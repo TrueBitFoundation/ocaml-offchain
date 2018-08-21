@@ -89,7 +89,11 @@ let argspec = Arg.align
   "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
   "-name", Arg.String (fun s -> export_name := s), " name of element to export";
 
-  "-load", Arg.String (fun s -> ignore (Mcode.load_microcode s)), " load microcode from a file";
+  "-load", Arg.String (fun s ->
+     let arr = Mcode.load_microcode s in
+     prerr_endline "Loaded code";
+     ignore (Run.run_microcode arr);
+     exit 0), " load microcode from a file";
   
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";

@@ -2,71 +2,6 @@
 open Merkle
 open Values
 
-exception VmTrap
-exception VmError
-
-type input = {
-  file_name : bytes array;
-  file_data : bytes array;
-  file_size : int array;
-}
-
-let magic_pc = 0xffffffffff
-
-type vm = {
-  code : inst array;
-  input : input;
-
-  mutable stack : value array;
-  mutable memory : Int64.t array;
-  mutable call_stack : int array;
-  mutable globals : value array;
-  mutable calltable : int array;
-  mutable calltable_types : Int64.t array;
-
-  mutable pc : int; (* in the end or error state, have magic value 0xffffffffff (40 bits) *)
-  mutable stack_ptr : int;
-  mutable call_ptr : int;
-  mutable memsize : int;
-
-  mutable step : int; (* use for debugging *)
-}
-
-let inc_pc vm = vm.pc <- vm.pc+1
-
-let custom_command = Hashtbl.create 7
-
-let empty_input sz = {
-  file_name = Array.make sz Bytes.empty;
-  file_data = Array.make sz Bytes.empty;
-  file_size = Array.make sz 0;
-}
-
-let create_vm code = {
-  code = Array.of_list code;
-  input = empty_input 1024;
-  stack = Array.make 4 (i 0);
-(*  memory = Array.make (1024*64) 0L; *)
-  memory = Array.make 4 0L;
-  call_stack = Array.make 4 0;
-  globals = Array.make 4 (i 0);
-  calltable = Array.make 4 (-1);
-  calltable_types = Array.make 4 0L;
-  (*
-  stack = Array.make !Flags.stack_size (i 0);
-  memory = Array.make (!Flags.memory_size*1024*8) 0L;
-  call_stack = Array.make (!Flags.call_size) 0;
-  globals = Array.make (!Flags.globals_size) (i 0);
-  calltable = Array.make (!Flags.table_size) (-1);
-  calltable_types = Array.make (!Flags.table_size) 0L;
-  *)
-  pc = 0;
-  stack_ptr = 0;
-  memsize = 0;
-  call_ptr = 0;
-  
-  step = 0;
-}
 
 let rec pow2 n = if n = 0 then 1 else 2 * pow2 (n-1)
 
@@ -175,6 +110,84 @@ let noop = {
   pc_ch = StackInc;
   mem_ch = false;
   immed = I32 Int32.zero;
+}
+
+exception VmTrap
+exception VmError
+
+type input = {
+  file_name : bytes array;
+  file_data : bytes array;
+  file_size : int array;
+}
+
+let magic_pc = 0xffffffffff
+
+type vm = {
+  code : inst array;
+  input : input;
+  
+  mutable microcode : microp array;
+
+  mutable stack : value array;
+  mutable memory : Int64.t array;
+  mutable call_stack : int array;
+  mutable globals : value array;
+  mutable calltable : int array;
+  mutable calltable_types : Int64.t array;
+
+  mutable pc : int; (* in the end or error state, have magic value 0xffffffffff (40 bits) *)
+  mutable stack_ptr : int;
+  mutable call_ptr : int;
+  mutable memsize : int;
+
+  mutable step : int; (* use for debugging *)
+}
+
+let inc_pc vm = vm.pc <- vm.pc+1
+
+let custom_command = Hashtbl.create 7
+
+let empty_input sz = {
+  file_name = Array.make sz Bytes.empty;
+  file_data = Array.make sz Bytes.empty;
+  file_size = Array.make sz 0;
+}
+
+let create_vm code = {
+  microcode = [| |];
+  code = Array.of_list code;
+  input = empty_input 1024;
+  stack = Array.make 4 (i 0);
+  memory = Array.make 4 0L;
+  call_stack = Array.make 4 0;
+  globals = Array.make 4 (i 0);
+  calltable = Array.make 4 (-1);
+  calltable_types = Array.make 4 0L;
+  pc = 0;
+  stack_ptr = 0;
+  memsize = 0;
+  call_ptr = 0;
+  
+  step = 0;
+}
+
+let create_micro_vm code = {
+  microcode = code;
+  code = [| |];
+  input = empty_input 1024;
+  stack = Array.make 4 (i 0);
+  memory = Array.make 4 0L;
+  call_stack = Array.make 4 0;
+  globals = Array.make 4 (i 0);
+  calltable = Array.make 4 (-1);
+  calltable_types = Array.make 4 0L;
+  pc = 0;
+  stack_ptr = 0;
+  memsize = 0;
+  call_ptr = 0;
+  
+  step = 0;
 }
 
 type registers = {
@@ -463,17 +476,31 @@ let mem_load r2 r3 ty sz loc =
   | None -> Memory.load mem addr 0l ty
   | Some (sz, ext) -> Memory.load_packed sz ext mem addr 0l ty )
 
+let value_to_u64 = function
+ | I32 i -> Int64.of_int32 i
+ | I64 i -> i
+ | F32 i -> Int64.of_int32 (F32.to_bits i)
+ | F64 i -> F64.to_bits i
+
+let u64_to_value i = function
+ | I32 _ -> I32 (Int64.to_int32 i)
+ | I64 _ -> I64 i
+ | F32 _ -> F32 (F32.of_bits (Int64.to_int32 i))
+ | F64 _ -> F64 (F64.of_bits i)
+
+let to_op op v = u64_to_value (value_to_u64 v) op
+
 let handle_alu r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
  | Min ->
    let v = min (value_to_int r1) (value_to_int r2) in
    trace ("min " ^ string_of_int v);
    i v
- | Convert op -> Eval_numeric.eval_cvtop op r1
- | Unary op -> Eval_numeric.eval_unop op r1
- | Test op -> value_of_bool (Eval_numeric.eval_testop op r1)
- | Binary op -> Eval_numeric.eval_binop op r1 r2
- | Compare op -> value_of_bool (Eval_numeric.eval_relop op r1 r2)
+ | Convert op -> Eval_numeric.eval_cvtop op (to_op op r1)
+ | Unary op -> Eval_numeric.eval_unop op (to_op op r1)
+ | Test op -> value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
+ | Binary op -> Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
+ | Compare op -> value_of_bool (Eval_numeric.eval_relop op (to_op op r1) (to_op op r2))
  | Trap -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | Exit -> raise VmTrap
  | Nop -> r1
@@ -540,10 +567,9 @@ let get_code = function
  | SETTABLE x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetTableTypes); write2=(Reg1,SetTable)}
  | CUSTOM x -> {noop with immed=i x; read_reg1=StackIn0; read_reg2=InputSizeIn; write1=(Reg1,CustomFileWrite); write2=(Reg2,InputSizeOut)}
 
-let micro_step vm =
+let m_step vm op =
   let open Values in
   (* fetch code *)
-  let op = get_code vm.code.(vm.pc) in
   (* init registers *)
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   (* read registers *)
@@ -568,6 +594,10 @@ let micro_step vm =
   vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+
+let micro_step vm = m_step vm (get_code vm.code.(vm.pc))
+
+let micro_step2 vm = m_step vm vm.microcode.(vm.pc)
 
 let get_memory_int vm loc =
    let a = vm.memory.(loc/8) in
@@ -983,7 +1013,9 @@ let load_label op =
   | Some (sz, pack) -> "_" ^ pack_label pack ^ size_label sz
   | None -> "" )
 
-let trace_step vm = match vm.code.(vm.pc) with
+let trace_step vm =
+ if Array.length vm.code <= vm.pc then "Microp" else
+ match vm.code.(vm.pc) with
  | NOP -> "NOP"
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"

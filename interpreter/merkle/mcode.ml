@@ -201,7 +201,7 @@ let get_out_sz_code = function
  | _ -> assert false
 
 let get_out_code_byte = function
- | 0x01 -> NoOut
+ | 0x00 -> NoOut
  | 0x02 -> StackOutReg1
  | 0x03 -> StackOut0
  | 0x04 -> StackOut1
@@ -225,7 +225,7 @@ let get_out_code_byte = function
  | a ->
     if 0x80 land a = 0x80 then MemoryOut1 (get_type_code (a lsr 3), get_out_sz_code (a land 0x03))
     else if 0xc0 land a = 0xc0 then MemoryOut2 (get_type_code (a lsr 3), get_out_sz_code (a land 0x03))
-    else assert false
+    else ( prerr_endline (string_of_int a) ; assert false )
 
 let get_stack_ch_byte = function
  | 0x00 -> StackRegSub
@@ -242,8 +242,8 @@ let get_stack_ch_byte = function
 let get_code (w:string) =
   let b n = Char.code w.[n] in
   let imm = ref 0L in
-  for i = 0 to 8 do
-     let v = Int64.of_int (b (18-i)) in
+  for i = 0 to 7 do
+     let v = Int64.of_int (b (11+i)) in
      imm := Int64.add v (Int64.mul 256L !imm)
   done;
   {
@@ -260,17 +260,18 @@ let get_code (w:string) =
   immed=I64 !imm;
   }
 
-let load_microcode (fname:string) : microp list =
+let load_microcode (fname:string) : microp array =
   (* read file *)
   let ch = open_in_bin fname in
   let sz = in_channel_length ch in
   let dta = Bytes.create sz in
   really_input ch dta 0 sz;
   (* split to pieces *)
-  let acc = ref [] in
-  for i = 0 to sz/32 - 1 do
-     acc := get_code (Bytes.sub_string dta (i*32) 32) :: !acc
+  let asz = sz/32 in
+  let acc = Array.make asz noop in
+  for i = 0 to asz - 1 do
+     acc.(i) <- get_code (Bytes.sub_string dta (i*32) 32)
   done;
-  List.rev !acc
+  acc
 
 

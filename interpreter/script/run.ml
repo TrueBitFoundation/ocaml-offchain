@@ -413,9 +413,8 @@ let handle_exit vm =
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
   end
 
-let run_test inst mdle func vs =
+let run_test_aux vm =
   let open Mrun in
-  let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
@@ -444,12 +443,13 @@ let run_test inst mdle func vs =
       let i = vm.step in
       if !Flags.trace_stack then begin
         trace (stack_to_string vm 10);
+        trace ("Stack size " ^ string_of_int (Array.length vm.stack));
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
       end;
       (* if i > 560019251 then begin  Flags.trace := true end; *)
       if i = !Flags.trace_from then Flags.trace := true;
       if !Flags.trace (* || i mod 1000000 = 0 *) then begin
-        (* trace (string_of_int vm.pc ^ ": " ^ trace_step vm); *)
+        (* trace (string_of_int vm.pc); *)
         Printf.printf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
       end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
@@ -461,7 +461,8 @@ let run_test inst mdle func vs =
            if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
-      end else ( test_errors vm ; Mrun.vm_step vm );
+      end else if Array.length vm.code = 0 then Mrun.micro_step2 vm 
+      else ( test_errors vm ; Mrun.vm_step vm );
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
       if vm.pc = magic_pc then raise VmTrap;
@@ -492,6 +493,14 @@ let run_test inst mdle func vs =
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
    | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
    | a -> raise a )
+
+let run_test inst mdle func vs = run_test_aux (setup_vm inst mdle func vs)
+
+let run_microcode arr =
+  let vm = Mrun.create_micro_vm arr in
+  trace ("Starting");
+  List.iteri (add_input vm) !Flags.input_files;
+  run_test_aux vm
 
 let run_test_micro inst mdle func vs =
   let open Mrun in
