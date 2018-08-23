@@ -11,7 +11,7 @@ let get_type_code = function
  | 1 -> I64Type
  | 2 -> F32Type
  | 3 -> F64Type
- | _ -> assert false
+ | a -> prerr_endline (string_of_int a); assert false
 
 let get_sz_code = function
  | 1 -> Memory.Mem8
@@ -37,6 +37,9 @@ let get_alu_byte = function
  | 0x04 -> CheckJumpForward
  | 0x06 -> Exit
  | 0x07 -> CheckDynamicCall
+ | 0x09 -> DebugInt
+ | 0x0a -> DebugString
+ | 0x0b -> DebugBuffer
  
  | 0x45 -> Test (I32 I32Op.Eqz)
  | 0x46 -> Compare (I32 I32Op.Eq)
@@ -160,9 +163,9 @@ let get_alu_byte = function
  | 0xbc -> Convert (I32 I32Op.ReinterpretFloat)
  | 0xbd -> Convert (I64 I64Op.ReinterpretFloat)
  | 0xbe -> Convert (F32 F32Op.ReinterpretInt)
- | 0xb0f -> Convert (F64 F64Op.ReinterpretInt)
+ | 0xbf -> Convert (F64 F64Op.ReinterpretInt)
  | a ->
-    if 0xc0 land a = 0xc0 then FixMemory (get_type_code (a lsr 4), get_size_code (a land 0x0f))
+    if 0xc0 land a = 0xc0 then FixMemory (get_type_code ((a lsr 4) land 0x3), get_size_code (a land 0x0f))
     else assert false
 
 let get_in_code_byte = function
@@ -223,8 +226,8 @@ let get_out_code_byte = function
  | 0x16 -> CustomFileWrite
 
  | a ->
-    if 0x80 land a = 0x80 then MemoryOut1 (get_type_code (a lsr 3), get_out_sz_code (a land 0x03))
-    else if 0xc0 land a = 0xc0 then MemoryOut2 (get_type_code (a lsr 3), get_out_sz_code (a land 0x03))
+    if 0xc0 land a = 0x80 then MemoryOut1 (get_type_code ((a lsr 3) land 0x03), get_out_sz_code (a land 0x03))
+    else if 0xc0 land a = 0xc0 then MemoryOut2 (get_type_code ((a lsr 3) land 0x03), get_out_sz_code (a land 0x03))
     else ( prerr_endline (string_of_int a) ; assert false )
 
 let get_stack_ch_byte = function

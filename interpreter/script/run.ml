@@ -11,7 +11,7 @@ exception Abort = Abort.Error
 exception Assert = Assert.Error
 exception IO = IO.Error
 
-let trace name = if !Flags.trace then print_endline ("-- " ^ name)
+let trace name = if !Flags.trace then prerr_endline ("-- " ^ name)
 
 
 (* File types *)
@@ -372,8 +372,9 @@ let setup_vm inst mdle func vs =
   let open Merkle in
   let open Values in
   let init =
-    try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
-    with Not_found -> if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
+    if !Flags.no_args then [PUSH (I32 0l); PUSH (I32 0l)] else
+    ( try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
+      with Not_found -> if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] ) in
   let table_init = Mrun.init_calltable mdle inst in
   let init2 = Merkle.init_system mdle inst in
 (*  prerr_endline "Compiling"; *)
@@ -381,7 +382,7 @@ let setup_vm inst mdle func vs =
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
   trace ("Initing " ^ string_of_int (List.length mem_init));
-  let inits = vm_init mdle @ table_init@mem_init@g_init@init2@init@cxx_init in
+  let inits = vm_init mdle @ table_init@mem_init@g_init@init2@cxx_init@init in
   trace "Compiling";
   let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
   trace "Compiled";
@@ -450,7 +451,7 @@ let run_test_aux vm =
       if i = !Flags.trace_from then Flags.trace := true;
       if !Flags.trace (* || i mod 1000000 = 0 *) then begin
         (* trace (string_of_int vm.pc); *)
-        Printf.printf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
+        Printf.eprintf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
       end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);

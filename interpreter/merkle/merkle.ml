@@ -23,7 +23,7 @@ let trace = Byteutil.trace
 
 (* perhaps the memory will include the stack? nope *)
 
-let value_bool v = not (v = I32 0l)
+let value_bool v = not (v = I32 0l or v = I64 0L)
 
 let value_to_int = function
  | I32 i -> Int32.to_int i
@@ -140,11 +140,12 @@ and compile' ctx = function
    (* trace "bin"; *)
    {ctx with ptr = ctx.ptr-1}, [BIN i]
  | Convert i -> ctx, [CONV i]
- | Loop (_, lst) ->
+ | Loop (ty, lst) ->
+   let rets = List.length ty in
    let start_label = ctx.label in
    let old_return = ctx.block_return in
    (* trace ("loop start " ^ string_of_int ctx.ptr); *)
-   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0; target=start_label}::old_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr+rets; rets=rets; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
    (* trace ("loop end " ^ string_of_int ctx.ptr); *)
    {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
@@ -160,7 +161,7 @@ and compile' ctx = function
  | Br x ->
    let num = Int32.to_int x.it in
    let c = List.nth ctx.block_return num in
-   (* trace ("br: " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer"); *)
+   trace ("br " ^ string_of_int num ^ ": " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
    let adjust = adjust_stack (ctx.ptr - c.level) c.rets in
    {ctx with ptr=ctx.ptr - c.rets}, adjust @ [JUMP c.target]
  | BrIf x ->

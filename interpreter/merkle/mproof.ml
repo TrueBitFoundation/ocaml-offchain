@@ -245,7 +245,7 @@ let micro_step_proofs vm =
       proof) in
   (* ALU *)
   let alu_proof = (machine_to_bin m, vm_to_bin vm) in
-  ( try regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  ( try regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
     with _ -> vm.pc <- magic_pc );
   (* Write registers *)
   let write_proof1 = wrap_proof3 m vm (fun () ->
@@ -289,7 +289,7 @@ let micro_step_proofs_with_error vm =
   regs.reg3 <- read_register vm regs op.read_reg3;
   (* ALU *)
   let alu_proof = machine_to_bin m, vm_to_bin vm in
-  regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
   (* Insert error *)
   set_input_name vm 1023 10 (i 1);
   (* Write registers *)
@@ -505,7 +505,7 @@ let check_read3_proof state1 state2 (m, vm, proof) =
   state2 = hash_machine_regs m regs
 
 let check_alu_proof state1 state2 m =
-  let regs = {(m.bin_regs) with reg1 = handle_alu m.bin_regs.reg1 m.bin_regs.reg2 m.bin_regs.reg3 m.bin_regs.ireg m.bin_microp.alu_code} in
+  let regs = {(m.bin_regs) with reg1 = handle_alu empty_vm m.bin_regs.reg1 m.bin_regs.reg2 m.bin_regs.reg3 m.bin_regs.ireg m.bin_microp.alu_code} in
   state1 = hash_machine_bin m &&
   state2 = hash_machine_bin {m with bin_regs=regs}
 
@@ -861,7 +861,7 @@ let micro_step_states vm =
     push (hash_machine m);
     trace ("read R3 " ^ string_of_value regs.reg3);
     (* ALU *)
-    regs.reg1 <- handle_alu regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+    regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
     push (hash_machine m);
     (* Write registers *)
     let w1 = get_register regs (fst op.write1) in
