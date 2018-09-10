@@ -23,7 +23,7 @@ let trace = Byteutil.trace
 
 (* perhaps the memory will include the stack? nope *)
 
-let value_bool v = not (v = I32 0l)
+let value_bool v = not (v = I32 0l or v = I64 0L)
 
 let value_to_int = function
  | I32 i -> Int32.to_int i
@@ -43,6 +43,7 @@ type inst =
  | NOP
  | JUMP of int
  | JUMPI of int
+ | JUMPZ of int
  | JUMPFORWARD of int (* size of jump table *)
  | CALL of int
  | LABEL of int
@@ -139,27 +140,28 @@ and compile' ctx = function
    (* trace "bin"; *)
    {ctx with ptr = ctx.ptr-1}, [BIN i]
  | Convert i -> ctx, [CONV i]
- | Loop (_, lst) ->
+ | Loop (ty, lst) ->
+   let rets = List.length ty in
    let start_label = ctx.label in
    let old_return = ctx.block_return in
    (* trace ("loop start " ^ string_of_int ctx.ptr); *)
-   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0; target=start_label}::old_return} in
+   let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr+rets; rets=rets; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
    (* trace ("loop end " ^ string_of_int ctx.ptr); *)
    {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
  | If (ty, texp, fexp) ->
    (* trace ("if " ^ string_of_int ctx.ptr); *)
-   let if_label = ctx.label in
+   let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let a_ptr = ctx.ptr-1 in
-   let ctx = {ctx with ptr=a_ptr; label=ctx.label+2} in
+   let ctx = {ctx with ptr=a_ptr; label=ctx.label+3} in
    let ctx, tbody = compile' ctx (Block (ty, texp)) in
    let ctx, fbody = compile' {ctx with ptr=a_ptr} (Block (ty, fexp)) in
-   ctx, [JUMPI if_label] @ fbody @ [JUMP end_label; LABEL if_label] @ tbody @ [LABEL end_label]
+   ctx, [JUMPZ else_label] @ tbody @ [JUMP end_label; LABEL else_label] @ fbody @ [LABEL end_label]
  | Br x ->
    let num = Int32.to_int x.it in
    let c = List.nth ctx.block_return num in
-   (* trace ("br: " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer"); *)
+   trace ("br " ^ string_of_int num ^ ": " ^ string_of_int c.rets ^ " return values, " ^ string_of_int c.level ^ " return pointer, " ^ string_of_int ctx.ptr ^ " current pointer");
    let adjust = adjust_stack (ctx.ptr - c.level) c.rets in
    {ctx with ptr=ctx.ptr - c.rets}, adjust @ [JUMP c.target]
  | BrIf x ->
@@ -267,7 +269,7 @@ let compile_func ctx idx func =
   trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
   (* Just params are now in the stack *)
   let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
-(*  trace ("---- function end " ^ string_of_int ctx.ptr); *)
+  trace ("---- function end " ^ string_of_int ctx.ptr);
   ctx,
   ( if false (* !Flags.trace *) then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
   List.map (fun x -> PUSH (default_value x)) func.it.locals @
@@ -286,6 +288,7 @@ let resolve_inst tab = function
    let loc = Hashtbl.find tab l in
 (*   trace ("resolve jumpi " ^ string_of_int l ^ " -> " ^ string_of_int loc); *)
    JUMPI loc
+ | JUMPZ l -> JUMPZ (Hashtbl.find tab l)
  | a -> a
 
 let resolve_to n lst =

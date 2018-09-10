@@ -153,7 +153,9 @@ struct
     shift Rep.shift_left x y
 
   let shr_s x y =
-    shift Rep.shift_right x y
+    let res = shift Rep.shift_right x y in
+(*    prerr_endline ("Calc " ^ Rep.to_string x ^ " shrs " ^ Rep.to_string y ^ " = " ^ Rep.to_string res); *)
+    res
 
   let shr_u x y =
     shift Rep.shift_right_logical x y

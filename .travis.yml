@@ -19,7 +19,7 @@ install:
   - opam init -y --comp=4.05.0
   - eval `opam config env`
   - opam update
-  - opam install -y ocamlbuild ocamlfind yojson cryptokit
+  - opam install -y ocamlbuild ocamlfind yojson cryptokit ctypes ctypes-foreign
     #- ./interpreter/meta/travis/install-ocaml.sh
 
 script: 
