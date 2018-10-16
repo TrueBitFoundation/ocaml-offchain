@@ -23,7 +23,7 @@ let trace = Byteutil.trace
 
 (* perhaps the memory will include the stack? nope *)
 
-let value_bool v = not (v = I32 0l or v = I64 0L)
+let value_bool v = not (v = I32 0l || v = I64 0L)
 
 let value_to_int = function
  | I32 i -> Int32.to_int i
@@ -418,8 +418,16 @@ let init_fs_stack mdle inst =
    STOREGLOBAL stack_max]
 
 let init_system mdle inst =
+  (* This is the last point that we can use to initialize metering *)
+  let num_globals = List.length (global_imports (elem mdle)) + List.length mdle.globals in
+  ( try
+      let initial_gas_limit = find_global_index (elem mdle) inst (Utf8.decode "GAS_LIMIT") in
+      let gas_limit = num_globals in
+      let gas = num_globals + 1 in
+      [LOADGLOBAL initial_gas_limit; CONV (I64 I64Op.ExtendUI32); PUSH (I64 1000000L); BIN (I64 I64Op.Mul); STOREGLOBAL gas_limit; PUSH (I64 0L); STOREGLOBAL gas]
+    with Not_found -> [] ) @
   simple_call mdle inst "__post_instantiate" @
-  (if (try ignore (find_global_index {it=mdle; at=no_region} inst (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
+  (if (try ignore (find_global_index (elem mdle) inst (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
   simple_call mdle inst "_initSystem"
 
 let find_initializers mdle =
@@ -575,10 +583,11 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_sinf" then [STUB "sinf"; RETURN] else
      if mname = "env" && fname = "usegas" then
        try
-         let gas = find_global_index (elem m) inst (Utf8.decode "GAS") in
-         let gas_limit = find_global_index (elem m) inst (Utf8.decode "GAS_LIMIT") in
-(*         [STUB "usegas"; LOADGLOBAL gas; BIN (F64 F64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (F64 F64Op.Gt); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE] *)
-         [LOADGLOBAL gas; BIN (I64 I64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (I64 I64Op.GtU); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
+         let _ (* initial gas limit *) = find_global_index (elem m) inst (Utf8.decode "GAS_LIMIT") in
+         let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
+         let gas_limit = num_globals in
+         let gas = num_globals + 1 in
+         [CONV (I64 I64Op.ExtendUI32); LOADGLOBAL gas; BIN (I64 I64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (I64 I64Op.GtU); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
        with Not_found -> [ STUB "env . _debugInt"; DROP 1; RETURN] else
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else

@@ -117,8 +117,8 @@ let add_globals m fn =
   let globals, mem, tmem = load_file fn in
   let m = if !Flags.asmjs then add_i32_global m "ASMJS" 0 else m in
   let m = add_i32_global m "TOTAL_MEMORY" tmem in
-  let m = add_i64_global m "GAS" 0L in
-  let m = add_i64_global m "GAS_LIMIT" (!Flags.gas_limit) in
+  (* let m = add_i32_global m "GAS" 0 in *)
+  let m = add_i32_global m "GAS_LIMIT" (!Flags.gas_limit) in
   (*
   let m = add_f64_global m "GAS" (F64.of_float 0.0) in
   let m = add_f64_global m "GAS_LIMIT" (F64.of_float (Int64.to_float !Flags.gas_limit)) in

@@ -13,7 +13,6 @@ exception IO = IO.Error
 
 let trace name = if !Flags.trace then prerr_endline ("-- " ^ name)
 
-
 (* File types *)
 
 let binary_ext = "wasm"
@@ -35,7 +34,6 @@ let dispatch_file_ext on_binary on_sexpr on_script_binary on_script on_js file =
     on_js file
   else
     raise (Sys_error (file ^ ": unrecognized file type"))
-
 
 (* Output *)
 
@@ -382,7 +380,7 @@ let setup_vm inst mdle func vs =
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
   trace ("Initing " ^ string_of_int (List.length mem_init));
-  let inits = vm_init mdle @ table_init@mem_init@g_init@init2@cxx_init@init in
+  let inits = vm_init mdle @ table_init @ mem_init @ g_init @ init2 @ cxx_init @ init in
   trace "Compiling";
   let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
   trace "Compiled";
