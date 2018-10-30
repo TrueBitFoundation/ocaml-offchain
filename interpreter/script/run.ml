@@ -11,8 +11,7 @@ exception Abort = Abort.Error
 exception Assert = Assert.Error
 exception IO = IO.Error
 
-let trace name = if !Flags.trace then print_endline ("-- " ^ name)
-
+let trace name = if !Flags.trace then prerr_endline ("-- " ^ name)
 
 (* File types *)
 
@@ -35,7 +34,6 @@ let dispatch_file_ext on_binary on_sexpr on_script_binary on_script on_js file =
     on_js file
   else
     raise (Sys_error (file ^ ": unrecognized file type"))
-
 
 (* Output *)
 
@@ -372,8 +370,9 @@ let setup_vm inst mdle func vs =
   let open Merkle in
   let open Values in
   let init =
-    try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
-    with Not_found -> if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] in
+    if !Flags.no_args then [PUSH (I32 0l); PUSH (I32 0l)] else
+    ( try Merkle.make_args mdle inst (["/home/truebit/program.wasm"] @ List.rev !Flags.arguments)
+      with Not_found -> if !Flags.run_wasm then [PUSH (I32 0l); PUSH (I32 0l)] else [] ) in
   let table_init = Mrun.init_calltable mdle inst in
   let init2 = Merkle.init_system mdle inst in
 (*  prerr_endline "Compiling"; *)
@@ -381,7 +380,7 @@ let setup_vm inst mdle func vs =
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
   trace ("Initing " ^ string_of_int (List.length mem_init));
-  let inits = vm_init mdle @ table_init@mem_init@g_init@init2@init@cxx_init in
+  let inits = vm_init mdle @ table_init @ mem_init @ g_init @ init2 @ cxx_init @ init in
   trace "Compiling";
   let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
   trace "Compiled";
@@ -413,9 +412,8 @@ let handle_exit vm =
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
   end
 
-let run_test inst mdle func vs =
+let run_test_aux vm =
   let open Mrun in
-  let vm = setup_vm inst mdle func vs in
   if !task_number = !Flags.case && !Flags.init then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
@@ -444,13 +442,14 @@ let run_test inst mdle func vs =
       let i = vm.step in
       if !Flags.trace_stack then begin
         trace (stack_to_string vm 10);
+        trace ("Stack size " ^ string_of_int (Array.length vm.stack));
         (* trace (string_of_int i ^ ": " ^ Mproof.to_hex (Mbinary.hash_stack vm.stack)) *)
       end;
       (* if i > 560019251 then begin  Flags.trace := true end; *)
       if i = !Flags.trace_from then Flags.trace := true;
       if !Flags.trace (* || i mod 1000000 = 0 *) then begin
-        (* trace (string_of_int vm.pc ^ ": " ^ trace_step vm); *)
-        Printf.printf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
+        (* trace (string_of_int vm.pc); *)
+        Printf.eprintf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
       end;
       if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
       if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
@@ -461,7 +460,8 @@ let run_test inst mdle func vs =
            if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
-      end else ( test_errors vm ; Mrun.vm_step vm );
+      end else if Array.length vm.code = 0 then Mrun.micro_step2 vm 
+      else ( test_errors vm ; Mrun.vm_step vm );
       ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
       if vm.pc = magic_pc then raise VmTrap;
@@ -492,6 +492,14 @@ let run_test inst mdle func vs =
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))
    | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
    | a -> raise a )
+
+let run_test inst mdle func vs = run_test_aux (setup_vm inst mdle func vs)
+
+let run_microcode arr =
+  let vm = Mrun.create_micro_vm arr in
+  trace ("Starting");
+  List.iteri (add_input vm) !Flags.input_files;
+  run_test_aux vm
 
 let run_test_micro inst mdle func vs =
   let open Mrun in

@@ -7,6 +7,7 @@ let dry = ref false
 let width = ref 80
 let harness = ref true
 
+let no_args = ref false
 let merkle = ref false
 let microstep = ref false
 let trace_stack = ref false
@@ -20,7 +21,7 @@ let checkstep = ref (-1)
 let checkfinal = ref (-1)
 let checkerror = ref (-1)
 
-let gas_limit = ref 100000000000L
+let gas_limit = ref 10000
 
 let init = ref false
 let init_vm = ref false

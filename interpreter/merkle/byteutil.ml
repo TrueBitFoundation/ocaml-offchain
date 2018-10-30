@@ -1,7 +1,7 @@
 
 open Values
 
-let trace name = if !Flags.trace then print_endline ("-- " ^ name)
+let trace name = if !Flags.trace then prerr_endline ("-- " ^ name)
 
 let w256_to_string bs =
   let res = ref "" in

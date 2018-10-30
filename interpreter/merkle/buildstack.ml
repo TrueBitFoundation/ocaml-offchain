@@ -21,13 +21,17 @@ let it e = {it=e; at=no_region}
 type ctx = {
   tctx : Valid.context;
   g64 : var;
+  (*
   possible : int32 -> bool;
-  count : var;
+  bottom : int32;
+  *)
+  count : var; (* count, check if critical  *)
+  is_critical : var; (* only check if current would be critical *)
+  
   store_arg : var;
   label : int;
   var_type : int32 -> func_type;
   lookup_type : int32 -> func_type;
-  bottom : int32;
   store_local_i32 : var;
   store_local_i64 : var;
   store_local_f32 : var;
@@ -158,9 +162,9 @@ let store_top ctx = function
 
 let rec process_inst ctx inst =
   let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
-  let e_block = function
-   | FuncType (_, []) -> [Call ctx.count; If ([], List.map it (store_locals ctx), [])]
-   | FuncType (_, [ty]) -> [Call ctx.count; If ([], List.map it (store_locals ctx @ store_top ctx ty), [])]
+  let e_block call = function
+   | FuncType (_, []) -> [call]
+   | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
    | _ -> raise (Failure "bad function return type") in
   let it x = {at=inst.at; it=x} in
   (* *)
@@ -169,8 +173,12 @@ let rec process_inst ctx inst =
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
   | Loop (ty, lst) -> [Loop (ty, List.map it s_block @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
+  (*
   | Call x -> s_block @ [Call x] @ e_block (ctx.var_type x.it)
   | CallIndirect x -> s_block @ [CallIndirect x] @ e_block (ctx.lookup_type x.it)
+  *)
+  | Call x -> s_block @ e_block (Call x) (ctx.var_type x.it) @ s_block
+  | CallIndirect x -> s_block @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block
   | a -> [a] in
   List.map it res
 
@@ -240,10 +248,13 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackI64"; idesc=it (FuncImport adjust_stack_i64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_stack_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_stack_f64)}; (* for each type, need a different function *)
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "testStep"; idesc=it (FuncImport count_type)};
     ] in
     let imps = m.imports @ added in
+    (*
     let pos_lst = path_table "critical.out" in
     let pos_tab = list_to_map pos_lst in
+    *)
     (* remap calls *)
     let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
     let funcs = List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs in
@@ -267,10 +278,11 @@ let process m =
       adjust_stack_i64 = it (Int32.of_int (i_num+7));
       adjust_stack_f32 = it (Int32.of_int (i_num+8));
       adjust_stack_f64 = it (Int32.of_int (i_num+9));
+      is_critical = it (Int32.of_int (i_num+10));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
-      possible = (fun loc -> Hashtbl.mem pos_tab loc);
-      bottom = List.hd (List.rev pos_lst);
+      (* possible = (fun loc -> Hashtbl.mem pos_tab loc);
+      bottom = List.hd (List.rev pos_lst); *)
       label = 0;
     } in
     let res = {pre_m with funcs=List.map (process_function ctx) pre_m.funcs} in

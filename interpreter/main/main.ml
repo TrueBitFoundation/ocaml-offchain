@@ -89,6 +89,12 @@ let argspec = Arg.align
   "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
   "-name", Arg.String (fun s -> export_name := s), " name of element to export";
 
+  "-load", Arg.String (fun s ->
+     let arr = Mcode.load_microcode s in
+     prerr_endline "Loaded code";
+     ignore (Run.run_microcode arr);
+     exit 0), " load microcode from a file";
+  
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
@@ -99,7 +105,7 @@ let argspec = Arg.align
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
   "-compile", Arg.Set do_compile, " Compiles wasm file to C";
   "-hash-file", Arg.String Run.hash_file, " return the root hash of a file";
-  "-gas-limit", Arg.String (fun str -> Flags.gas_limit := Int64.of_string str), " set gas limit. Use with flag -add-globals";
+  "-gas-limit", Arg.Int (fun x -> Flags.gas_limit := x), " set gas limit. Use with flag -add-globals";
 
   "-trace-from", Arg.Int (fun n -> Flags.trace_from := n), " start tracing from a step";
   "-trace-stack", Arg.Set Flags.trace_stack, " trace execution stack";
@@ -130,6 +136,7 @@ let argspec = Arg.align
     add_arg "(invoke \"_main\")"), " run main function from this file";
   "-file", Arg.String (fun file -> Flags.input_files := file :: !Flags.input_files), " add a file to the VM file system";
   "-arg", Arg.String (fun file -> Flags.arguments := file :: !Flags.arguments), " add command line argument to the VM";
+  "-no-args", Arg.Set Flags.no_args, " do not allocate command line arguments to the VM";
   "-input-proof", Arg.String (fun file -> Flags.input_file_proof := Some file), " output proof that an input file is in the initial state";
   "-output-proof", Arg.String (fun file -> Flags.output_file_proof := Some file), " output proof that an output file is in the final state";
   "-output-proofs", Arg.Set Flags.output_all_file_proofs, " output proofs for all output files that are in the final state";
