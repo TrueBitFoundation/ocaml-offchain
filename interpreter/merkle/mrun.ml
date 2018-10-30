@@ -661,8 +661,7 @@ let handle_alu vm r1 r2 r3 ireg = function
     | F32 _ -> "f32"
     | F64 _ -> "f64" in
    trace ("convert " ^ str);
-(*   Eval_numeric.eval_cvtop op (to_type (req_type op) r1) *)
-   Eval_numeric.eval_cvtop op r1
+   Eval_numeric.eval_cvtop op (to_type (req_type op) r1)
  | Unary op -> Eval_numeric.eval_unop op (to_op op r1)
  | Test op -> value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
  | Binary op -> Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
@@ -818,7 +817,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr + 1
  | CONV op ->
    inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op (to_type (req_type op) vm.stack.(vm.stack_ptr-1))
  | UNA op ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
