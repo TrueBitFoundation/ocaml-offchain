@@ -661,7 +661,8 @@ let handle_alu vm r1 r2 r3 ireg = function
     | F32 _ -> "f32"
     | F64 _ -> "f64" in
    trace ("convert " ^ str);
-   Eval_numeric.eval_cvtop op (to_type (req_type op) r1)
+(*   Eval_numeric.eval_cvtop op (to_type (req_type op) r1) *)
+   Eval_numeric.eval_cvtop op r1
  | Unary op -> Eval_numeric.eval_unop op (to_op op r1)
  | Test op -> value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
  | Binary op -> Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
