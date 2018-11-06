@@ -646,7 +646,22 @@ let req_type = function
  | I64 I64Op.TruncSF64 -> F64Type
  | I64 I64Op.TruncUF64 -> F64Type
  | I64 I64Op.ReinterpretFloat -> F64Type
- | _ -> I64Type
+ | F32 F32Op.ConvertSI32
+ | F32 F32Op.ConvertUI32
+ | F64 F64Op.ConvertSI32
+ | F64 F64Op.ConvertUI32 -> I32Type
+ | F32 F32Op.ConvertSI64
+ | F32 F32Op.ConvertUI64
+ | F64 F64Op.ConvertSI64
+ | F64 F64Op.ConvertUI64 -> I64Type
+ | F32 F32Op.DemoteF64 -> F64Type
+ | F64 F64Op.PromoteF32 -> F32Type
+ | F32 F32Op.ReinterpretInt -> I32Type
+ | F64 F64Op.ReinterpretInt -> I64Type
+ | I32 _ -> prerr_endline "here 32" ; I64Type
+ | I64 _ -> prerr_endline "here 64" ; I64Type
+ | F32 _ -> prerr_endline "here f32" ; I64Type
+ | _ -> prerr_endline "here f64" ; I64Type
 
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
@@ -817,7 +832,8 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.stack_ptr <- vm.stack_ptr + 1
  | CONV op ->
    inc_pc vm;
-   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1)
+   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op (to_type (req_type op) vm.stack.(vm.stack_ptr-1))
+(*   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1) *)
  | UNA op ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
