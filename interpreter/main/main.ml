@@ -116,7 +116,9 @@ let argspec = Arg.align
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
   "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";
   "-result", Arg.Set Flags.result, " output final state hash of a test case and the number of steps";
+  "-final-stack", Arg.Set Flags.final_stack, " output final state of stack";
   "-case", Arg.Int (fun n -> Flags.case := n), " for which test case the hash or proofs will be generated";
+  "-all-cases", Arg.Set Flags.all_cases, " select all test cases";
   "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
   "-error-step", Arg.Int (fun n -> Flags.checkerror := n), " for which step the intermediate state will be generated";

@@ -391,44 +391,53 @@ let setup_vm inst mdle func vs =
 (*  prerr_endline "Initialized"; *)
   vm
 
-let handle_exit vm =
+let take_array n arr =
+  let res = ref [] in
+  for i = 0 to n-1 do
+     if i < Array.length arr then res := arr.(i) :: !res
+  done;
+  List.rev !res
+
+let handle_exit vm selected =
   let open Mrun in
   let vm = vm in
-  ( if !task_number - 1 = !Flags.case then match !Flags.output_file_proof with
+  ( if selected then match !Flags.output_file_proof with
     | Some x ->
        let loc = Mproof.find_file vm x in
        Printf.printf "{\"vm\": %s, \"loc\": %s}\n" (Mproof.vm_to_string (Mbinary.vm_to_bin vm)) (Mproof.loc_to_string loc)
     | None -> () );
-  if !task_number - 1 = !Flags.case && !Flags.output_all_file_proofs then begin
+  if selected && !Flags.output_all_file_proofs then begin
        let lst = Mproof.find_files vm in
        let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
        Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst))
   end;
-  if vm.step = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
-  if  !task_number - 1 = !Flags.case then output_files vm;
-  if !task_number = !Flags.case + 1 && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) vm.step;
-  if !task_number = !Flags.case + 1 && !Flags.output_proof then begin
+  if selected && !Flags.final_stack then Printf.printf "{\"end_stack\": %s, \"steps\": %i}\n" (Mproof.list_to_string (List.map Byteutil.get_value (take_array 10 vm.stack))) vm.step;
+  if vm.step = !Flags.location && selected then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+  if selected then output_files vm;
+  if selected && !Flags.result then Printf.printf "{\"result\": %s, \"steps\": %i}\n" (Mproof.to_hex (Mbinary.hash_vm vm)) vm.step;
+  if selected && !Flags.output_proof then begin
      let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
   end
 
 let run_test_aux vm =
   let open Mrun in
-  if !task_number = !Flags.case && !Flags.init then
+  let selected = !task_number = !Flags.case || !Flags.all_cases in
+  if selected && !Flags.init then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_vm_bin vm_bin)) );
-  if !task_number = !Flags.case && !Flags.input_proof then
+  if selected && !Flags.input_proof then
     ( let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin));
       exit 0 );
-  if !task_number = !Flags.case && !Flags.input_all_file_proofs then begin
+  if selected && !Flags.input_all_file_proofs then begin
        let lst = Mproof.find_files vm in
        let print_file (p1, p2, idx, fname) = Printf.sprintf "{\"data\": %s, \"name\": %s, \"loc\": %i, \"file\": \"%s\"}\n" (Mproof.list_to_string p1) (Mproof.list_to_string p2) idx fname in
        Printf.printf "[%s]\n" (String.concat ", " (List.map print_file lst));
        exit 0
   end;
-  if !task_number = !Flags.case && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
-  ( if !task_number = !Flags.case then match !Flags.input_file_proof with
+  if selected && !Flags.init_vm then Printf.printf "%s\n" (Mproof.whole_vm_to_string vm);
+  ( if selected then match !Flags.input_file_proof with
   | Some x ->
     let vm_bin = Mbinary.vm_to_bin vm in
     let loc = Mproof.find_file vm x in
@@ -451,18 +460,18 @@ let run_test_aux vm =
         (* trace (string_of_int vm.pc); *)
         Printf.eprintf "Step %d, stack ptr %d, PC %d: %s\n" i vm.stack_ptr vm.pc (trace_step vm);
       end;
-      if i = !Flags.location && !task_number - 1 = !Flags.case then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
-      if i = !Flags.checkfinal && !task_number - 1 = !Flags.case then Mproof.print_fetch (Mproof.make_fetch_code vm);
-      if i = !Flags.output_file_at && !task_number - 1 = !Flags.case then do_output_file vm !Flags.output_file_number;
-      if i = !Flags.checkerror && !task_number - 1 = !Flags.case then Mproof.micro_step_states vm
-      else if i = !Flags.checkstep && !task_number - 1 = !Flags.case then begin
+      if i = !Flags.location && selected then Printf.printf "%s\n" (Mproof.to_hex (Mbinary.hash_vm vm));
+      if i = !Flags.checkfinal && selected then Mproof.print_fetch (Mproof.make_fetch_code vm);
+      if i = !Flags.output_file_at && selected then do_output_file vm !Flags.output_file_number;
+      if i = !Flags.checkerror && selected then Mproof.micro_step_states vm
+      else if i = !Flags.checkstep && selected then begin
          let proof =
-           if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mproof.micro_step_proofs_with_error vm
+           if i = !Flags.insert_error && selected then Mproof.micro_step_proofs_with_error vm
            else Mproof.micro_step_proofs vm in
          Mproof.check_proof proof
       end else if Array.length vm.code = 0 then Mrun.micro_step2 vm 
       else ( test_errors vm ; Mrun.vm_step vm );
-      ( if i = !Flags.insert_error && !task_number - 1 = !Flags.case then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
+      ( if i = !Flags.insert_error && selected then Mrun.set_input_name vm 1023 10 (Values.I32 1l) ); 
       vm.step <- vm.step + 1;
       if vm.pc = magic_pc then raise VmTrap;
       (* if i mod 10000000 = 0 then prerr_endline "."; *)
@@ -471,7 +480,7 @@ let run_test_aux vm =
     raise (Failure "takes too long")
   end
   with VmTrap -> (* check stack pointer, get values *)
-    handle_exit vm;
+    handle_exit vm selected;
     values_from_arr vm.stack 0 vm.stack_ptr
    | a ->
    (* Print error result *)
@@ -486,7 +495,7 @@ let run_test_aux vm =
     end;
     vm.step <- vm.step + 1;
     vm.pc <- magic_pc;
-    handle_exit vm;
+    handle_exit vm selected;
    ( match a with
    | Numeric_error.IntegerOverflow -> raise (Eval.Trap (no_region, "integer overflow"))
    | Numeric_error.InvalidConversionToInteger -> raise (Eval.Trap (no_region, "invalid conversion to integer"))

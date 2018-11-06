@@ -21,6 +21,8 @@ let checkstep = ref (-1)
 let checkfinal = ref (-1)
 let checkerror = ref (-1)
 
+let final_stack = ref false
+
 let gas_limit = ref 10000
 
 let init = ref false
@@ -48,6 +50,7 @@ let memory_offset = ref 0
 let run_wasm = ref false
 
 let case = ref (-1)
+let all_cases = ref false
 let location = ref (-1)
 
 let input_files : string list ref = ref []
