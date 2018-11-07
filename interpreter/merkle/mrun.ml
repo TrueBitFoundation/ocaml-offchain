@@ -648,6 +648,8 @@ let req_type = function
  | I64 I64Op.ReinterpretFloat -> F64Type
  | _ -> I64Type
 
+exception FloatsDisabled
+
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
  | Min ->
@@ -661,11 +663,16 @@ let handle_alu vm r1 r2 r3 ireg = function
     | F32 _ -> "f32"
     | F64 _ -> "f64" in
    trace ("convert " ^ str);
+(*   if !Flags.disable_float && is_float_op op then raise FloatsDisabled; *)
    Eval_numeric.eval_cvtop op (to_type (req_type op) r1)
- | Unary op -> Eval_numeric.eval_unop op (to_op op r1)
- | Test op -> value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
- | Binary op -> Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
- | Compare op -> value_of_bool (Eval_numeric.eval_relop op (to_op op r1) (to_op op r2))
+ | Unary op ->
+   Eval_numeric.eval_unop op (to_op op r1)
+ | Test op ->
+   value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
+ | Binary op ->
+   Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
+ | Compare op ->
+   value_of_bool (Eval_numeric.eval_relop op (to_op op r1) (to_op op r2))
  | Trap -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | Exit -> raise VmTrap
  | Nop -> r1

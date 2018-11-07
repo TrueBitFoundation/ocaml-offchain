@@ -502,7 +502,10 @@ let run_test_aux vm =
    | Numeric_error.IntegerDivideByZero -> raise (Eval.Trap (no_region, "integer divide by zero"))
    | a -> raise a )
 
-let run_test inst mdle func vs = run_test_aux (setup_vm inst mdle func vs)
+let run_test inst mdle func vs =
+  let selected = !task_number = !Flags.case || !Flags.all_cases in
+  Flags.trace := if not selected then false else !Flags.trace_save;
+  run_test_aux (setup_vm inst mdle func vs)
 
 let run_microcode arr =
   let vm = Mrun.create_micro_vm arr in
@@ -568,8 +571,8 @@ let run_action act =
 
 let assert_result at correct got print_expect expect =
   if not correct then begin
-    print_string "Result: "; print_result got;
-    print_string "Expect: "; print_expect expect;
+    (* print_string "Result: "; print_result got;
+    print_string "Expect: "; print_expect expect; *)
     Assert.error at "wrong return values"
   end
 

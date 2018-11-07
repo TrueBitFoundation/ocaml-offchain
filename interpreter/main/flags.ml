@@ -1,6 +1,7 @@
 
 let interactive = ref false
 let trace = ref false
+let trace_save = ref false
 let unchecked = ref false
 let print_sig = ref false
 let dry = ref false
@@ -12,6 +13,8 @@ let merkle = ref false
 let microstep = ref false
 let trace_stack = ref false
 let debug_error = ref false
+
+let disable_float = ref false
 
 let trace_from = ref (-1)
 

@@ -37,6 +37,10 @@ let value_to_int64 = function
 
 let i x = I32 (Int32.of_int x)
 
+let is_float_op = function
+ | I32 _ | I64 _ -> false
+ | _ -> true
+
 type inst =
  | EXIT
  | UNREACHABLE
@@ -131,15 +135,23 @@ and compile' ctx = function
    (* trace ("block end " ^ string_of_int ctx.ptr); *)
    {ctx with bptr=ctx.bptr-1; block_return=old_return; ptr=old_ptr+rets}, body @ [LABEL end_label]
  | Const lit -> {ctx with ptr = ctx.ptr+1}, [PUSH lit.it]
- | Test t -> ctx, [TEST t]
+ | Test i ->
+    if is_float_op i && !Flags.disable_float then ctx, [UNREACHABLE] else
+    ctx, [TEST i]
  | Compare i ->
    (* trace "cmp"; *)
-   {ctx with ptr = ctx.ptr-1}, [CMP i]
- | Unary i -> ctx, [UNA i]
+    if is_float_op i && !Flags.disable_float then {ctx with ptr = ctx.ptr-1}, [UNREACHABLE] else
+    {ctx with ptr = ctx.ptr-1}, [CMP i]
+ | Unary i ->
+    if is_float_op i && !Flags.disable_float then ctx, [UNREACHABLE] else
+    ctx, [UNA i]
  | Binary i -> 
    (* trace "bin"; *)
-   {ctx with ptr = ctx.ptr-1}, [BIN i]
- | Convert i -> ctx, [CONV i]
+    if is_float_op i && !Flags.disable_float then {ctx with ptr = ctx.ptr-1}, [UNREACHABLE] else
+    {ctx with ptr = ctx.ptr-1}, [BIN i]
+ | Convert i ->
+    if is_float_op i && !Flags.disable_float then ctx, [UNREACHABLE] else
+    ctx, [CONV i]
  | Loop (ty, lst) ->
    let rets = List.length ty in
    let start_label = ctx.label in
@@ -472,7 +484,7 @@ let generic_stub m inst mname fname =
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
 let mem_init_size m =
-  if !Flags.run_wasm then 100000000 else
+  if !Flags.run_wasm || !Flags.disable_float then 100000000 else
   let open Ast in
   let open Types in
   let open Source in

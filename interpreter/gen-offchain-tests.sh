@@ -1,7 +1,7 @@
 #!/bin/sh
 
 process() {
-   ./wasm -all-cases -init-vm -final-stack -m $1 > $1.json
+   ./wasm -disable-float -all-cases -init-vm -final-stack -m $1 > sol-test/$(basename $1).json || echo
 }
 
 process ../test/core/address.wast || exit 1
@@ -10,7 +10,7 @@ process ../test/core/binary.wast || exit 1
 process ../test/core/block.wast || exit 1
 process ../test/core/break-drop.wast || exit 1
 process ../test/core/br_if.wast || exit 1
-process ../test/core/br_table.wast || exit 1
+# process ../test/core/br_table.wast || exit 1
 process ../test/core/br.wast || exit 1
 process ../test/core/call_indirect.wast || exit 1
 process ../test/core/call.wast || exit 1
@@ -21,17 +21,17 @@ process ../test/core/custom_section.wast || exit 1
 # ./wasm -m ../test/core/elem.wast || exit 1
 process ../test/core/endianness.wast || exit 1
 process ../test/core/exports.wast || exit 1
-process  ../test/core/f32_bitwise.wast || exit 1
-process  ../test/core/f32_cmp.wast || exit 1
-process  ../test/core/f32.wast || exit 1
-process  ../test/core/f64_bitwise.wast || exit 1
-process  ../test/core/f64_cmp.wast || exit 1
-process  ../test/core/f64.wast || exit 1
+#process  ../test/core/f32_bitwise.wast || exit 1
+#process  ../test/core/f32_cmp.wast || exit 1
+#process  ../test/core/f32.wast || exit 1
+#process  ../test/core/f64_bitwise.wast || exit 1
+#process  ../test/core/f64_cmp.wast || exit 1
+#process  ../test/core/f64.wast || exit 1
 process  ../test/core/fac.wast || exit 1
 #./wasm -m ../test/core/float_exprs.wast || exit 1
 #./wasm -m ../test/core/float_literals.wast || exit 1
 #./wasm -m ../test/core/float_memory.wast || exit 1
-process  ../test/core/float_misc.wast || exit 1
+#process  ../test/core/float_misc.wast || exit 1
 process  ../test/core/forward.wast || exit 1
 process  ../test/core/func_ptrs.wast || exit 1
 process ../test/core/func.wast || exit 1
