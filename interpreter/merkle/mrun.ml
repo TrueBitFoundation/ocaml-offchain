@@ -758,37 +758,43 @@ let m_step vm op =
   let open Values in
   (* fetch code *)
   (* init registers *)
+  let wrap f =
+    try if vm.pc <> magic_pc then f ()
+    with _ -> vm.pc <- magic_pc in
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   trace ("immed " ^ string_of_value op.immed);
   (* read registers *)
   trace ("read R1 " ^ print_in_code op.read_reg1);
-  regs.reg1 <- read_register vm regs op.read_reg1;
+  wrap (fun () -> regs.reg1 <- read_register vm regs op.read_reg1);
   trace ("read R1 " ^ string_of_value regs.reg1);
   trace ("read R2 " ^ print_in_code op.read_reg2);
-  regs.reg2 <- read_register vm regs op.read_reg2;
+  wrap (fun () -> regs.reg2 <- read_register vm regs op.read_reg2);
   trace ("read R2 " ^ string_of_value regs.reg2);
   trace ("read R3 " ^ print_in_code op.read_reg3);
-  regs.reg3 <- read_register vm regs op.read_reg3;
+  wrap (fun () -> regs.reg3 <- read_register vm regs op.read_reg3);
   trace ("read R3 " ^ string_of_value regs.reg3);
   (* ALU *)
-  regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  wrap (fun () -> regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code);
   (* Write registers *)
   let w1 = get_register regs (fst op.write1) in
   trace ("write 1: " ^ string_of_value w1);
-  write_register vm regs w1 (snd op.write1);
+  wrap (fun () -> write_register vm regs w1 (snd op.write1));
   let w2 = get_register regs (fst op.write2) in
   trace ("write 2: " ^ string_of_value w2);
-  write_register vm regs w2 (snd op.write2);
+  wrap (fun () -> write_register vm regs w2 (snd op.write2));
   (* update pointers *)
   trace "update pointers";
-  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
-  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+  if vm.pc <> magic_pc then begin
+    vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+    vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+    vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+    if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+  end
 
 let micro_step vm = m_step vm (get_code vm.code.(vm.pc))
 
-let micro_step2 vm = m_step vm vm.microcode.(vm.pc)
+let micro_step2 vm =
+  if vm.pc <> magic_pc then m_step vm vm.microcode.(vm.pc)
 
 let vm_step vm = match vm.code.(vm.pc) with
  | BIN op ->
@@ -881,7 +887,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.pc <- vm.pc + 1 + idx;
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
-   (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
@@ -892,7 +897,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.call_ptr <- vm.call_ptr + 1;
    (* prerr_endline ("call table from " ^ string_of_int addr ^ " got " ^ string_of_int vm.calltable.(addr)); *)
    vm.pc <- vm.calltable.(addr)
- | CHECKCALLI _ -> inc_pc vm
+ | CHECKCALLI sg ->
+   let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
+   if vm.calltable_types.(addr) <> sg then raise VmError;
+   inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | RETURN ->
    vm.pc <- vm.call_stack.(vm.call_ptr-1);
