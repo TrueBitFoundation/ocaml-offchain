@@ -266,7 +266,7 @@ let micro_step_proofs vm =
   let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
   if vm.pc <> magic_pc then vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
-  if vm.pc <> magic_pc && op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  if vm.pc <> magic_pc && op.mem_ch then vm.memsize <- value_to_int regs.reg1;
   let finalize_proof = vm_to_bin vm in
   {fetch_code_proof; init_regs_proof; 
    read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
@@ -305,7 +305,7 @@ let micro_step_proofs_with_error vm =
   let update_ptr_proof3 = (machine_to_bin m, vm_to_bin vm) in
   vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
   let memsize_proof = (machine_to_bin m, vm_to_bin vm) in
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+  if op.mem_ch then vm.memsize <- value_to_int regs.reg1;
   let finalize_proof = vm_to_bin vm in
   {fetch_code_proof; init_regs_proof; 
    read_register_proof1; read_register_proof2; read_register_proof3; alu_proof; write_proof1; write_proof2;
@@ -535,7 +535,7 @@ let check_update_call_ptr state1 state2 (m,vm) =
   state2 = hash_machine_bin m2
 
 let check_update_memsize (state1:w256) (state2:w256) (m,vm) =
-  let vm2 = {vm with bin_memsize=(if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else 0) + vm.bin_memsize} in
+  let vm2 = {vm with bin_memsize=if m.bin_microp.mem_ch then value_to_int m.bin_regs.reg1 else vm.bin_memsize} in
   state1 = hash_machine_bin m &&
   m.bin_vm = hash_vm_bin vm &&
   state2 = hash_vm_bin vm2
@@ -881,7 +881,7 @@ let micro_step_states vm =
     push (hash_machine m);
     vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
     push (hash_machine m);
-    if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1;
+    if op.mem_ch then vm.memsize <- value_to_int regs.reg1;
     push (hash_vm vm);
     raise VmError
   with a ->

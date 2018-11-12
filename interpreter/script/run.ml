@@ -503,6 +503,7 @@ let run_test_aux vm =
    | a -> raise a )
 
 let run_test inst mdle func vs =
+(* prerr_endline ("Running test"); *)
   let selected = !task_number = !Flags.case || !Flags.all_cases in
   Flags.trace := if not selected then false else !Flags.trace_save;
   run_test_aux (setup_vm inst mdle func vs)
@@ -722,7 +723,7 @@ let rec run_command cmd =
   | Assertion ass ->
     quote := cmd :: !quote;
     if not !Flags.dry then begin
-      run_assertion ass
+      try run_assertion ass with e -> if !Flags.disable_float then prerr_endline ("Had errors") else raise e
     end
 
   | Meta cmd ->

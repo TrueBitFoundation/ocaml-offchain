@@ -1,7 +1,8 @@
 #!/bin/sh
 
 process() {
-   ./wasm -disable-float -all-cases -init-vm -final-stack -m $1 > sol-test/$(basename $1).json || echo
+    echo $1
+    ./wasm -disable-float -all-cases -init-vm -final-stack -m $1 > sol-test/$(basename $1).json || echo
 }
 
 process ../test/core/address.wast || exit 1

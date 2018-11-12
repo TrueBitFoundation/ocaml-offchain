@@ -721,7 +721,7 @@ let get_code = function
  | INITCALLTABLE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTableOut); stack_ch=StackDec}
  | INITCALLTYPE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTypeOut); stack_ch=StackDec}
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
- | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
+ | GROW -> {noop with read_reg1=MemsizeIn; read_reg2 = StackIn0; alu_code= Binary (I32 I32Op.Add); mem_ch=true; stack_ch=StackDec}
  | PUSH lit -> {noop with immed=lit; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
  | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Convert op}
  | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Unary op}
@@ -769,7 +769,8 @@ let m_step vm op =
     vm.pc <- handle_ptr regs vm.pc op.pc_ch;
     vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
     vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
-    if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+    prerr_endline ("mem " ^ string_of_int vm.memsize);
+    if op.mem_ch then vm.memsize <- value_to_int regs.reg1
   end
 
 let micro_step vm = m_step vm (get_code vm.code.(vm.pc))

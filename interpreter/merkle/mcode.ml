@@ -261,7 +261,7 @@ let get_code (w:string) =
   call_ch=get_stack_ch_byte (b 23);
   stack_ch=get_stack_ch_byte (b 22);
   pc_ch=get_stack_ch_byte (b 20);
-  mem_ch=if b 19 = 0 then true else false;
+  mem_ch=if b 19 = 0 then false else true;
   immed=I64 !imm;
   }
 
