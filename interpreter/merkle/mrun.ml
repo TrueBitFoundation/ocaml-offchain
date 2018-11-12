@@ -629,25 +629,6 @@ let print_conv64 = function
  | I64Op.TruncUF64 -> "uf64"
  | I64Op.ReinterpretFloat -> "reinterpret"
 
-let req_type = function
- | I32 I32Op.ExtendSI32 -> I32Type
- | I32 I32Op.ExtendUI32 -> I32Type
- | I32 I32Op.WrapI64 -> I64Type
- | I32 I32Op.TruncSF32 -> F32Type
- | I32 I32Op.TruncUF32 -> F32Type
- | I32 I32Op.TruncSF64 -> F64Type
- | I32 I32Op.TruncUF64 -> F64Type
- | I32 I32Op.ReinterpretFloat -> F32Type
- | I64 I64Op.ExtendSI32 -> I32Type
- | I64 I64Op.ExtendUI32 -> I32Type
- | I64 I64Op.WrapI64 -> I64Type
- | I64 I64Op.TruncSF32 -> F32Type
- | I64 I64Op.TruncUF32 -> F32Type
- | I64 I64Op.TruncSF64 -> F64Type
- | I64 I64Op.TruncUF64 -> F64Type
- | I64 I64Op.ReinterpretFloat -> F64Type
- | _ -> I64Type
-
 exception FloatsDisabled
 
 let handle_alu vm r1 r2 r3 ireg = function

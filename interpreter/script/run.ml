@@ -581,8 +581,8 @@ let assert_message at name msg re =
     String.length msg < String.length re ||
     String.sub msg 0 (String.length re) <> re
   then begin
-    print_endline ("Result: \"" ^ msg ^ "\"");
-    print_endline ("Expect: \"" ^ re ^ "\"");
+    prerr_endline ("Result: \"" ^ msg ^ "\"");
+    prerr_endline ("Expect: \"" ^ re ^ "\"");
     Assert.error at ("wrong " ^ name ^ " error")
   end
 
