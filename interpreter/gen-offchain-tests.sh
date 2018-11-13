@@ -1,8 +1,11 @@
 #!/bin/sh
 
+mkdir -p sol-test
+
 process() {
     echo $1
-    ./wasm -disable-float -all-cases -init-vm -final-stack -m $1 > sol-test/$(basename $1).json || echo
+    ./wasm -disable-float -all-cases -init-vm -final-stack -m $1 > sol-test/$(basename $1).jso
+    node tolist.js sol-test/$(basename $1).jso > sol-test/$(basename $1).json
 }
 
 process ../test/core/address.wast || exit 1
