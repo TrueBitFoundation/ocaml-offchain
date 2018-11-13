@@ -1,6 +1,7 @@
 
 let interactive = ref false
 let trace = ref false
+let trace_save = ref false
 let unchecked = ref false
 let print_sig = ref false
 let dry = ref false
@@ -13,6 +14,8 @@ let microstep = ref false
 let trace_stack = ref false
 let debug_error = ref false
 
+let disable_float = ref false
+
 let trace_from = ref (-1)
 
 let insert_error = ref (-1)
@@ -20,6 +23,8 @@ let insert_error = ref (-1)
 let checkstep = ref (-1)
 let checkfinal = ref (-1)
 let checkerror = ref (-1)
+
+let final_stack = ref false
 
 let gas_limit = ref 10000
 
@@ -48,6 +53,7 @@ let memory_offset = ref 0
 let run_wasm = ref false
 
 let case = ref (-1)
+let all_cases = ref false
 let location = ref (-1)
 
 let input_files : string list ref = ref []

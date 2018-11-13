@@ -94,7 +94,9 @@ let argspec = Arg.align
      prerr_endline "Loaded code";
      ignore (Run.run_microcode arr);
      exit 0), " load microcode from a file";
-  
+
+  "-disable-float", Arg.Set Flags.disable_float, " disable floating point support";
+
   "-shift-mem", Arg.Int (fun x -> shift_mem_mode := Some x), " shift memory by an offset";
   "-underscore", Arg.Set underscore_mode, " add underscores to all of the names";
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
@@ -116,7 +118,9 @@ let argspec = Arg.align
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
   "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";
   "-result", Arg.Set Flags.result, " output final state hash of a test case and the number of steps";
+  "-final-stack", Arg.Set Flags.final_stack, " output final state of stack";
   "-case", Arg.Int (fun n -> Flags.case := n), " for which test case the hash or proofs will be generated";
+  "-all-cases", Arg.Set Flags.all_cases, " select all test cases";
   "-location", Arg.Int (fun n -> Flags.location := n), " for which step the hash will be generated";
   "-step", Arg.Int (fun n -> Flags.checkstep := n), " for which step the proofs will be generated";
   "-error-step", Arg.Int (fun n -> Flags.checkerror := n), " for which step the intermediate state will be generated";
@@ -157,6 +161,7 @@ let () =
     configure ();
     Arg.parse argspec
       (fun file -> add_arg ("(input " ^ quote file ^ ")")) usage;
+    Flags.trace_save := !Flags.trace;
     List.iter (fun arg -> if not (Run.run_string arg) then exit 1) !args;
     let lst = ref [] in
     Run.Map.iter (fun a b -> if a <> "" then lst := b :: !lst) !Run.modules;

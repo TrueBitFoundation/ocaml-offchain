@@ -629,24 +629,7 @@ let print_conv64 = function
  | I64Op.TruncUF64 -> "uf64"
  | I64Op.ReinterpretFloat -> "reinterpret"
 
-let req_type = function
- | I32 I32Op.ExtendSI32 -> I32Type
- | I32 I32Op.ExtendUI32 -> I32Type
- | I32 I32Op.WrapI64 -> I64Type
- | I32 I32Op.TruncSF32 -> F32Type
- | I32 I32Op.TruncUF32 -> F32Type
- | I32 I32Op.TruncSF64 -> F64Type
- | I32 I32Op.TruncUF64 -> F64Type
- | I32 I32Op.ReinterpretFloat -> F32Type
- | I64 I64Op.ExtendSI32 -> I32Type
- | I64 I64Op.ExtendUI32 -> I32Type
- | I64 I64Op.WrapI64 -> I64Type
- | I64 I64Op.TruncSF32 -> F32Type
- | I64 I64Op.TruncUF32 -> F32Type
- | I64 I64Op.TruncSF64 -> F64Type
- | I64 I64Op.TruncUF64 -> F64Type
- | I64 I64Op.ReinterpretFloat -> F64Type
- | _ -> I64Type
+exception FloatsDisabled
 
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
@@ -661,11 +644,16 @@ let handle_alu vm r1 r2 r3 ireg = function
     | F32 _ -> "f32"
     | F64 _ -> "f64" in
    trace ("convert " ^ str);
+(*   if !Flags.disable_float && is_float_op op then raise FloatsDisabled; *)
    Eval_numeric.eval_cvtop op (to_type (req_type op) r1)
- | Unary op -> Eval_numeric.eval_unop op (to_op op r1)
- | Test op -> value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
- | Binary op -> Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
- | Compare op -> value_of_bool (Eval_numeric.eval_relop op (to_op op r1) (to_op op r2))
+ | Unary op ->
+   Eval_numeric.eval_unop op (to_op op r1)
+ | Test op ->
+   value_of_bool (Eval_numeric.eval_testop op (to_op op r1))
+ | Binary op ->
+   Eval_numeric.eval_binop op (to_op op r1) (to_op op r2)
+ | Compare op ->
+   value_of_bool (Eval_numeric.eval_relop op (to_op op r1) (to_op op r2))
  | Trap -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | Exit -> raise VmTrap
  | Nop -> r1
@@ -733,7 +721,7 @@ let get_code = function
  | INITCALLTABLE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTableOut); stack_ch=StackDec}
  | INITCALLTYPE x -> {noop with immed=i x; read_reg2=StackIn0; write1=(Reg2, CallTypeOut); stack_ch=StackDec}
  | CURMEM -> {noop with stack_ch=StackInc; read_reg2 = MemsizeIn; write1=(Reg2, StackOut0)}
- | GROW -> {noop with read_reg2=MemsizeIn; read_reg3 = StackIn0; mem_ch=true; stack_ch=StackDec}
+ | GROW -> {noop with read_reg1=MemsizeIn; read_reg2 = StackIn0; alu_code= Binary (I32 I32Op.Add); mem_ch=true; stack_ch=StackDec}
  | PUSH lit -> {noop with immed=lit; read_reg1=Immed; stack_ch=StackInc; write1=(Reg1, StackOut0)}
  | CONV op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Convert op}
  | UNA op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Unary op}
@@ -751,37 +739,44 @@ let m_step vm op =
   let open Values in
   (* fetch code *)
   (* init registers *)
+  let wrap f =
+    try if vm.pc <> magic_pc then f ()
+    with _ -> vm.pc <- magic_pc in
   let regs = {reg1=i 0; reg2=i 0; reg3=i 0; ireg=op.immed} in
   trace ("immed " ^ string_of_value op.immed);
   (* read registers *)
   trace ("read R1 " ^ print_in_code op.read_reg1);
-  regs.reg1 <- read_register vm regs op.read_reg1;
+  wrap (fun () -> regs.reg1 <- read_register vm regs op.read_reg1);
   trace ("read R1 " ^ string_of_value regs.reg1);
   trace ("read R2 " ^ print_in_code op.read_reg2);
-  regs.reg2 <- read_register vm regs op.read_reg2;
+  wrap (fun () -> regs.reg2 <- read_register vm regs op.read_reg2);
   trace ("read R2 " ^ string_of_value regs.reg2);
   trace ("read R3 " ^ print_in_code op.read_reg3);
-  regs.reg3 <- read_register vm regs op.read_reg3;
+  wrap (fun () -> regs.reg3 <- read_register vm regs op.read_reg3);
   trace ("read R3 " ^ string_of_value regs.reg3);
   (* ALU *)
-  regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
+  wrap (fun () -> regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code);
   (* Write registers *)
   let w1 = get_register regs (fst op.write1) in
   trace ("write 1: " ^ string_of_value w1);
-  write_register vm regs w1 (snd op.write1);
+  wrap (fun () -> write_register vm regs w1 (snd op.write1));
   let w2 = get_register regs (fst op.write2) in
   trace ("write 2: " ^ string_of_value w2);
-  write_register vm regs w2 (snd op.write2);
+  wrap (fun () -> write_register vm regs w2 (snd op.write2));
   (* update pointers *)
   trace "update pointers";
-  vm.pc <- handle_ptr regs vm.pc op.pc_ch;
-  vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
-  vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
-  if op.mem_ch then vm.memsize <- vm.memsize + value_to_int regs.reg1
+  if vm.pc <> magic_pc then begin
+    vm.pc <- handle_ptr regs vm.pc op.pc_ch;
+    vm.stack_ptr <- handle_ptr regs vm.stack_ptr op.stack_ch;
+    vm.call_ptr <- handle_ptr regs vm.call_ptr op.call_ch;
+    prerr_endline ("mem " ^ string_of_int vm.memsize);
+    if op.mem_ch then vm.memsize <- value_to_int regs.reg1
+  end
 
 let micro_step vm = m_step vm (get_code vm.code.(vm.pc))
 
-let micro_step2 vm = m_step vm vm.microcode.(vm.pc)
+let micro_step2 vm =
+  if vm.pc <> magic_pc then m_step vm vm.microcode.(vm.pc)
 
 let vm_step vm = match vm.code.(vm.pc) with
  | BIN op ->
@@ -874,7 +869,6 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.pc <- vm.pc + 1 + idx;
    vm.stack_ptr <- vm.stack_ptr - 1
  | CALL x ->
-   (* vm.call_stack.(vm.call_ptr) <- (vm.pc, vm.stack_ptr, vm.break_ptr);  I now guess that it won't need these *)
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
@@ -885,7 +879,10 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.call_ptr <- vm.call_ptr + 1;
    (* prerr_endline ("call table from " ^ string_of_int addr ^ " got " ^ string_of_int vm.calltable.(addr)); *)
    vm.pc <- vm.calltable.(addr)
- | CHECKCALLI _ -> inc_pc vm
+ | CHECKCALLI sg ->
+   let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
+   if vm.calltable_types.(addr) <> sg then raise VmError;
+   inc_pc vm
  | LABEL _ -> raise VmError (* these should have been processed away *)
  | RETURN ->
    vm.pc <- vm.call_stack.(vm.call_ptr-1);
