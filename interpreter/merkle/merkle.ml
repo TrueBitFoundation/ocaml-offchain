@@ -58,7 +58,21 @@ let req_type = function
  | I64 I64Op.TruncSF64 -> F64Type
  | I64 I64Op.TruncUF64 -> F64Type
  | I64 I64Op.ReinterpretFloat -> F64Type
- | _ -> I64Type
+ | F32 F32Op.ConvertSI32 -> I32Type
+ | F32 F32Op.ConvertUI32 -> I32Type
+ | F32 F32Op.ConvertSI64 -> I64Type
+ | F32 F32Op.ConvertUI64 -> I64Type
+ | F32 F32Op.PromoteF32 -> F32Type
+ | F32 F32Op.DemoteF64 -> F64Type
+ | F32 F32Op.ReinterpretInt -> I32Type
+ 
+ | F64 F64Op.ConvertSI32 -> I32Type
+ | F64 F64Op.ConvertUI32 -> I32Type
+ | F64 F64Op.ConvertSI64 -> I64Type
+ | F64 F64Op.ConvertUI64 -> I64Type
+ | F64 F64Op.PromoteF32 -> F32Type
+ | F64 F64Op.DemoteF64 -> F64Type
+ | F64 F64Op.ReinterpretInt -> I64Type
 
 type inst =
  | EXIT
