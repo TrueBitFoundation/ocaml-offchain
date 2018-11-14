@@ -631,6 +631,7 @@ let print_conv64 = function
 
 exception FloatsDisabled
 
+
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
  | Min ->
@@ -813,6 +814,7 @@ let vm_step vm = match vm.code.(vm.pc) with
  | CONV op ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op (to_type (req_type op) vm.stack.(vm.stack_ptr-1))
+(*   vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_cvtop op vm.stack.(vm.stack_ptr-1) *)
  | UNA op ->
    inc_pc vm;
    vm.stack.(vm.stack_ptr-1) <- Eval_numeric.eval_unop op vm.stack.(vm.stack_ptr-1)
