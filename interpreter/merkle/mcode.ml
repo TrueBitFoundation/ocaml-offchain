@@ -243,7 +243,9 @@ let get_stack_ch_byte = function
  | _ -> assert false
 
 let get_code (w:string) =
-  let b n = Char.code w.[n] in
+  let b n =
+     let res = Char.code w.[n] in
+     res in
   let imm = ref 0L in
   for i = 0 to 7 do
      let v = Int64.of_int (b (11+i)) in
@@ -259,7 +261,7 @@ let get_code (w:string) =
   call_ch=get_stack_ch_byte (b 23);
   stack_ch=get_stack_ch_byte (b 22);
   pc_ch=get_stack_ch_byte (b 20);
-  mem_ch=if b 19 = 0 then true else false;
+  mem_ch=if b 19 = 0 then false else true;
   immed=I64 !imm;
   }
 
@@ -273,7 +275,9 @@ let load_microcode (fname:string) : microp array =
   let asz = sz/32 in
   let acc = Array.make asz noop in
   for i = 0 to asz - 1 do
-     acc.(i) <- get_code (Bytes.sub_string dta (i*32) 32)
+     try
+       acc.(i) <- get_code (Bytes.sub_string dta (i*32) 32)
+     with e -> prerr_endline ("Error at word " ^ string_of_int i); raise e
   done;
   acc
 
