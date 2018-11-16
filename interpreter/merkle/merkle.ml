@@ -392,6 +392,15 @@ let other_imports m =
    | el::tl -> el :: do_get tl in
   do_get m.it.imports
 
+let other_imports_nomem m =
+  let rec do_get = function
+   | [] -> []
+   | {it={idesc={it=FuncImport _;_};_};_}::tl -> do_get tl
+   | {it={idesc={it=GlobalImport _;_};_};_}::tl -> do_get tl
+   | {it={idesc={it=MemoryImport _;_};_};_}::tl -> do_get tl
+   | el::tl -> el :: do_get tl in
+  do_get m.it.imports
+
 let find_function m func =
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
@@ -518,7 +527,7 @@ let generic_stub m inst mname fname =
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
 
 let mem_init_size m =
-  if !Flags.run_wasm || !Flags.disable_float then 100000000 else
+  if !Flags.run_wasm || !Flags.disable_float then Byteutil.pow2 (!Flags.memory_size - 13) else
   let open Ast in
   let open Types in
   let open Source in
@@ -544,7 +553,6 @@ let flatten_tl lst =
 
 let compile_test m func vs init inst =
   (* debug_exports m; *)
-  trace ("????");
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));
