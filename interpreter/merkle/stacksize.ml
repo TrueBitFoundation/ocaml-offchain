@@ -35,6 +35,10 @@ type extra = {
   mutable max_stack : int;
 }
 
+let do_it x f = {x with it=f x.it}
+let it e = {it=e; at=no_region}
+
+
 let rec compile e (ctx : context) expr = compile' e ctx (Int32.of_int expr.at.right.line) expr.it
 and compile' e ctx id v =
   let res = compile'' e ctx id v in
@@ -120,4 +124,25 @@ and compile_block e ctx = function
     let ctx = compile e ctx a in
     let ctx = compile_block e ctx tl in
     ctx
+
+let check_func ctx func =
+   let e = {max_stack=0} in
+   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
+   (* Just params are now in the stack *)
+   let locals = List.length par + List.length func.it.locals in
+   let ctx = compile' e {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
+   let limit = List.length func.it.locals + e.max_stack in
+   prerr_endline ("" ^ string_of_int limit);
+   limit
+
+let check m =
+   let ftab, ttab = Secretstack.make_tables m.it in
+   let ctx = {
+      ptr=0; bptr=0; block_return=[]; 
+      f_types2=ttab; f_types=ftab;
+      locals=0; stack=[] } in
+   let lst = List.sort compare (List.map (fun x -> check_func ctx x) m.it.funcs) in
+   if lst <> [] then prerr_endline ("Highest " ^ string_of_int (List.hd (List.rev lst)))
+
+
 

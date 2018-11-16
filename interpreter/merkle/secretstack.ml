@@ -3,7 +3,6 @@ open Merkle
 open Ast
 open Source
 open Types
-open Stacksize
 
 (* Analyze stack *)
 
