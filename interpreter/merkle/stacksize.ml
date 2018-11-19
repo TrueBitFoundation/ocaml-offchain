@@ -38,7 +38,6 @@ type extra = {
 let do_it x f = {x with it=f x.it}
 let it e = {it=e; at=no_region}
 
-
 let rec compile e (ctx : context) expr = compile' e ctx (Int32.of_int expr.at.right.line) expr.it
 and compile' e ctx id v =
   let res = compile'' e ctx id v in
@@ -96,7 +95,6 @@ and compile'' e ctx id = function
    let c = List.nth ctx.block_return num in
    {ctx with ptr=ctx.ptr - c.rets; stack=popn c.rets ctx.stack}
  | BrIf x ->
-   let num = Int32.to_int x.it in
    {ctx with ptr = ctx.ptr-1; stack=popn 1 ctx.stack}
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
@@ -130,10 +128,40 @@ let check_func ctx func =
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
    (* Just params are now in the stack *)
    let locals = List.length par + List.length func.it.locals in
-   let ctx = compile' e {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
+   let _ = compile' e {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
    let limit = List.length func.it.locals + e.max_stack in
-   prerr_endline ("" ^ string_of_int limit);
    limit
+
+let add_functions m =
+  do_it m (fun m ->
+    (* add function types *)
+    let i_num = List.length (Merkle.func_imports (it m)) in
+    let ftypes = m.types @ [
+       it (FuncType ([I32Type], []));
+       ] in
+    let ftypes_len = List.length m.types in
+    let set_type = it (Int32.of_int (ftypes_len)) in
+    (* add imports *)
+    let added = [
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "pushFrame"; idesc=it (FuncImport set_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popFrame"; idesc=it (FuncImport set_type)};
+    ] in
+    let imps = m.imports @ added in
+    let remap x = let x = Int32.to_int x in if x >= i_num then Int32.of_int (x + List.length added) else Int32.of_int x in
+    {m with funcs=List.map (Merge.remap remap (fun x -> x) (fun x -> x)) m.funcs;
+            types=ftypes;
+            imports=imps;
+            exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
+            elems=List.map (Merge.remap_elements remap) m.elems; })
+
+let rec pre_return' code = function
+ | Block (ty, lst) -> [Block (ty, List.flatten (List.map (pre_return code) lst))]
+ | Loop (ty, lst) -> [Loop (ty, List.flatten (List.map (pre_return code) lst))]
+ | If (ty, texp, fexp) -> [If (ty, List.flatten (List.map (pre_return code) texp), List.flatten (List.map (pre_return code) fexp))]
+ | Return -> code @ [Return]
+ | a -> [a]
+
+and pre_return code e = List.map elem (pre_return' code e.it)
 
 let check m =
    let ftab, ttab = Secretstack.make_tables m.it in
@@ -143,6 +171,26 @@ let check m =
       locals=0; stack=[] } in
    let lst = List.sort compare (List.map (fun x -> check_func ctx x) m.it.funcs) in
    if lst <> [] then prerr_endline ("Highest " ^ string_of_int (List.hd (List.rev lst)))
+
+let process_func ctx push_f pop_f func =
+   let limit = Int32.of_int (check_func ctx func) in
+   let open Values in
+   let end_code = [Const (elem (I32 limit)); Call (elem pop_f)] in
+   do_it func (fun f -> {f with body=
+      List.map elem [Const (elem (I32 limit)); Call (elem push_f)] @
+      List.flatten (List.map (pre_return end_code) f.body) @
+      List.map elem end_code})
+
+let process m =
+   let m = add_functions m in
+   let push_f = Int32.of_int (List.length (Merkle.func_imports m) - 2) in
+   let pop_f = Int32.of_int (List.length (Merkle.func_imports m) - 1) in
+   let ftab, ttab = Secretstack.make_tables m.it in
+   let ctx = {
+      ptr=0; bptr=0; block_return=[]; 
+      f_types2=ttab; f_types=ftab;
+      locals=0; stack=[] } in
+   do_it m (fun m -> {m with funcs=List.map (fun x -> process_func ctx push_f pop_f x) m.funcs})
 
 
 

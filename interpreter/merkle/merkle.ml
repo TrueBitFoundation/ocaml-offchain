@@ -551,6 +551,8 @@ let flatten_tl lst =
   | a::tl -> do_flatten (a @ acc) tl in
   do_flatten [] (List.rev lst)
 
+let kludge = ref (fun m -> 1)
+
 let compile_test m func vs init inst =
   (* debug_exports m; *)
   trace ("Function types: " ^ string_of_int (List.length m.types));
@@ -635,6 +637,27 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_fabsf" then [STUB "fabsf"; UNA (F32 F32Op.Abs); RETURN] else
      if mname = "env" && fname = "_cosf" then [STUB "cosf"; RETURN] else
      if mname = "env" && fname = "_sinf" then [STUB "sinf"; RETURN] else
+     if mname = "env" && fname = "pushFrame" then
+         let stack_limit = Int32.of_int (Byteutil.pow2 !Flags.stack_size - !kludge (elem m)) in
+         let call_limit = Int32.of_int (Byteutil.pow2 !Flags.call_size - 1) in
+         let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
+         let call_stack = num_globals + 2 in
+         let frame_stack = num_globals + 3 in
+         [LOADGLOBAL frame_stack; BIN (I32 I32Op.Add); STOREGLOBAL frame_stack;
+          PUSH (I32 1l); LOADGLOBAL call_stack; BIN (I32 I32Op.Add); STOREGLOBAL call_stack;
+          LOADGLOBAL frame_stack; PUSH (I32 stack_limit); CMP (I32 I32Op.GtU); JUMPI (-11);
+          LOADGLOBAL call_stack; PUSH (I32 call_limit); CMP (I32 I32Op.GtU); JUMPI (-11);
+          RETURN; LABEL (-11); UNREACHABLE] else
+     if mname = "env" && fname = "popFrame" then
+         let stack_limit = Int32.of_int (Byteutil.pow2 !Flags.stack_size - !kludge (elem m)) in
+         let call_limit = Int32.of_int (Byteutil.pow2 !Flags.call_size - 1) in
+         let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
+         let call_stack = num_globals + 2 in
+         let frame_stack = num_globals + 3 in
+         [LOADGLOBAL frame_stack; BIN (I32 I32Op.Sub); STOREGLOBAL frame_stack;
+          PUSH (I32 0l); LOADGLOBAL frame_stack; BIN (I32 I32Op.Sub); STOREGLOBAL frame_stack;
+          LOADGLOBAL call_stack; PUSH (I32 1l); BIN (I32 I32Op.Sub); STOREGLOBAL call_stack;
+          RETURN; LABEL (-11); UNREACHABLE] else
      if mname = "env" && fname = "usegas" then
        try
          let _ (* initial gas limit *) = find_global_index (elem m) inst (Utf8.decode "GAS_LIMIT") in
