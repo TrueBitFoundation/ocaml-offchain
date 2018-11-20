@@ -2,6 +2,7 @@
 (* Use remapping from merge *)
 open Merge
 open Ast
+open Types
 open Source
 open Merkle
 
@@ -27,6 +28,7 @@ let remap_global map gmap gmap2 ftmap x =
   res
 
 let do_it x f = {x with it=f x.it}
+let elem x = {it=x; at=no_region}
 
 let remap_elem_segments map gmap gmap2 ftmap el = do_it el (fun (x:'a segment') -> {x with offset=do_it x.offset (List.map (remap_func map gmap gmap2 ftmap))})
 
@@ -164,11 +166,18 @@ let add_globals m fn =
   (* table elements have to be remapped *)
   Run.trace ("Remapping globals");
   let new_data = List.map generate_data mem in
+  let mem_size = Int32.of_int (Byteutil.pow2 (!Flags.memory_size - 13)) in
+  let mem = {
+     idesc=elem (MemoryImport (MemoryType {min=mem_size; max=Some mem_size}));
+     module_name=Utf8.decode "env";
+     item_name=Utf8.decode "memory";
+  } in
   {m with it={(m.it) with funcs = funcs_a; data=m.it.data@new_data;
      globals = List.map (remap_global (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.globals;
-     imports = List.rev !g_imports @ func_imports m @ other_imports m;
+     imports = List.rev !g_imports @ func_imports m @ other_imports_nomem m @ [elem mem];
      exports = exports_a;
-     elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems}}
+     elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems;
+  }}
 
 let export_global m idx name =
    let idx = idx + List.length (global_imports m) in

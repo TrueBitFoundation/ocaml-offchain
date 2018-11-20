@@ -41,6 +41,7 @@ let quote s = "\"" ^ String.escaped s ^ "\""
 
 let merge_mode = ref false
 let float_mode = ref false
+let float_error_mode = ref false
 let globals_file = ref None
 let init_code = ref None
 let shift_mem_mode : int option ref = ref None
@@ -56,6 +57,7 @@ let critical_mode = ref false
 let buildstack_mode = ref false
 let elim_globals_mode = ref false
 let secret_stack_mode = ref false
+let check_stack_mode = ref false
 
 let export_global_mode : int option ref = ref None
 
@@ -80,12 +82,14 @@ let argspec = Arg.align
   "-v", Arg.Unit banner, " show version";
 
   "-critical", Arg.Set critical_mode, " find the critical path to step";
+  "-limit-stack", Arg.Set check_stack_mode, " check sizes of stack frames";
   "-build-stack", Arg.Set buildstack_mode, " build the stack for critical path";
   "-elim-globals", Arg.Set elim_globals_mode, " change global variables to memory accesses";
   "-analyze-stack", Arg.Set secret_stack_mode, " remove extra elements from stack";
 
   "-merge", Arg.Set merge_mode, " merge files";
   "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
+  "-error-float", Arg.Set float_error_mode, " replace float operations with immediate errors";
   "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
   "-name", Arg.String (fun s -> export_name := s), " name of element to export";
 
@@ -202,6 +206,12 @@ let () =
       Run.create_sexpr_file "secretstack.wast" () (fun () -> m);
       Run.create_binary_file "secretstack.wasm" () (fun () -> m)
     | _ -> () );
+    ( match !check_stack_mode, !lst with
+    | true, m :: _ ->
+      let m = Stacksize.process m in
+      Run.create_sexpr_file "stacklimit.wast" () (fun () -> m);
+      Run.create_binary_file "stacklimit.wasm" () (fun () -> m)
+    | _ -> () );
     ( match !buildstack_mode, !lst with
     | true, m :: _ ->
       let m = Buildstack.process m in
@@ -213,6 +223,12 @@ let () =
       let m = Intfloat.process a b in
       Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !float_error_mode, !lst with
+    | true, a :: _ ->
+      let m = Floaterror.process a in
+      Run.create_sexpr_file "float-error.wast" () (fun () -> m);
+      Run.create_binary_file "float-error.wasm" () (fun () -> m)
     | _ -> () );
     ( match !shift_mem_mode, !lst with
     | Some num, m :: _ ->
