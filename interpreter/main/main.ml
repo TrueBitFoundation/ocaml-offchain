@@ -41,6 +41,7 @@ let quote s = "\"" ^ String.escaped s ^ "\""
 
 let merge_mode = ref false
 let float_mode = ref false
+let float_error_mode = ref false
 let globals_file = ref None
 let init_code = ref None
 let shift_mem_mode : int option ref = ref None
@@ -86,6 +87,7 @@ let argspec = Arg.align
 
   "-merge", Arg.Set merge_mode, " merge files";
   "-int-float", Arg.Set float_mode, " replace float operations with integer operations";
+  "-error-float", Arg.Set float_error_mode, " replace float operations with immediate errors";
   "-export-global", Arg.Int (fun i -> export_global_mode := Some i), " export a global variable";
   "-name", Arg.String (fun s -> export_name := s), " name of element to export";
 
@@ -213,6 +215,12 @@ let () =
       let m = Intfloat.process a b in
       Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !float_error_mode, !lst with
+    | true, a :: _ ->
+      let m = Floaterror.process a in
+      Run.create_sexpr_file "float-error.wast" () (fun () -> m);
+      Run.create_binary_file "float-error.wasm" () (fun () -> m)
     | _ -> () );
     ( match !shift_mem_mode, !lst with
     | Some num, m :: _ ->
