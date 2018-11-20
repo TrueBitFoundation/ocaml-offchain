@@ -22,6 +22,8 @@ cd interpreter
 make
 ```
 
+If the build fails it may be due to an outdated version of ocaml. To upgrade simply run `opam switch 4.06.0`, and then follow the steps above starting with `eval $(opam config env)`.
+
 This should generate the executable `wasm` in the `interpreter` directory.
 
 # Testing the off-chain interpreter

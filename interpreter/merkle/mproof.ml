@@ -246,7 +246,9 @@ let micro_step_proofs vm =
   (* ALU *)
   let alu_proof = (machine_to_bin m, vm_to_bin vm) in
   ( try regs.reg1 <- handle_alu vm regs.reg1 regs.reg2 regs.reg3 regs.ireg op.alu_code;
-    with _ -> vm.pc <- magic_pc );
+    with _ ->
+       prerr_endline "Got ALU error";
+       vm.pc <- magic_pc );
   (* Write registers *)
   let write_proof1 = wrap_proof3 m vm (fun () ->
     let proof = make_write_proof m op.write1 in
