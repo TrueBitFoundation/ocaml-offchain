@@ -971,7 +971,7 @@ let vm_step vm = match vm.code.(vm.pc) with
       let a, b = Byteutil.Decode.mini_memory mem in
       vm.memory.(loc/8) <- a;
       vm.memory.(loc/8+1) <- b );
-   trace ("Stored to " ^ string_of_int (loc/8) ^ ": " ^ Int64.to_string vm.memory.(loc/8) ^ " and " ^ Int64.to_string vm.memory.(loc/8 + 1));
+   (* trace ("Stored to " ^ string_of_int (loc/8) ^ ": " ^ Int64.to_string vm.memory.(loc/8) ^ " and " ^ Int64.to_string vm.memory.(loc/8 + 1)); *)
    vm.stack_ptr <- vm.stack_ptr - 2
  | DROP_N ->
    inc_pc vm;
