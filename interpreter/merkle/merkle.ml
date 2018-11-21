@@ -560,6 +560,8 @@ let compile_test m func vs init inst =
   trace ("Tables: " ^ string_of_int (List.length m.tables));
   trace ("Data: " ^ string_of_int (List.length m.data));
   trace ("Elem: " ^ string_of_int (List.length m.elems));
+  if List.length (List.flatten (List.map (fun dta -> dta.it.init) m.elems)) > Byteutil.pow2 !Flags.table_size then prerr_endline "Warning: too large call table!";
+  if List.length m.globals + 10 > Byteutil.pow2 !Flags.globals_size then prerr_endline "Warning: too many globals!";
   let ftab = Hashtbl.create 10 in
   let ttab = Hashtbl.create 10 in
   List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
@@ -649,8 +651,6 @@ let compile_test m func vs init inst =
           LOADGLOBAL call_stack; PUSH (I32 call_limit); CMP (I32 I32Op.GtU); JUMPI (-11);
           RETURN; LABEL (-11); UNREACHABLE] else
      if mname = "env" && fname = "popFrame" then
-         let stack_limit = Int32.of_int (Byteutil.pow2 !Flags.stack_size - !kludge (elem m)) in
-         let call_limit = Int32.of_int (Byteutil.pow2 !Flags.call_size - 1) in
          let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
          let call_stack = num_globals + 2 in
          let frame_stack = num_globals + 3 in
