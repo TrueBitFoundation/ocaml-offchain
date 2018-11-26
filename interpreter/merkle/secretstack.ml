@@ -73,6 +73,27 @@ let una_stack id x = {x with stack=id::popn 1 x.stack}
 let bin_stack id x = {x with stack=id::popn 2 x.stack}
 let n_stack n id x = {x with stack=id::popn n x.stack}
 
+let info = Hashtbl.create 100
+
+let rec gen n a = if n = 0 then [] else a (n-1) :: gen (n-1) a
+
+let generate_entry id_to_local (lst, others) =
+   let open Merkle in
+   let stack_size = List.length lst + others in
+   (* others will have to be moved to make space *)
+   let n = List.length lst in
+   gen n (fun i -> DUP 1) @ (* fillers *)
+   gen others (fun i -> DUP (others-i+n+1)) @ (* this should copy the others *)
+   List.flatten (List.mapi (fun i id -> [DUP (stack_size + List.assoc id_to_local id); SWAP (stack_size-i); DROP 1]) lst) (* access local variable, then write to filled location *)
+
+let generate_exit id_to_local (lst, others) =
+   let open Merkle in
+   let stack_size = List.length lst + others in
+   (* others will have to be moved over the hidden variables *)
+   let n = List.length lst in
+   List.flatten (gen others (fun i -> [DUP (others-i+1); SWAP (others-i+1+n); DROP 1])) @ (* this should copy the others *)
+   [DROP others]
+
 let rec compile marked (ctx : context) expr = compile' marked ctx (Int32.of_int expr.at.right.line) expr.it
 and compile' marked ctx id = function
  | Block (ty, lst) ->
@@ -90,7 +111,13 @@ and compile' marked ctx id = function
  | Loop (_, lst) ->
    let old_return = ctx.block_return in
    let extra = ctx.ptr - ctx.locals in
-   if extra > 0 then trace ("loop start " ^ string_of_int extra);
+   (* we should mark the extra here, too *)
+   if extra > 0 then begin
+      trace ("loop start " ^ string_of_int extra);
+      let hidden = take extra ctx.stack in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (marked, 0);
+   end;
    let ctx = {ctx with bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0}::old_return} in
    let ctx = compile_block marked ctx lst in
    if extra > 0 then trace ("loop end " ^ string_of_int extra);
@@ -99,14 +126,22 @@ and compile' marked ctx id = function
    (* Will just push the pc *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    let extra = ctx.ptr - ctx.locals - List.length par in
-   if extra > 0 then trace ("call " ^ string_of_int extra);
-   marked := (take extra (popn (List.length par) ctx.stack)) @ !marked;
+   if extra > 0 then begin
+      trace ("call " ^ string_of_int extra);
+      let hidden = take extra (popn (List.length par) ctx.stack) in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (marked, List.length par);
+   end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par; stack=make id (List.length ret) @ popn (List.length par) ctx.stack}
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
    let extra = ctx.ptr - ctx.locals - List.length par - 1 in
-   if extra > 0 then trace ("calli " ^ string_of_int extra);
-   marked := (take extra (popn (List.length par+1) ctx.stack)) @ !marked;
+   if extra > 0 then begin
+      trace ("calli " ^ string_of_int extra);
+      let hidden = take extra (popn (List.length par+1) ctx.stack) in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (marked, List.length par+1);
+   end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par-1; stack=make id (List.length ret) @ popn (List.length par + 1) ctx.stack}
  | If (ty, texp, fexp) ->
    let a_ptr = ctx.ptr-1 in
@@ -179,6 +214,7 @@ let compile_func ctx func =
   let func = do_it func (fun f -> {f with body=relabel f.body}) in
   let res = assoc_types (Valid.func_context ctx.tctx func) func in
   let marked = ref [] in
+  Hashtbl.clear info;
   let ctx = compile' marked {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
   (* find types for marked expressions *)
   let find_type expr =
@@ -187,6 +223,7 @@ let compile_func ctx func =
       | _ -> trace ("Warning: empty type") ; raise Not_found
      with Not_found -> ( trace ("Warning: cannot find type") ; I32Type)
      in
+  (* Association list from expression ids to local variables *)
   let marked = List.mapi (fun i x -> x, (find_type x, {it=Int32.of_int (i+locals); at=no_region})) !marked in
   trace ("---- function end " ^ string_of_int ctx.ptr);
   do_it func (fun f -> {f with locals=f.locals@List.map (fun (_,(t,_)) -> t) marked; body=tee_locals marked func})
