@@ -13,10 +13,7 @@ open Ast
 open Source
 open Types
 open Values
-
-let do_it x f = {x with it=f x.it}
-
-let it e = {it=e; at=no_region}
+open Sourceutil
 
 type ctx = {
   tctx : Valid.context;
@@ -211,7 +208,7 @@ let list_to_map lst =
 let process m =
   do_it m (fun m ->
     (* add function types *)
-    let i_num = List.length (Merkle.func_imports (it m)) in
+    let i_num = List.length (func_imports (it m)) in
     let ftypes = m.types @ [
       it (FuncType ([], [I32Type]));
       it (FuncType ([I32Type; I32Type], []));
@@ -264,7 +261,7 @@ let process m =
             globals=m.globals @ [it {gtype=GlobalType (I64Type, Mutable); value=it [it (Const (it (I64 0L)))]}];
             exports=List.map (Merge.remap_export remap (fun x -> x) (fun x -> x) "") m.exports;
             elems=List.map (Merge.remap_elements remap) m.elems; } in
-    let ftab, ttab = Merkle.make_tables pre_m in
+    let ftab, ttab = make_tables pre_m in
     let ctx = {
       g64 = it (Int32.of_int (List.length m.globals));
       tctx = Valid.module_context (it pre_m);

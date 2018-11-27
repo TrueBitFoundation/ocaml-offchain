@@ -294,7 +294,7 @@ let () =
     | true, m :: _ ->
       let open Source in
       let open Ast in
-      let lst = Merkle.func_imports m in
+      let lst = Sourceutil.func_imports m in
       let import_name n = "[\"" ^ Utf8.encode n.it.module_name ^ "\",\"" ^ Utf8.encode n.it.item_name ^ "\"]" in
       Printf.printf "[%s]\n" (String.concat ", " (List.map import_name lst))
     | _ -> () );

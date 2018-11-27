@@ -1,10 +1,8 @@
 
 open Source
 open Ast
-open Merkle
+open Sourceutil
 open Values
-
-let do_it x f = {x with it=f x.it}
 
 (* offset in load, store and memory segments *)
 

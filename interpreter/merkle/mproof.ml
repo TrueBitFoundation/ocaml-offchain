@@ -1,11 +1,9 @@
 
-open Merkle
 open Values
 open Mrun
 open Mbinary
 open Byteutil
-
-let trace = Merkle.trace
+open Sourceutil
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
 

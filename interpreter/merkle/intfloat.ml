@@ -3,17 +3,15 @@ open Source
 open Ast
 open Types
 open Values
-open Merkle 
+open Sourceutil
 
 (* just simply merge two files *)
-
-let do_it x f = {x with it=f x.it}
 
 let simple_add n i = Int32.add i (Int32.of_int n)
 
 let merge a b =
   let funcs_a = a.it.funcs in
-  let num = List.length (Merkle.func_imports a) + List.length funcs_a in
+  let num = List.length (func_imports a) + List.length funcs_a in
   let num_ft = List.length a.it.types in
   let funcs_b = List.map (Merge.remap (simple_add num) (fun x -> x) (simple_add num_ft)) b.it.funcs in
   {a with it={(a.it) with funcs = funcs_a@funcs_b;

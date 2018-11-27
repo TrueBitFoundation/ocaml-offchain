@@ -3,10 +3,7 @@ open Ast
 open Source
 open Types
 open Values
-
-let do_it x f = {x with it=f x.it}
-
-let it e = {it=e; at=no_region}
+open Sourceutil
 
 (*
 type ctx = {
@@ -48,7 +45,7 @@ let process_function ctx f =
 let process m =
   do_it m (fun m ->
     (* add function types *)
-    let i_num = List.length (Merkle.func_imports (it m)) in
+    let i_num = List.length (func_imports (it m)) in
     let ftypes = m.types @ [
        it (FuncType ([], [I32Type]));
        it (FuncType ([I32Type], []));

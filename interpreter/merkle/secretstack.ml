@@ -1,14 +1,10 @@
 
-open Merkle
 open Ast
 open Source
 open Types
+open Sourceutil
 
 (* Analyze stack *)
-
-let do_it x f = {x with it=f x.it}
-
-let it e = {it=e; at=no_region}
 
 type control = {
   rets : int;
@@ -26,18 +22,6 @@ type context = {
   mutable marked : Int32.t list;
   tctx : Valid.context;
 }
-
-let relabel lst =
-   let uniq = ref 1 in
-   let rec compile expr =
-      incr uniq;
-      {it=compile' expr.it; at={left=no_pos; right={file="label"; line= !uniq; column=0}}}
-   and compile' = function
-    | Block (ty, lst) -> Block (ty, List.map compile lst)
-    | Loop (ty, lst) -> Loop (ty, List.map compile lst)
-    | If (ty, texp, fexp) -> If (ty, List.map compile texp, List.map compile fexp)
-    | a -> a in
-  List.map compile lst
 
 (* Associating instructions with types *)
 let assoc_types ctx func =
@@ -61,38 +45,11 @@ let assoc_types ctx func =
 
 (* the idea would be to add local variables so that there are never hidden elements in the stack when making a call *)
 
-let rec popn n = function
- | a::tl when n > 0 -> popn (n-1) tl
- | lst -> lst
-
-let rec take n = function
- | a::tl when n > 0 -> a :: take (n-1) tl
- | lst -> []
-
 let una_stack id x = {x with stack=id::popn 1 x.stack}
 let bin_stack id x = {x with stack=id::popn 2 x.stack}
 let n_stack n id x = {x with stack=id::popn n x.stack}
 
 let info = Hashtbl.create 100
-
-let rec gen n a = if n = 0 then [] else a (n-1) :: gen (n-1) a
-
-let generate_entry id_to_local (lst, others) =
-   let open Merkle in
-   let stack_size = List.length lst + others in
-   (* others will have to be moved to make space *)
-   let n = List.length lst in
-   gen n (fun i -> DUP 1) @ (* fillers *)
-   gen others (fun i -> DUP (others-i+n+1)) @ (* this should copy the others *)
-   List.flatten (List.mapi (fun i id -> [DUP (stack_size + List.assoc id_to_local id); SWAP (stack_size-i); DROP 1]) lst) (* access local variable, then write to filled location *)
-
-let generate_exit id_to_local (lst, others) =
-   let open Merkle in
-   let stack_size = List.length lst + others in
-   (* others will have to be moved over the hidden variables *)
-   let n = List.length lst in
-   List.flatten (gen others (fun i -> [DUP (others-i+1); SWAP (others-i+1+n); DROP 1])) @ (* this should copy the others *)
-   [DROP others]
 
 let rec compile marked (ctx : context) expr = compile' marked ctx (Int32.of_int expr.at.right.line) expr.it
 and compile' marked ctx id = function

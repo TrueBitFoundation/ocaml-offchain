@@ -4,9 +4,7 @@ open Source
 open Ast
 open Types
 open Values
-open Merkle 
-
-let do_it x f = {x with it=f x.it}
+open Sourceutil
 
 let process m =
   let rec convert_op' = function

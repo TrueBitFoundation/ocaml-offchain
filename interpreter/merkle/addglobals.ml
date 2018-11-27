@@ -4,7 +4,7 @@ open Merge
 open Ast
 open Types
 open Source
-open Merkle
+open Sourceutil
 
 (* remap function calls *)
 let rec remap_func' map gmap gmap2 ftmap = function

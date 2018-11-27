@@ -1,7 +1,7 @@
 
 open Ast
 open Source
-open Merkle
+open Sourceutil
 
 (* remap function calls *)
 let rec remap_func' map gmap ftmap = function
@@ -97,13 +97,13 @@ let merge a b =
       let loc = Int32.of_int (List.length !imports) in
       Hashtbl.add map (Int32.of_int num) loc;
       imports := imp :: !imports;
-      Run.trace ("Got import " ^ name ^ ", linked to " ^ Int32.to_string loc);
+      trace ("Got import " ^ name ^ ", linked to " ^ Int32.to_string loc);
 (*      if name = "_env__llvm_bswap_i64" || (String.length name > 11 && String.sub name 0 11 = "_env_invoke") then () else *)
       Hashtbl.add taken_cur name loc;
       Hashtbl.add taken name loc
     end else begin
       let loc = Hashtbl.find taken name in
-      Run.trace ("Dropping import " ^ name ^ ", linked to " ^ Int32.to_string loc);
+      trace ("Dropping import " ^ name ^ ", linked to " ^ Int32.to_string loc);
       Hashtbl.add map (Int32.of_int num) loc
     end in
   (* first just have to calculate total number of imports *)
@@ -115,7 +115,7 @@ let merge a b =
   List.iteri (fun n x -> add_import taken_globals taken_imports_b g_imports gmap2 n x) (global_imports b);
   let num_f = List.length !f_imports in
   let num_g = List.length !g_imports in
-  Run.trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
+  trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
   (* now can calculate the export positions *)
   let taken_imports = Hashtbl.create 10 in
   let taken_imports_a = Hashtbl.create 10 in
@@ -140,8 +140,8 @@ let merge a b =
   f_imports := [];
   List.iteri (fun n x -> add_import taken_imports taken_imports_a f_imports map1 n x) imports_a;
   List.iteri (fun n x -> add_import taken_imports taken_imports_b f_imports map2 n x) imports_b;
-  Run.trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
-  Run.trace ("Functions A: " ^ string_of_int (List.length a.it.funcs) ^ "; Functions B: " ^ string_of_int (List.length b.it.funcs));
+  trace ("Function imports: " ^ string_of_int num_f ^ "; Global imports: " ^ string_of_int num_g);
+  trace ("Functions A: " ^ string_of_int (List.length a.it.funcs) ^ "; Functions B: " ^ string_of_int (List.length b.it.funcs));
   (* add remapping for functions *)
   List.iteri (fun i _ ->
     Hashtbl.add map1 (Int32.of_int (i + num_fa)) (Int32.of_int (i + num_fa + offset_a))) a.it.funcs;
@@ -149,10 +149,10 @@ let merge a b =
     Hashtbl.add map2 (Int32.of_int (i + num_fb)) (Int32.of_int (i + num_fb + offset_b))) b.it.funcs;
   (* add remapping for globals *)
   List.iteri (fun i _ ->
-    Run.trace ("global " ^ string_of_int i ^ " -> " ^ string_of_int (i + num_ga + offset_ga));
+    trace ("global " ^ string_of_int i ^ " -> " ^ string_of_int (i + num_ga + offset_ga));
     Hashtbl.add gmap1 (Int32.of_int (i + num_ga)) (Int32.of_int (i + num_ga + offset_ga))) a.it.globals;
   List.iteri (fun i _ ->
-    Run.trace ("global " ^ string_of_int i ^ " -> " ^ string_of_int (i + num_gb + offset_gb));
+    trace ("global " ^ string_of_int i ^ " -> " ^ string_of_int (i + num_gb + offset_gb));
     Hashtbl.add gmap2 (Int32.of_int (i + num_gb)) (Int32.of_int (i + num_gb + offset_gb))) b.it.globals;
   (* remap exports *)
   let exports_a = List.map (remap_export (Hashtbl.find map1) (Hashtbl.find gmap1) ftmap1 "") a.it.exports in
@@ -162,7 +162,7 @@ let merge a b =
   let funcs_b = List.map (remap (Hashtbl.find map2) (Hashtbl.find gmap2) ftmap2) b.it.funcs in
   let more_imports = other_imports a @ List.filter drop_table_import (other_imports b) in
   (* table elements have to be remapped *)
-  Run.trace ("Remapping globals");
+  trace ("Remapping globals");
   {a with it={(a.it) with funcs = funcs_a@funcs_b;
      globals = List.map (remap_global (Hashtbl.find map1) (Hashtbl.find gmap1) ftmap1) a.it.globals @
                List.map (remap_global (Hashtbl.find map2) (Hashtbl.find gmap2) ftmap2) b.it.globals;
