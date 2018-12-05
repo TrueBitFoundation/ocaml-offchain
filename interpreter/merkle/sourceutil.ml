@@ -180,3 +180,47 @@ let type_to_str = function
  | F64Type -> "f64"
 
 
+let int_const y = Const (elem (Values.I32 (Int32.of_int y)))
+let int64_const y = Const (elem (Values.I64 y))
+let f64_const y = Const (elem (Values.F64 y))
+
+let int_binary i =
+  let res = Bytes.create 4 in
+  Bytes.set res 0 (Char.chr (i land 0xff));
+  Bytes.set res 1 (Char.chr ((i lsr 8) land 0xff));
+  Bytes.set res 2 (Char.chr ((i lsr 16) land 0xff));
+  Bytes.set res 3 (Char.chr ((i lsr 24) land 0xff));
+  Bytes.to_string res
+
+let generate_data (addr, i) : string segment =
+  elem {
+    offset=elem [elem (int_const (addr*4))];
+    index=elem 0l;
+    init=int_binary i;
+  }
+
+let add_i32_global m name tmem =
+  let open Types in
+  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
+  do_it m (fun m -> {m with
+    globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
+
+let add_i64_global m name tmem =
+  let open Types in
+  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
+  do_it m (fun m -> {m with
+    globals=m.globals@[elem {value=elem [elem (int64_const tmem)]; gtype=GlobalType (I64Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
+
+let add_f64_global m name tmem =
+  let open Types in
+  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
+  do_it m (fun m -> {m with
+    globals=m.globals@[elem {value=elem [elem (f64_const tmem)]; gtype=GlobalType (F64Type, Immutable)}];
+    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
+
+let has_import m name =
+  List.exists (fun im -> Utf8.encode im.it.item_name = name) m.it.imports
+
+

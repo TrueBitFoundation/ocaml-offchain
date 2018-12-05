@@ -173,8 +173,8 @@ let check m =
    if lst <> [] then
      let highest = List.hd (List.rev lst) in
      prerr_endline ("Highest " ^ string_of_int highest);
-     highest
-   else 1
+     max 10 highest
+   else 10
 
 let process_func ctx push_f pop_f func =
    let limit = Int32.of_int (check_func ctx func) in
@@ -187,6 +187,7 @@ let process_func ctx push_f pop_f func =
 
 let process m =
    let m = add_functions m in
+   let m = add_i32_global m "FRAME_MAX" (check m) in
    let push_f = Int32.of_int (List.length (func_imports m) - 2) in
    let pop_f = Int32.of_int (List.length (func_imports m) - 1) in
    let ftab, ttab = Secretstack.make_tables m.it in

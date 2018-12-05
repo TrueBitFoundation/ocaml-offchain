@@ -317,8 +317,10 @@ let init_fs_stack mdle inst =
   prerr_endline ("All globals " ^ string_of_int (List.length mdle.globals));
   let stack_max = List.length (global_imports (elem mdle)) + 3 in *)
   prerr_endline ("Warning: asm.js initialization is very dependant on the filesystem.wasm");
-  let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
-  let stack_ptr = len - 20 in (* this is the difficult place *)
+  let asmjs = find_global_index (elem mdle) inst (Utf8.decode "ASMJS") in
+  (* let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
+  let stack_ptr = len - 20 in *)
+  let stack_ptr = asmjs - 16 in (* this is the difficult place *)
   let stack_max = stack_ptr + 1 in
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i 1024); CALL malloc; DUP 1; DUP 1;
