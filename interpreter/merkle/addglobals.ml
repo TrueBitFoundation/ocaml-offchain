@@ -72,9 +72,39 @@ let int_global i = GetGlobal {it=Int32.of_int i; at=no_region}
 
 (* need to add a TOTAL_MEMORY global *)
 
+let add_setters m =
+  let asmjs = find_global_index m (Utf8.decode "ASMJS") in
+  do_it m (fun m ->
+    (* add function types *)
+    let ftypes = m.types @ [
+       it (FuncType ([I32Type], []));
+       ] in
+    let ftypes_len = List.length m.types in
+    let set_type = it (Int32.of_int (ftypes_len)) in
+    let make_func num =
+      elem {
+        ftype = set_type;
+        locals = [];
+        body = List.map it [GetLocal (it 0l); SetGlobal (it num)];
+      } in
+    (* add exports *)
+    let fnum = List.length (func_imports (it m)) + List.length m.funcs in
+    let added = [
+       it {name=Utf8.decode "setHelperStack"; edesc=it (FuncExport (it (Int32.of_int fnum)))};
+       it {name=Utf8.decode "setHelperStackLimit"; edesc=it (FuncExport (it (Int32.of_int (fnum+1))))};
+    ] in
+    let stack_ptr = asmjs - 16 in (* this is the difficult place *)
+    let stack_max = stack_ptr + 1 in
+    let set1 = make_func (Int32.of_int stack_ptr) in
+    let set2 = make_func (Int32.of_int stack_max) in
+    {m with funcs=m.funcs @ [set1; set2];
+            types=ftypes;
+            exports=m.exports @ added; })
+
 let add_globals m fn =
   let globals, mem, tmem = load_file fn in
-  let m = if !Flags.asmjs then add_i32_global m "ASMJS" 0 else m in
+  let m =
+     if !Flags.asmjs then add_setters (add_i32_global m "ASMJS" 1) else m in
   let m = add_i32_global m "TOTAL_MEMORY" tmem in
   (* let m = add_i32_global m "GAS" 0 in *)
   let m = add_i32_global m "GAS_LIMIT" (!Flags.gas_limit) in

@@ -163,7 +163,7 @@ let find_function_index m inst name =
   | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> find_function m func
   | _ -> raise Not_found )
 
-let find_global_index m inst name =
+let find_global_index m name =
   let num_imports = 0l (* Int32.of_int (List.length (global_imports m)) *) in
   let rec get_exports = function
    | [] -> trace ("Cannot Find global: " ^ Utf8.encode name); raise Not_found
