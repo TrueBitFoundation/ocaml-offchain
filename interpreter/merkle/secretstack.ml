@@ -120,7 +120,6 @@ and compile' marked ctx id = function
    let c = List.nth ctx.block_return num in
    {ctx with ptr=ctx.ptr - c.rets; stack=popn c.rets ctx.stack}
  | BrIf x ->
-   let num = Int32.to_int x.it in
    {ctx with ptr = ctx.ptr-1; stack=popn 1 ctx.stack}
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
@@ -168,10 +167,8 @@ let compile_func ctx func =
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals));
   (* Just params are now in the stack *)
   let locals = List.length par + List.length func.it.locals in
-  let func = do_it func (fun f -> {f with body=relabel f.body}) in
   let res = assoc_types (Valid.func_context ctx.tctx func) func in
   let marked = ref [] in
-  Hashtbl.clear info;
   let ctx = compile' marked {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
   (* find types for marked expressions *)
   let find_type expr =
@@ -205,7 +202,12 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
+let relabel m =
+  do_it m (fun m ->
+     {m with funcs=List.map (fun func -> do_it func (fun f -> {f with body=relabel f.body})) m.funcs})
+
 let process m_ =
+  Hashtbl.clear info;
   do_it m_ (fun m ->
      let ftab, ttab = make_tables m in
      let ctx = {

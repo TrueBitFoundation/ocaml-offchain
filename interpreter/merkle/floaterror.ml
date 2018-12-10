@@ -2,7 +2,6 @@
 
 open Source
 open Ast
-open Types
 open Values
 open Sourceutil
 

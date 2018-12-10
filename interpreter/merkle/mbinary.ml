@@ -171,6 +171,7 @@ let alu_byte = function
  | Convert (F64 F64Op.PromoteF32) -> op 0xbb
  | Convert (F64 F64Op.DemoteF64) -> assert false
  | Convert (F64 F64Op.ReinterpretInt) -> op 0xbf
+ | _ -> assert false
 
 let in_code_byte = function
  | NoIn -> 0x00

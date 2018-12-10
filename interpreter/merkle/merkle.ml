@@ -416,7 +416,7 @@ let generate_entry id_to_local (lst, others) =
    List.flatten (List.mapi (fun i id -> [DUP (stack_size + List.assoc id_to_local id); SWAP (stack_size-i); DROP 1]) lst) (* access local variable, then write to filled location *)
 
 let generate_exit id_to_local (lst, others) =
-   let stack_size = List.length lst + others in
+   (* let stack_size = List.length lst + others in *)
    (* others will have to be moved over the hidden variables *)
    let n = List.length lst in
    List.flatten (gen others (fun i -> [DUP (others-i+1); SWAP (others-i+1+n); DROP 1])) @ (* this should copy the others *)

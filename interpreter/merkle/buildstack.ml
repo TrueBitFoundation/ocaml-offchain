@@ -33,11 +33,15 @@ type ctx = {
   store_local_i64 : var;
   store_local_f32 : var;
   store_local_f64 : var;
-  
+
+  store_indirect : var;
+
   adjust_stack_i32 : var;
   adjust_stack_i64 : var;
   adjust_stack_f32 : var;
   adjust_stack_f64 : var;
+  
+  orig_locals : int;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -120,9 +124,9 @@ let determine_type tctx block =
   | _ -> raise (Failure "typing error")
 
 let store_locals ctx =
-   let num_locals = List.length ctx.tctx.Valid.locals in
+(*   let num_locals = List.length ctx.tctx.Valid.locals in *)
    let res = ref [] in
-   for i = 0 to num_locals - 1 do
+   for i = 0 to ctx.orig_locals - 1 do
       let var = it (Int32.of_int i) in
       let lst = match Valid.local ctx.tctx var with
       | I32Type -> [GetLocal var; Call ctx.store_local_i32]
@@ -132,7 +136,6 @@ let store_locals ctx =
       res := !res @ (Const (it (I32 (Int32.of_int i))) :: lst)
    done;
    !res
-
 
 let rec remap_blocks label inst =
   let handle {it=v; _} = if Int32.of_int label > v then it v else it (Int32.add v 1l) in
@@ -170,12 +173,8 @@ let rec process_inst ctx inst =
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
   | Loop (ty, lst) -> [Loop (ty, List.map it s_block @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
-  (*
-  | Call x -> s_block @ [Call x] @ e_block (ctx.var_type x.it)
-  | CallIndirect x -> s_block @ [CallIndirect x] @ e_block (ctx.lookup_type x.it)
-  *)
   | Call x -> s_block @ e_block (Call x) (ctx.var_type x.it) @ s_block
-  | CallIndirect x -> s_block @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block
+  | CallIndirect x -> s_block @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block
   | a -> [a] in
   List.map it res
 
@@ -205,7 +204,14 @@ let list_to_map lst =
   List.iter (fun el -> Hashtbl.add res el true) lst;
   res
 
-let process m =
+let process m_orig =
+  let m = Secretstack.relabel m_orig in
+  let m = Secretstack.process m in
+  let _, ttab = make_tables m.it in
+  let orig_locals = List.map (fun f ->
+      let FuncType (par,_) = Hashtbl.find ttab f.it.ftype.it in
+      List.length f.it.locals + List.length par) m_orig.it.funcs in
+  (* Information about hidden variables is at [Secretstack.info] *)
   do_it m (fun m ->
     (* add function types *)
     let i_num = List.length (func_imports (it m)) in
@@ -246,6 +252,7 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF32"; idesc=it (FuncImport adjust_stack_f32)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_stack_f64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "testStep"; idesc=it (FuncImport count_type)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeIndirect"; idesc=it (FuncImport adjust_stack_i32)};
     ] in
     let imps = m.imports @ added in
     (*
@@ -276,15 +283,14 @@ let process m =
       adjust_stack_f32 = it (Int32.of_int (i_num+8));
       adjust_stack_f64 = it (Int32.of_int (i_num+9));
       is_critical = it (Int32.of_int (i_num+10));
+      store_indirect = it (Int32.of_int (i_num+11));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       (* possible = (fun loc -> Hashtbl.mem pos_tab loc);
       bottom = List.hd (List.rev pos_lst); *)
       label = 0;
+      orig_locals = 0;
     } in
-    let res = {pre_m with funcs=List.map (process_function ctx) pre_m.funcs} in
-    res
-    )
-
-
+    let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i} f) pre_m.funcs} in
+    res)
 

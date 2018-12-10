@@ -478,7 +478,7 @@ let write_register vm regs v = function
    set_input_name vm s2 s1 v
  | InputDataOut ->
    let s2 = value_to_int regs.reg1 in
-   let s1 = value_to_int regs.reg2 in
+(*   let s1 = value_to_int regs.reg2 in *)
    let v = value_to_int v in
    let s1 = if v < 0 then v + 256 else v in
    trace ("output data to file number " ^ string_of_int s2 ^ ": " ^ string_of_int s1);
