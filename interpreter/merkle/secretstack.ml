@@ -162,6 +162,8 @@ let tee_locals assoc func =
   and compile_list lst = List.flatten (List.map compile lst) in
   compile_list func.it.body
 
+let func_info = ref []
+
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals));
@@ -180,6 +182,7 @@ let compile_func ctx func =
   (* Association list from expression ids to local variables *)
   let marked = List.mapi (fun i x -> x, (find_type x, {it=Int32.of_int (i+locals); at=no_region})) !marked in
   trace ("---- function end " ^ string_of_int ctx.ptr);
+  func_info := !func_info @ [marked];
   do_it func (fun f -> {f with locals=f.locals@List.map (fun (_,(t,_)) -> t) marked; body=tee_locals marked func})
 
 let make_tables m =
@@ -208,6 +211,7 @@ let relabel m =
 
 let process m_ =
   Hashtbl.clear info;
+  func_info := [];
   do_it m_ (fun m ->
      let ftab, ttab = make_tables m in
      let ctx = {

@@ -161,6 +161,8 @@ let store_top ctx = function
  | F64Type -> [Call ctx.adjust_stack_f64]
 
 let rec process_inst ctx inst =
+  let id = Int32.of_int expr.at.right.line in
+  
   let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
