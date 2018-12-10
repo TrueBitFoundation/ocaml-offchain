@@ -106,14 +106,14 @@ let compile labels = function
     "vm.stack_ptr--; r1 = vm.stack[vm.stack_ptr];" ^
     "if (r1 < 0 || r1 >= " ^ string_of_int x ^ ") r1 = " ^ string_of_int x ^ ";" ^
     "vm.pc = vm.pc + 1 + r1; goto *jumptable[vm.pc];"
- | CALL x ->
+ | CALL (x,_) ->
     Hashtbl.add labels x true;
     "vm.callstack[vm.call_ptr] = vm.pc+1;" ^
     "vm.call_ptr++;" ^
     "vm.pc = " ^ string_of_int x ^ "-1;" ^
     "goto label_" ^ string_of_int x ^ ";"
  | CHECKCALLI _ -> "vm.pc++;"
- | CALLI ->
+ | CALLI _ ->
     "vm.stack_ptr--;" ^
     "r1 = vm.stack[vm.stack_ptr];" ^
     "vm.callstack[vm.call_ptr] = vm.pc+1;" ^

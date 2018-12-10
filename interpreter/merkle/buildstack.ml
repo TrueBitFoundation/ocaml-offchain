@@ -35,6 +35,7 @@ type ctx = {
   store_local_f64 : var;
 
   store_indirect : var;
+  store_call : var;
 
   adjust_stack_i32 : var;
   adjust_stack_i64 : var;
@@ -44,6 +45,9 @@ type ctx = {
   orig_locals : int;
   
   func_idx : int;
+  
+  find_return_pc : int32 -> int;
+  
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -177,7 +181,10 @@ let store_hidden ctx id =
 
 let rec process_inst ctx inst =
   let id = Int32.of_int inst.at.right.line in
-  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id), [])] in
+  let save_call =
+    try [Const (it (I32 (Int32.of_int (ctx.find_return_pc id)))); Call ctx.store_call]
+    with Not_found -> [] in
+  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ save_call), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
    | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
@@ -222,6 +229,13 @@ let list_to_map lst =
 
 let process m_orig =
   let m = Secretstack.relabel m_orig in
+  let code = Run.get_code m in
+  let return_pc = Hashtbl.create 100 in
+  let handle i = function
+   | Merkle.CALL (_, id) -> Hashtbl.add return_pc id i
+   | Merkle.CALLI id -> Hashtbl.add return_pc id i
+   | _ -> () in
+  List.iteri handle code;
   let m = Secretstack.process m in
   let _, ttab = make_tables m.it in
   let orig_locals = List.map (fun f ->
@@ -269,6 +283,7 @@ let process m_orig =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "adjustStackF64"; idesc=it (FuncImport adjust_stack_f64)}; (* for each type, need a different function *)
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "testStep"; idesc=it (FuncImport count_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeIndirect"; idesc=it (FuncImport adjust_stack_i32)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeReturnPC"; idesc=it (FuncImport store_type_i32)};
     ] in
     let imps = m.imports @ added in
     (*
@@ -300,6 +315,7 @@ let process m_orig =
       adjust_stack_f64 = it (Int32.of_int (i_num+9));
       is_critical = it (Int32.of_int (i_num+10));
       store_indirect = it (Int32.of_int (i_num+11));
+      store_call = it (Int32.of_int (i_num+12));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       (* possible = (fun loc -> Hashtbl.mem pos_tab loc);
@@ -307,6 +323,7 @@ let process m_orig =
       label = 0;
       orig_locals = 0;
       func_idx = 0;
+      find_return_pc = (fun x -> Hashtbl.find return_pc x);
     } in
     let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i; func_idx=i} f) pre_m.funcs} in
     res)

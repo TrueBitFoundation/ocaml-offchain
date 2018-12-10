@@ -700,9 +700,9 @@ let get_code = function
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPZ x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJumpZ; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD x -> {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
- | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
+ | CALL (x, _) -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
- | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
+ | CALLI _ -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
  | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
  | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputNameIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
@@ -871,11 +871,11 @@ let vm_step vm = match vm.code.(vm.pc) with
    let idx = if idx < 0 || idx >= x then x else idx in
    vm.pc <- vm.pc + 1 + idx;
    vm.stack_ptr <- vm.stack_ptr - 1
- | CALL x ->
+ | CALL (x,_) ->
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
- | CALLI ->
+ | CALLI _ ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
@@ -1173,7 +1173,7 @@ let trace_step vm =
    let x = vm.stack.(vm.stack_ptr-1) in
    "JUMPZ " ^ (if not (value_bool x) then " jump" else " no jump") ^ " " ^ string_of_value x
  | JUMPFORWARD x -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | CALL x -> "CALL " ^ string_of_int x
+ | CALL (x,_) -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
  | LOAD x ->
@@ -1202,7 +1202,7 @@ let trace_step vm =
  | TEST op -> "TEST"
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | CALLI -> "CALLI"
+ | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
  | SETSTACK v -> "SETSTACK"
  | SETCALLSTACK v -> "SETCALLSTACK"
@@ -1227,7 +1227,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | JUMPI x -> "JUMPI"
  | JUMPZ x -> "JUMPZ"
  | JUMPFORWARD x -> "JUMPFORWARD"
- | CALL x -> "CALL " ^ string_of_int x
+ | CALL (x,_) -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
  | LOAD x ->
@@ -1249,7 +1249,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | TEST op -> "TEST"
  | BIN op -> "BIN"
  | CMP op -> "CMP"
- | CALLI -> "CALLI"
+ | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
  | SETSTACK v -> "SETSTACK"
  | SETCALLSTACK v -> "SETCALLSTACK"

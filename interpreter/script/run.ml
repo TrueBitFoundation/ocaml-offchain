@@ -391,6 +391,15 @@ let setup_vm inst mdle func vs =
 (*  prerr_endline "Initialized"; *)
   vm
 
+let get_code mdle =
+  let imports = Import.link mdle in
+  let inst = Eval.init mdle imports in
+  let func = match Instance.export inst (Utf8.decode "_main") with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> func
+      | _ -> raise (Failure "no main function") in
+  let vm = setup_vm inst mdle.it func [] in
+  Array.to_list vm.Mrun.code
+
 let take_array n arr =
   let res = ref [] in
   for i = 0 to n-1 do

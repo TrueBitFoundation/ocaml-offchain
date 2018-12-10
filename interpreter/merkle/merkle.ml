@@ -30,7 +30,7 @@ type inst =
  | JUMPI of int
  | JUMPZ of int
  | JUMPFORWARD of int (* size of jump table *)
- | CALL of int
+ | CALL of int * Int32.t
  | LABEL of int
  | RETURN
  | LOAD of loadop
@@ -43,7 +43,7 @@ type inst =
  | STOREGLOBAL of int
  | CURMEM
  | GROW                     (* Grow memory *)
- | CALLI                    (* indirect call *)
+ | CALLI of Int32.t                   (* indirect call (extra ID) *)
  | CHECKCALLI of Int64.t    (* check type of indirect call *)
  | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
@@ -97,8 +97,8 @@ let adjust_stack diff num =
   ( (* trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values"); *)
     adjust_stack_aux diff num @ [DROP diff] )
 
-let rec compile ctx expr = compile' ctx expr.it
-and compile' ctx = function
+let rec compile ctx expr = compile' ctx (Int32.of_int expr.at.right.line) expr.it
+and compile' ctx id = function
  | Unreachable ->
    ctx, [UNREACHABLE]
  | Nop ->
@@ -147,8 +147,8 @@ and compile' ctx = function
    let end_label = ctx.label+1 in
    let a_ptr = ctx.ptr-1 in
    let ctx = {ctx with ptr=a_ptr; label=ctx.label+3} in
-   let ctx, tbody = compile' ctx (Block (ty, texp)) in
-   let ctx, fbody = compile' {ctx with ptr=a_ptr} (Block (ty, fexp)) in
+   let ctx, tbody = compile' ctx id (Block (ty, texp)) in
+   let ctx, fbody = compile' {ctx with ptr=a_ptr} id (Block (ty, fexp)) in
    ctx, [JUMPZ else_label] @ tbody @ [JUMP end_label; LABEL else_label] @ fbody @ [LABEL end_label]
  | Br x ->
    let num = Int32.to_int x.it in
@@ -197,11 +197,12 @@ and compile' ctx = function
    (* Will just push the pc *)
    (* trace ("Function call " ^ Int32.to_string v.it); *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it, id)]
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
+   
    (* trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret)))); *)
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI]
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI id]
  | Select ->
    (* trace "select"; *)
    let else_label = ctx.label in
@@ -254,7 +255,7 @@ let compile_func ctx idx func =
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
   trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
   (* Just params are now in the stack *)
-  let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
+  let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} 0l (Block (ret, func.it.body)) in
   trace ("---- function end " ^ string_of_int ctx.ptr);
   ctx,
   ( if false (* !Flags.trace *) then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
@@ -283,7 +284,7 @@ let resolve_to n lst =
   List.map (resolve_inst tab) lst
 
 let resolve_inst2 tab = function
- | CALL l -> CALL (Hashtbl.find tab l)
+ | CALL (l, id) -> CALL (Hashtbl.find tab l, id)
  | a -> a
 
 let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle}
@@ -299,16 +300,16 @@ let malloc_string mdle malloc str =
   done;
   res := [DUP 1; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
   (* array address is left *)
-  [PUSH (i len); CALL malloc] @ List.flatten (List.rev (!res))
+  [PUSH (i len); CALL (malloc, 0l)] @ List.flatten (List.rev (!res))
 
 let make_args mdle inst lst =
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i (List.length lst)); (* argc *)
-   PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
+   PUSH (i (List.length lst * 4)); CALL (malloc, 0l)] @ (* argv *)
   List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4 + !Flags.memory_offset); sz=None}]) lst)
 
 let simple_call mdle inst name =
-  try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name))]
+  try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name), 0l)]
   with Not_found -> []
 
 let init_fs_stack mdle inst =
@@ -323,7 +324,7 @@ let init_fs_stack mdle inst =
   let stack_ptr = asmjs - 16 in (* this is the difficult place *)
   let stack_max = stack_ptr + 1 in
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
-  [PUSH (i 1024); CALL malloc; DUP 1; DUP 1;
+  [PUSH (i 1024); CALL (malloc, 0l); DUP 1; DUP 1;
    STOREGLOBAL stack_ptr;
    BIN (I32 I32Op.Add);
    STOREGLOBAL stack_max]
@@ -369,15 +370,15 @@ let make_cxx_init mdle inst =
 let generic_stub m inst mname fname =
   try
   [STUB (mname ^ " . " ^ fname);
-   CALL (find_function_index m inst (Utf8.decode "_callArguments"));
+   CALL (find_function_index m inst (Utf8.decode "_callArguments"), 0l);
    DROP_N;
-   CALL (find_function_index m inst (Utf8.decode "_callMemory"));
+   CALL (find_function_index m inst (Utf8.decode "_callMemory"), 0l);
    (* Just handle zero or one return values *)
-   CALL (find_function_index m inst (Utf8.decode "_callReturns"));
+   CALL (find_function_index m inst (Utf8.decode "_callReturns"), 0l);
    JUMPI (-2);
    JUMP (-3);
    LABEL (-2);
-   CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
+   CALL (find_function_index m inst (Utf8.decode "_getReturn"), 0l); (* here we should do a type adjustment???? *)
    LABEL (-3);
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
@@ -455,7 +456,7 @@ let compile_test m func vs init inst =
   (* perhaps could do something with the function type *)
   (* one idea would be to use a debugging message *)
   let exit_code =
-    try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
+    try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem"), 0l); EXIT]
     with Not_found -> [EXIT] in
   let import_codes = List.map (fun im ->
      let mname = Utf8.encode im.module_name in
@@ -485,10 +486,10 @@ let compile_test m func vs init inst =
      (* invoke index, a1, a2*)
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
-       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
+       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number)), 0l); RETURN] else
      if mname = "env" && String.length fname > 8 && String.sub fname 0 8 = "_invoke_" then
        let number = String.sub fname 8 (String.length fname - 8) in
-       try [ (* STUB fname; *) CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number))); RETURN]
+       try [ (* STUB fname; *) CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number)), 0l); RETURN]
        with Not_found ->
          prerr_endline ("Warning: cannot find dynamic call number " ^ number);
          [RETURN] else
@@ -500,7 +501,7 @@ let compile_test m func vs init inst =
         ( prerr_endline "Warning, cannot find global variable TOTAL_MEMORY. Use emscripten-module-wrapper to run files that were generated by emscripten";
           [PUSH (i (1024*1024*1500)); RETURN] ) else
      if mname = "env" && fname = "setTempRet0" then
-        try [STUB "setTempRet0 (found)"; CALL (find_function_index m inst (Utf8.decode ("setTempRet0"))); RETURN]
+        try [STUB "setTempRet0 (found)"; CALL (find_function_index m inst (Utf8.decode ("setTempRet0")), 0l); RETURN]
         with Not_found -> [STUB "setTempRet0"; DROP 1; RETURN] else
 (*     if mname = "env" && fname = "_rintf" then [UNA (F32 F32Op.Nearest); RETURN] else *)
      if mname = "env" && fname = "_rintf" then [STUB "rintf"; RETURN] else
@@ -553,7 +554,7 @@ let compile_test m func vs init inst =
      trace ("Function " ^ string_of_int n ^ " at " ^ string_of_int l_acc);
      let x = resolve_to l_acc fcode in
      build (n+1) (x::acc) (List.length x + l_acc) tl in
-  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry] @ exit_code in
+  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL (!entry, 0l)] @ exit_code in
   let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
   trace ("Here, working");
   let flat_code = flatten_tl (List.rev codes) in
