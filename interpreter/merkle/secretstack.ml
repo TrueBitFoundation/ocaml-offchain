@@ -73,7 +73,7 @@ and compile' marked ctx id = function
       trace ("loop start " ^ string_of_int extra);
       let hidden = take extra ctx.stack in
       marked := hidden @ !marked;
-      Hashtbl.add info id (marked, 0);
+      Hashtbl.add info id (hidden, 0);
    end;
    let ctx = {ctx with bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0}::old_return} in
    let ctx = compile_block marked ctx lst in
@@ -87,7 +87,7 @@ and compile' marked ctx id = function
       trace ("call " ^ string_of_int extra);
       let hidden = take extra (popn (List.length par) ctx.stack) in
       marked := hidden @ !marked;
-      Hashtbl.add info id (marked, List.length par);
+      Hashtbl.add info id (hidden, List.length par);
    end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par; stack=make id (List.length ret) @ popn (List.length par) ctx.stack}
  | CallIndirect v ->
@@ -97,7 +97,7 @@ and compile' marked ctx id = function
       trace ("calli " ^ string_of_int extra);
       let hidden = take extra (popn (List.length par+1) ctx.stack) in
       marked := hidden @ !marked;
-      Hashtbl.add info id (marked, List.length par+1);
+      Hashtbl.add info id (hidden, List.length par+1);
    end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par-1; stack=make id (List.length ret) @ popn (List.length par + 1) ctx.stack}
  | If (ty, texp, fexp) ->

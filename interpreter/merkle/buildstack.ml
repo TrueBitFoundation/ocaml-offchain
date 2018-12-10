@@ -42,6 +42,8 @@ type ctx = {
   adjust_stack_f64 : var;
   
   orig_locals : int;
+  
+  func_idx : int;
 }
 
 (* perhaps should get everything as args, just be a C function: add them to env *)
@@ -133,7 +135,8 @@ let store_locals ctx =
       | F32Type -> [GetLocal var; Call ctx.store_local_f32]
       | F64Type -> [GetLocal var; Call ctx.store_local_f64]
       | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
-      res := !res @ (Const (it (I32 (Int32.of_int i))) :: lst)
+(*      res := !res @ (Const (it (I32 (Int32.of_int i))) :: lst) *)
+      res := !res @ lst
    done;
    !res
 
@@ -160,10 +163,21 @@ let store_top ctx = function
  | I64Type -> [SetGlobal ctx.g64; Const (it (I32 64l)); GetGlobal ctx.g64; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.adjust_stack_i64; GetGlobal ctx.g64]
  | F64Type -> [Call ctx.adjust_stack_f64]
 
+let store_hidden ctx id =
+  let exprs, _ = Hashtbl.find Secretstack.info id in
+  let dta = List.nth !Secretstack.func_info ctx.func_idx in
+  let handle e_id =
+     let (ty, var) = List.assoc e_id dta in
+     match ty with
+     | I32Type -> [GetLocal var; Call ctx.store_local_i32]
+     | F32Type -> [GetLocal var; Call ctx.store_local_f32]
+     | F64Type -> [GetLocal var; Call ctx.store_local_f64]
+     | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
+  List.flatten (List.map handle exprs)
+
 let rec process_inst ctx inst =
-  let id = Int32.of_int expr.at.right.line in
-  
-  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
+  let id = Int32.of_int inst.at.right.line in
+  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
    | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
@@ -292,7 +306,8 @@ let process m_orig =
       bottom = List.hd (List.rev pos_lst); *)
       label = 0;
       orig_locals = 0;
+      func_idx = 0;
     } in
-    let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i} f) pre_m.funcs} in
+    let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i; func_idx=i} f) pre_m.funcs} in
     res)
 
