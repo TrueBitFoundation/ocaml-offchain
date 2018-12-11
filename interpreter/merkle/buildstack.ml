@@ -168,23 +168,28 @@ let store_top ctx = function
  | F64Type -> [Call ctx.adjust_stack_f64]
 
 let store_hidden ctx id =
-  let exprs, _ = Hashtbl.find Secretstack.info id in
-  let dta = List.nth !Secretstack.func_info ctx.func_idx in
-  let handle e_id =
-     let (ty, var) = List.assoc e_id dta in
-     match ty with
-     | I32Type -> [GetLocal var; Call ctx.store_local_i32]
-     | F32Type -> [GetLocal var; Call ctx.store_local_f32]
-     | F64Type -> [GetLocal var; Call ctx.store_local_f64]
-     | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
-  List.flatten (List.map handle exprs)
+  try
+    let exprs, _ = Hashtbl.find Secretstack.info id in
+    let dta = List.nth !Secretstack.func_info ctx.func_idx in
+    let handle e_id =
+      let (ty, var) = List.assoc e_id dta in
+      match ty with
+      | I32Type -> [GetLocal var; Call ctx.store_local_i32]
+      | F32Type -> [GetLocal var; Call ctx.store_local_f32]
+      | F64Type -> [GetLocal var; Call ctx.store_local_f64]
+      | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
+    List.flatten (List.map handle exprs)
+  with Not_found -> []
 
 let rec process_inst ctx inst =
   let id = Int32.of_int inst.at.right.line in
-  let save_call =
-    try [Const (it (I32 (Int32.of_int (ctx.find_return_pc id)))); Call ctx.store_call]
-    with Not_found -> [] in
-  let s_block = [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ save_call), [])] in
+  let s_block2 () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
+  let s_block () =
+    let save_call =
+      try [Const (it (I32 (Int32.of_int (ctx.find_return_pc id)))); Call ctx.store_call]
+      with Not_found -> prerr_endline ("warning: call return location not found " ^ Int32.to_string id); [] in
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ save_call), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
    | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
@@ -194,10 +199,10 @@ let rec process_inst ctx inst =
   let res = match inst.it with
   | Block (ty, lst) -> [Block (ty, List.flatten (List.map (process_inst ctx) lst))]
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
-  | Loop (ty, lst) -> [Loop (ty, List.map it s_block @ List.flatten (List.map (process_inst ctx) lst))]
+  | Loop (ty, lst) -> [Loop (ty, List.map it (s_block2 ()) @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
-  | Call x -> s_block @ e_block (Call x) (ctx.var_type x.it) @ s_block
-  | CallIndirect x -> s_block @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block
+  | Call x -> s_block () @ e_block (Call x) (ctx.var_type x.it) @ s_block ()
+  | CallIndirect x -> (* prerr_endline ("at call " ^ Int32.to_string id); *) s_block () @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block ()
   | a -> [a] in
   List.map it res
 
@@ -233,7 +238,7 @@ let process m_orig =
   let return_pc = Hashtbl.create 100 in
   let handle i = function
    | Merkle.CALL (_, id) -> Hashtbl.add return_pc id i
-   | Merkle.CALLI id -> Hashtbl.add return_pc id i
+   | Merkle.CALLI id -> Hashtbl.add return_pc id i (* ; prerr_endline ("adding " ^ Int32.to_string id) *)
    | _ -> () in
   List.iteri handle code;
   let m = Secretstack.process m in
@@ -247,10 +252,10 @@ let process m_orig =
     let i_num = List.length (func_imports (it m)) in
     let ftypes = m.types @ [
       it (FuncType ([], [I32Type]));
-      it (FuncType ([I32Type; I32Type], []));
       it (FuncType ([I32Type], []));
-      it (FuncType ([I32Type; F32Type], []));
-      it (FuncType ([I32Type; F64Type], []));
+      it (FuncType ([], []));
+      it (FuncType ([F32Type], []));
+      it (FuncType ([F64Type], []));
       
       it (FuncType ([I32Type], [I32Type]));
       it (FuncType ([], []));

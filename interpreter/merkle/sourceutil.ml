@@ -9,8 +9,9 @@ let do_it x f = {x with it=f x.it}
 
 let it e = {it=e; at=no_region}
 
+let uniq = ref 1
+
 let relabel lst =
-   let uniq = ref 1 in
    let rec compile expr =
       incr uniq;
       {it=compile' expr.it; at={left=no_pos; right={file="label"; line= !uniq; column=0}}}

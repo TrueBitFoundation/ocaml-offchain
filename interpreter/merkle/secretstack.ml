@@ -94,7 +94,7 @@ and compile' marked ctx id = function
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
    let extra = ctx.ptr - ctx.locals - List.length par - 1 in
    if extra > 0 then begin
-      trace ("calli " ^ string_of_int extra);
+      trace ("calli " ^ string_of_int extra ^ " adding info for " ^ Int32.to_string id);
       let hidden = take extra (popn (List.length par+1) ctx.stack) in
       marked := hidden @ !marked;
       Hashtbl.add info id (hidden, List.length par+1);
