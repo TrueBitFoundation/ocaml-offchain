@@ -43,6 +43,7 @@ type ctx = {
   adjust_stack_f64 : var;
   
   orig_locals : int;
+  params : int;
   
   func_idx : int;
   
@@ -129,10 +130,25 @@ let determine_type tctx block =
   | Some x :: _ -> x
   | _ -> raise (Failure "typing error")
 
+let store_params ctx =
+(*   let num_locals = List.length ctx.tctx.Valid.locals in *)
+   let res = ref [] in
+   for i = 0 to ctx.params - 1 do
+      let var = it (Int32.of_int i) in
+      let lst = match Valid.local ctx.tctx var with
+      | I32Type -> [GetLocal var; Call ctx.store_local_i32]
+      | F32Type -> [GetLocal var; Call ctx.store_local_f32]
+      | F64Type -> [GetLocal var; Call ctx.store_local_f64]
+      | I64Type -> [Const (it (I32 64l)); GetLocal var; Store {ty=I64Type; align=0; offset=0l; sz=None}; Call ctx.store_local_i64] in
+(*      res := !res @ (Const (it (I32 (Int32.of_int i))) :: lst) *)
+      res := !res @ lst
+   done;
+   !res
+
 let store_locals ctx =
 (*   let num_locals = List.length ctx.tctx.Valid.locals in *)
    let res = ref [] in
-   for i = 0 to ctx.orig_locals - 1 do
+   for i = ctx.params to ctx.orig_locals - 1 do
       let var = it (Int32.of_int i) in
       let lst = match Valid.local ctx.tctx var with
       | I32Type -> [GetLocal var; Call ctx.store_local_i32]
@@ -190,6 +206,8 @@ let rec process_inst ctx inst =
       try [Const (it (I32 (Int32.of_int (ctx.find_return_pc id)))); Call ctx.store_call]
       with Not_found -> prerr_endline ("warning: call return location not found " ^ Int32.to_string id); [] in
     [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ save_call), [])] in
+  let s_block3 () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
    | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
@@ -201,8 +219,8 @@ let rec process_inst ctx inst =
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
   | Loop (ty, lst) -> [Loop (ty, List.map it (s_block2 ()) @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
-  | Call x -> s_block () @ e_block (Call x) (ctx.var_type x.it) @ s_block ()
-  | CallIndirect x -> (* prerr_endline ("at call " ^ Int32.to_string id); *) s_block () @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block ()
+  | Call x -> s_block () @ e_block (Call x) (ctx.var_type x.it) @ s_block3 ()
+  | CallIndirect x -> (* prerr_endline ("at call " ^ Int32.to_string id); *) s_block () @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block3 ()
   | a -> [a] in
   List.map it res
 
@@ -215,7 +233,7 @@ let process_function ctx f =
   let ctx = {ctx with tctx=Valid.func_context ctx.tctx f} in
   (* let FuncType (_, rets) = ctx.lookup_type f.it.ftype.it in *)
   let s_block = List.map it [
-     Call ctx.store_arg; If ([], List.map it (store_locals ctx), [])
+     Call ctx.store_arg; If ([], List.map it (store_params ctx), [])
   ] in
   do_it f (fun f -> {f with body=s_block @ List.flatten (List.map (process_inst ctx) f.body)})
 
@@ -246,6 +264,9 @@ let process m_orig =
   let orig_locals = List.map (fun f ->
       let FuncType (par,_) = Hashtbl.find ttab f.it.ftype.it in
       List.length f.it.locals + List.length par) m_orig.it.funcs in
+  let f_params = List.map (fun f ->
+      let FuncType (par,_) = Hashtbl.find ttab f.it.ftype.it in
+      List.length par) m_orig.it.funcs in
   (* Information about hidden variables is at [Secretstack.info] *)
   do_it m (fun m ->
     (* add function types *)
@@ -327,9 +348,10 @@ let process m_orig =
       bottom = List.hd (List.rev pos_lst); *)
       label = 0;
       orig_locals = 0;
+      params = 0;
       func_idx = 0;
       find_return_pc = (fun x -> Hashtbl.find return_pc x);
     } in
-    let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i; func_idx=i} f) pre_m.funcs} in
+    let res = {pre_m with funcs=List.mapi (fun i f -> process_function {ctx with orig_locals=List.nth orig_locals i; params=List.nth f_params i; func_idx=i} f) pre_m.funcs} in
     res)
 
