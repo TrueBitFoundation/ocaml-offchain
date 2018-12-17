@@ -47,6 +47,7 @@ type alu_code =
  | DebugInt
  | DebugString
  | DebugBuffer
+ | Breakpoint
 
 type reg =
  | Reg1
@@ -631,7 +632,7 @@ let print_conv64 = function
  | I64Op.ReinterpretFloat -> "reinterpret"
 
 exception FloatsDisabled
-
+exception BreakpointExn
 
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
@@ -688,11 +689,13 @@ let handle_alu vm r1 r2 r3 ireg = function
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ string_of_int ptr);
    i 0
+ | Breakpoint -> raise BreakpointExn
 
 open Ast
 
 let get_code = function
  | NOP -> noop
+ | BREAKPOINT _ -> {noop with alu_code=Breakpoint}
  | STUB _ -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
  | EXIT -> {noop with immed=I64 (Int64.of_int magic_pc); read_reg1 = Immed; pc_ch=StackReg}
@@ -865,6 +868,7 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.calltable_types.(x) <- value_to_int64 vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | EXIT -> vm.pc <- magic_pc
+ | BREAKPOINT _ -> raise BreakpointExn
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
@@ -1152,6 +1156,7 @@ let trace_step vm =
  if Array.length vm.code <= vm.pc then "Microp" else
  match vm.code.(vm.pc) with
  | NOP -> "NOP"
+ | BREAKPOINT _ -> "BREAKPOINT"
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
@@ -1213,6 +1218,7 @@ let trace_step vm =
 
 let trace_clean vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
+ | BREAKPOINT _ -> "BREAKPOINT"
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"

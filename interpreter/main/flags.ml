@@ -16,6 +16,8 @@ let debug_error = ref false
 
 let disable_float = ref false
 
+let br_mode = ref false
+
 let trace_from = ref (-1)
 
 let insert_error = ref (-1)

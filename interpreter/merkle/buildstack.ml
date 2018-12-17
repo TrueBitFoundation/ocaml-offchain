@@ -36,6 +36,7 @@ type ctx = {
 
   store_indirect : var;
   store_call : var;
+  store_pc : var;
 
   adjust_stack_i32 : var;
   adjust_stack_i64 : var;
@@ -199,15 +200,17 @@ let store_hidden ctx id =
 
 let rec process_inst ctx inst =
   let id = Int32.of_int inst.at.right.line in
-  let s_block2 () =
-    [Call ctx.count; If ([], List.map it (store_locals ctx), [])] in
-  let s_block () =
-    let save_call =
-      try [Const (it (I32 (Int32.of_int (ctx.find_return_pc id)))); Call ctx.store_call]
-      with Not_found -> prerr_endline ("warning: call return location not found " ^ Int32.to_string id); [] in
-    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ save_call), [])] in
-  let s_block3 () =
-    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id), [])] in
+  let i_loc =
+     try ctx.find_return_pc id
+     with Not_found -> 0 in
+  let s_block_loop () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ [Const (it (I32 (Int32.of_int i_loc))); Call ctx.store_pc]), [])] in
+  let s_block_call () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ [Const (it (I32 (Int32.of_int i_loc))); Call ctx.store_call; Const (it (I32 (Int32.of_int (i_loc-2)))); Call ctx.store_pc]), [])] in
+  let s_block_calli () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ [Const (it (I32 (Int32.of_int i_loc))); Call ctx.store_call; Const (it (I32 (Int32.of_int (i_loc-2)))); Call ctx.store_pc]), [])] in
+  let s_block_return () =
+    [Call ctx.count; If ([], List.map it (store_locals ctx @ store_hidden ctx id @ [Const (it (I32 (Int32.of_int i_loc))); Call ctx.store_pc]), [])] in
   let e_block call = function
    | FuncType (_, []) -> [call]
    | FuncType (_, [ty]) -> call :: store_top ctx ty (* adjust stack will have to check if it is critical *)
@@ -217,10 +220,10 @@ let rec process_inst ctx inst =
   let res = match inst.it with
   | Block (ty, lst) -> [Block (ty, List.flatten (List.map (process_inst ctx) lst))]
   | If (ty, l1, l2) -> [If (ty, List.flatten (List.map (process_inst ctx) l1), List.flatten (List.map (process_inst ctx) l2))]
-  | Loop (ty, lst) -> [Loop (ty, List.map it (s_block2 ()) @ List.flatten (List.map (process_inst ctx) lst))]
+  | Loop (ty, lst) -> [Loop (ty, List.map it (s_block_loop ()) @ List.flatten (List.map (process_inst ctx) lst))]
   (* Just before call, store all locals (arguments will be stored later, but what if builtin) *)
-  | Call x -> s_block () @ e_block (Call x) (ctx.var_type x.it) @ s_block3 ()
-  | CallIndirect x -> (* prerr_endline ("at call " ^ Int32.to_string id); *) s_block () @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block3 ()
+  | Call x -> s_block_call () @ e_block (Call x) (ctx.var_type x.it) @ s_block_return ()
+  | CallIndirect x -> (* prerr_endline ("at call " ^ Int32.to_string id); *) s_block_calli () @ [Call ctx.store_indirect] @ e_block (CallIndirect x) (ctx.lookup_type x.it) @ s_block_return ()
   | a -> [a] in
   List.map it res
 
@@ -252,9 +255,11 @@ let list_to_map lst =
 
 let process m_orig =
   let m = Secretstack.relabel m_orig in
+  Flags.br_mode := true;
   let code = Run.get_code m in
   let return_pc = Hashtbl.create 100 in
   let handle i = function
+   | Merkle.BREAKPOINT id -> Hashtbl.add return_pc id i
    | Merkle.CALL (_, id) -> Hashtbl.add return_pc id i
    | Merkle.CALLI id -> Hashtbl.add return_pc id i (* ; prerr_endline ("adding " ^ Int32.to_string id) *)
    | _ -> () in
@@ -310,6 +315,7 @@ let process m_orig =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "testStep"; idesc=it (FuncImport count_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeIndirect"; idesc=it (FuncImport adjust_stack_i32)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storeReturnPC"; idesc=it (FuncImport store_type_i32)};
+       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "storePC"; idesc=it (FuncImport store_type_i32)};
     ] in
     let imps = m.imports @ added in
     (*
@@ -342,6 +348,7 @@ let process m_orig =
       is_critical = it (Int32.of_int (i_num+10));
       store_indirect = it (Int32.of_int (i_num+11));
       store_call = it (Int32.of_int (i_num+12));
+      store_pc = it (Int32.of_int (i_num+13));
       var_type = Hashtbl.find ftab;
       lookup_type = Hashtbl.find ttab;
       (* possible = (fun loc -> Hashtbl.mem pos_tab loc);

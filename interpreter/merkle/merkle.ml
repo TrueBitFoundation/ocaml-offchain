@@ -66,6 +66,7 @@ type inst =
  | SETGLOBALS of int
  | SETMEMORY of int
  | CUSTOM of int
+ | BREAKPOINT of Int32.t
 
 type control = {
   target : int;
@@ -81,6 +82,7 @@ type context = {
   f_types2 : (Int32.t, func_type) Hashtbl.t;
   block_return : control list;
   mdle : Ast.module_';
+  add_points : bool;
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
@@ -140,7 +142,7 @@ and compile' ctx id = function
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr+rets; rets=rets; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
    (* trace ("loop end " ^ string_of_int ctx.ptr); *)
-   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
+   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ ( if ctx.add_points then [BREAKPOINT id] else [] ) @ body
  | If (ty, texp, fexp) ->
    (* trace ("if " ^ string_of_int ctx.ptr); *)
    let else_label = ctx.label in
@@ -197,12 +199,13 @@ and compile' ctx id = function
    (* Will just push the pc *)
    (* trace ("Function call " ^ Int32.to_string v.it); *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it, id)]
+   let br = if ctx.add_points then [BREAKPOINT id] else [] in
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, br @ [CALL (Int32.to_int v.it, id)] @ br
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
-   
    (* trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret)))); *)
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI id]
+   let br = if ctx.add_points then [BREAKPOINT id] else [] in
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, br @ [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI id] @ br
  | Select ->
    (* trace "select"; *)
    let else_label = ctx.label in
@@ -287,8 +290,7 @@ let resolve_inst2 tab = function
  | CALL (l, id) -> CALL (Hashtbl.find tab l, id)
  | a -> a
 
-let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle}
-
+let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle; add_points=false}
 
 let malloc_string mdle malloc str =
   let open Memory in
@@ -545,7 +547,7 @@ let compile_test m func vs init inst =
      generic_stub m inst mname fname ) f_imports in
   let module_codes = List.mapi (fun i f ->
      if f = func then trace "*************** CURRENT ";
-     compile_func {(empty_ctx m) with f_types2=ttab; f_types=ftab} (i + List.length f_imports) f) m.funcs in
+     compile_func {(empty_ctx m) with f_types2=ttab; f_types=ftab; add_points = !Flags.br_mode} (i + List.length f_imports) f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc l_acc = function
    | [] -> acc
