@@ -39,6 +39,8 @@ let add_arg source = args := !args @ [source]
 
 let quote s = "\"" ^ String.escaped s ^ "\""
 
+let inter_mode = ref false
+
 let merge_mode = ref false
 let float_mode = ref false
 let float_error_mode = ref false
@@ -81,6 +83,7 @@ let argspec = Arg.align
   "-t", Arg.Set Flags.trace, " trace execution";
   "-v", Arg.Unit banner, " show version";
 
+  "-inter", Arg.Set inter_mode, " start execution at an intermediate state";
   "-critical", Arg.Set critical_mode, " find the critical path to step";
   "-limit-stack", Arg.Set check_stack_mode, " check sizes of stack frames";
   "-build-stack", Arg.Set buildstack_mode, " build the stack for critical path";
@@ -199,6 +202,9 @@ let () =
       let m = Critical.process m in
       Run.create_sexpr_file "critical.wast" () (fun () -> m);
       Run.create_binary_file "critical.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !inter_mode, !lst with
+    | true, m :: _ -> Loadstate.run m
     | _ -> () );
     ( match !secret_stack_mode, !lst with
     | true, m :: _ ->
