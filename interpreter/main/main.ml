@@ -54,6 +54,7 @@ let underscore_mode = ref false
 let counter_mode = ref false
 let test_counter_mode = ref false
 let handle_nan_mode = ref false
+let dyncall_mode = ref false
 
 let critical_mode = ref false
 let buildstack_mode = ref false
@@ -109,6 +110,7 @@ let argspec = Arg.align
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-test-counter", Arg.Set test_counter_mode, " add a counter variable to the file (new test version)";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
+  "-dyncall", Arg.Set dyncall_mode, " simplify dynamic calls";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
@@ -229,6 +231,12 @@ let () =
       let m = Intfloat.process a b in
       Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !dyncall_mode, !lst with
+    | true, a :: _ ->
+      let m = Dyncall.process a in
+      Run.create_sexpr_file "dyncall.wast" () (fun () -> m);
+      Run.create_binary_file "dyncall.wasm" () (fun () -> m)
     | _ -> () );
     ( match !float_error_mode, !lst with
     | true, a :: _ ->
