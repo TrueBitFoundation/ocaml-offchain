@@ -159,9 +159,15 @@ let add_globals m fn =
      module_name=Utf8.decode "env";
      item_name=Utf8.decode "memory";
   } in
+  let table = if other_imports_nomem m = [] then [] else [
+  elem {idesc=elem (TableImport (TableType ({min=100000l; max=None}, AnyFuncType)));
+     module_name=Utf8.decode "env";
+     item_name=Utf8.decode "table";
+  }
+  ] in
   {m with it={(m.it) with funcs = funcs_a; data=m.it.data@new_data;
      globals = List.map (remap_global (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.globals;
-     imports = List.rev !g_imports @ func_imports m @ other_imports_nomem m @ [elem mem];
+     imports = List.rev !g_imports @ func_imports m @ table @ [elem mem];
      exports = exports_a;
      elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems;
   }}
