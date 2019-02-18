@@ -321,14 +321,16 @@ let add_input vm i fname =
   let open Mrun in
   vm.input.file_name.(i) <- terminate fname;
   let fname = if !Flags.input_out then fname ^ ".out" else fname in
-  let ch = open_in_bin fname in
-  let sz = in_channel_length ch in
-  vm.input.file_size.(i) <- sz;
-  let dta = Bytes.create sz in
-  really_input ch dta 0 sz;
-  close_in ch;
-  vm.input.file_data.(i) <- dta;
-  trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+  try
+    let ch = open_in_bin fname in
+    let sz = in_channel_length ch in
+    vm.input.file_size.(i) <- sz;
+    let dta = Bytes.create sz in
+    really_input ch dta 0 sz;
+    close_in ch;
+    vm.input.file_data.(i) <- dta;
+    trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+  with _ -> prerr_endline ("Warning: cannot find file " ^ fname )
 
 let output_files vm =
   let open Mrun in

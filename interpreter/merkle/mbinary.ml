@@ -432,6 +432,7 @@ let rec makeMerkle16 arr idx level =
        if level = 0 then ( if idx < Array.length arr then arr.(idx) else ( (* prerr_endline "here" ; *) zeroword16 ) )
        else keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) in
      Hashtbl.add cache16 key res;
+(*     prerr_endline ("here " ^ w256_to_string res); *)
      res
 
 let rec makeMerkle arr idx level =

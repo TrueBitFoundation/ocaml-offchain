@@ -370,6 +370,11 @@ let make_cxx_init mdle inst =
   [STUB "Initialization finished"] *)
 
 let generic_stub m inst mname fname =
+    try [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode "_finalizeSystem"), 0l); EXIT]
+    with Not_found -> [STUB (mname ^ " . " ^ fname); EXIT]
+
+(*
+let generic_stub m inst mname fname =
   try
   [STUB (mname ^ " . " ^ fname);
    CALL (find_function_index m inst (Utf8.decode "_callArguments"), 0l);
@@ -384,6 +389,7 @@ let generic_stub m inst mname fname =
    LABEL (-3);
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
+*)
 
 let mem_init_size m =
   if !Flags.run_wasm || !Flags.disable_float then Byteutil.pow2 (!Flags.memory_size - 13) else
