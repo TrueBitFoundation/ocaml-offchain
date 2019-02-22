@@ -431,7 +431,7 @@ let handle_exit vm selected =
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
   end;
   if selected && !Flags.output_io_proof then begin
-      Printf.printf "{\"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.to_hex (Mbinary.hash_io vm)) vm.step (print_file_names vm)
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_io_to_string vm) (Mproof.to_hex (Mbinary.hash_io vm)) vm.step (print_file_names vm)
   end
 
 let run_test_aux vm =
