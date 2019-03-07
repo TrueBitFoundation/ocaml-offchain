@@ -264,7 +264,7 @@ let get_vm_string vm loc =
 let get_vm_buffer vm loc len =
   let res = ref "" in
 (*  let loc = ref (get_memory_int vm loc) in *)
-  for i = 0 to len - 1 do
+  for i = 0 to min (len - 1) 256 do
     res := !res ^ String.make 1 (get_memory_char vm (loc+i));
   done;
   !res
