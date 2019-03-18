@@ -433,6 +433,11 @@ let generate_exit id_to_local (lst, others) =
 
 let compile_test m func vs init inst =
   (* debug_exports m; *)
+  (try
+      let g_ind = find_global_index (elem m) (Utf8.decode "MEMORY_OFFSET") in
+      let g = List.nth m.globals g_ind in
+      Flags.memory_offset := value_to_int (Eval.eval_const inst g.it.value)
+   with Not_found -> () );
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));

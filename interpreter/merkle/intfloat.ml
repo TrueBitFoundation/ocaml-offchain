@@ -157,5 +157,7 @@ let convert_float m =
   do_it m (fun m -> {m with funcs=List.map convert_func m.funcs; globals=List.map convert_global m.globals})
 
 let process a b =
-  convert_float (convert_types (merge a b))
-  
+  let res = convert_float (convert_types (merge a b)) in
+  (* Need to add memory offset here *)
+  add_i32_global res "MEMORY_OFFSET" (!Flags.memory_offset)
+
