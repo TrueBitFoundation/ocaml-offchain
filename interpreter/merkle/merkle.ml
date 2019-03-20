@@ -541,7 +541,7 @@ let compile_test m func vs init inst =
           PUSH (I32 0l); LOADGLOBAL frame_stack; BIN (I32 I32Op.Sub); STOREGLOBAL frame_stack;
           LOADGLOBAL call_stack; PUSH (I32 1l); BIN (I32 I32Op.Sub); STOREGLOBAL call_stack;
           RETURN; LABEL (-11); UNREACHABLE] else
-     if mname = "env" && fname = "usegas" then
+     if mname = "env" && fname = "usegas" || mname = "env" && fname = "gas" then
        try
          let _ (* initial gas limit *) = find_global_index (elem m) (Utf8.decode "GAS_LIMIT") in
          let num_globals = List.length (global_imports (elem m)) + List.length m.globals in

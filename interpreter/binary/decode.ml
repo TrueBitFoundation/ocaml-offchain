@@ -95,7 +95,11 @@ let rec vsN n s =
   else Int64.(logor x (shift_left (vsN (n - 7) s) 7))
 
 let vu1 s = Int64.to_int (vuN 1 s)
-let vu32 s = Int64.to_int32 (vuN 32 s)
+let vu32 s =
+  let res = Int64.to_int32 (vuN 32 s) in
+  (* prerr_endline ("Got int " ^ Int32.to_string res); *)
+  res
+
 let vs7 s = Int64.to_int (vsN 7 s)
 let vs32 s = Int64.to_int32 (vsN 32 s)
 let vs64 s = vsN 64 s
@@ -116,8 +120,10 @@ let vec f s = let n = len32 s in list f n s
 
 let name s =
   let pos = pos s in
-  try Utf8.decode (string s) with Utf8.Utf8 ->
-    error s pos "invalid UTF-8 encoding"
+  let str = string s in
+  (* prerr_endline ("??? " ^ str) ; *)
+  try Utf8.decode str with Utf8.Utf8 ->
+    ( prerr_endline ("??? " ^ str) ; error s pos "invalid UTF-8 encoding" )
 
 let sized f s =
   let size = len32 s in
