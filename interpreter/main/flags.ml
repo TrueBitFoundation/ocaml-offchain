@@ -76,3 +76,5 @@ let output_io_proof = ref false
 
 let sbrk_offset = ref 0l
 
+let config_from_file = ref false
+

@@ -733,11 +733,11 @@ let get_code = function
  | TEST op -> {noop with read_reg1=StackIn0; write1=(Reg1, StackOut1); alu_code=Test op}
  | BIN op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Binary op; stack_ch=StackDec}
  | CMP op -> {noop with read_reg1=StackIn1; read_reg2=StackIn0; write1=(Reg1, StackOut2); alu_code=Compare op; stack_ch=StackDec}
- | SETSTACK x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetStack)}
- | SETCALLSTACK x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetCallStack)}
- | SETGLOBALS x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetGlobals)}
- | SETMEMORY x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetMemory)}
- | SETTABLE x -> {noop with immed=i x; read_reg1=Immed; write1=(Reg1,SetTableTypes); write2=(Reg1,SetTable)}
+ | SETSTACK -> {noop with read_reg1=StackIn0; write1=(Reg1,SetStack); stack_ch=StackDec}
+ | SETCALLSTACK -> {noop with read_reg1=StackIn0; write1=(Reg1,SetCallStack); stack_ch=StackDec}
+ | SETMEMORY -> {noop with read_reg1=StackIn0; write1=(Reg1,SetMemory); stack_ch=StackDec}
+ | SETGLOBALS -> {noop with read_reg1=StackIn0; write1=(Reg1,SetGlobals); stack_ch=StackDec}
+ | SETTABLE -> {noop with read_reg1=StackIn0; write1=(Reg1,SetTable); stack_ch=StackDec}
  | CUSTOM x -> {noop with immed=i x; read_reg1=StackIn0; read_reg2=InputSizeIn; write1=(Reg1,CustomFileWrite); write2=(Reg2,InputSizeOut)}
 
 let m_step vm op =
@@ -1041,26 +1041,36 @@ let vm_step vm = match vm.code.(vm.pc) with
    inc_pc vm;
    vm.memsize <- vm.memsize + value_to_int vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
- | SETSTACK v ->
+ | SETSTACK ->
+   let v = value_to_int vm.stack.(vm.stack_ptr-1) in
    let sz = pow2 v in
    vm.stack <- Array.make sz (i 0);
+   vm.stack_ptr <- vm.stack_ptr - 1;
    inc_pc vm
- | SETCALLSTACK v ->
+ | SETCALLSTACK ->
+   let v = value_to_int vm.stack.(vm.stack_ptr-1) in
    let sz = pow2 v in
    vm.call_stack <- Array.make sz 0;
+   vm.stack_ptr <- vm.stack_ptr - 1;
    inc_pc vm
- | SETTABLE v ->
+ | SETTABLE ->
+   let v = value_to_int vm.stack.(vm.stack_ptr-1) in
    let sz = pow2 v in
    vm.calltable <- Array.make sz (-1);
    vm.calltable_types <- Array.make sz 0L;
+   vm.stack_ptr <- vm.stack_ptr - 1;
    inc_pc vm
- | SETMEMORY v ->
+ | SETMEMORY ->
+   let v = value_to_int vm.stack.(vm.stack_ptr-1) in
    let sz = pow2 v in
    vm.memory <- Array.make sz 0L;
+   vm.stack_ptr <- vm.stack_ptr - 1;
    inc_pc vm
- | SETGLOBALS v ->
+ | SETGLOBALS ->
+   let v = value_to_int vm.stack.(vm.stack_ptr-1) in
    let sz = pow2 v in
    vm.globals <- Array.make sz (i 0);
+   vm.stack_ptr <- vm.stack_ptr - 1;
    inc_pc vm
  | CUSTOM x ->
    inc_pc vm;
@@ -1209,11 +1219,11 @@ let trace_step vm =
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
- | SETSTACK v -> "SETSTACK"
- | SETCALLSTACK v -> "SETCALLSTACK"
- | SETTABLE v -> "SETTABLE"
- | SETMEMORY v -> "SETMEMORY"
- | SETGLOBALS v -> "SETGLOBALS"
+ | SETSTACK -> "SETSTACK"
+ | SETCALLSTACK -> "SETCALLSTACK"
+ | SETTABLE -> "SETTABLE"
+ | SETMEMORY -> "SETMEMORY"
+ | SETGLOBALS -> "SETGLOBALS"
  | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let trace_clean vm = match vm.code.(vm.pc) with
@@ -1257,11 +1267,11 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | CMP op -> "CMP"
  | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
- | SETSTACK v -> "SETSTACK"
- | SETCALLSTACK v -> "SETCALLSTACK"
- | SETTABLE v -> "SETTABLE"
- | SETMEMORY v -> "SETMEMORY"
- | SETGLOBALS v -> "SETGLOBALS"
+ | SETSTACK -> "SETSTACK"
+ | SETCALLSTACK -> "SETCALLSTACK"
+ | SETTABLE -> "SETTABLE"
+ | SETMEMORY -> "SETMEMORY"
+ | SETGLOBALS -> "SETGLOBALS"
  | CUSTOM x -> "CUSTOM " ^ string_of_int x
 
 let stack_to_string vm n =

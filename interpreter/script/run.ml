@@ -332,6 +332,14 @@ let add_input vm i fname =
     trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
   with _ -> prerr_endline ("Warning: cannot find file " ^ fname )
 
+let add_input_data vm i fname dta =
+  let open Mrun in
+  let sz = Bytes.length dta in
+  vm.input.file_name.(i) <- terminate fname;
+  vm.input.file_size.(i) <- sz;
+  vm.input.file_data.(i) <- dta;
+  trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+
 let output_files vm =
   let open Mrun in
   for i = 0 to Array.length vm.input.file_name - 1 do
@@ -367,6 +375,22 @@ let print_file_names vm =
 
 let (@) a b = List.rev_append (List.rev a) b
 
+let create_config () =
+  let res = Bytes.make 32 '\000' in
+  (* stack should be first *)
+  Bytes.set res 0 (Char.chr (!Flags.stack_size));
+  Bytes.set res 1 (Char.chr (!Flags.memory_size));
+  Bytes.set res 2 (Char.chr (!Flags.table_size));
+  Bytes.set res 3 (Char.chr (!Flags.globals_size));
+  Bytes.set res 4 (Char.chr (!Flags.call_size));
+  (* gas limit *)
+  let acc = ref !Flags.gas_limit in
+  for i = 0 to 7 do
+      Bytes.set res (5+7-i) (Char.chr (!acc land 0xff));
+      acc := !acc / 256
+  done;
+  res
+
 let setup_vm inst mdle func vs =
 (*  prerr_endline "Setting up"; *)
   let open Merkle in
@@ -382,14 +406,19 @@ let setup_vm inst mdle func vs =
   let g_init = Mrun.setup_globals mdle inst in
   let mem_init = Mrun.init_memory mdle inst in
   trace ("Initing " ^ string_of_int (List.length mem_init));
-  let inits = vm_init mdle @ table_init @ mem_init @ g_init @ init2 @ cxx_init @ init in
+  let vm_code = vm_init mdle in
+  let inits = vm_code @ table_init @ mem_init @ g_init @ init2 @ cxx_init @ init in
   trace "Compiling";
   let code, f_resolve = Merkle.compile_test mdle func vs (inits) inst in
   trace "Compiled";
   let vm = Mrun.create_vm code in
   Mrun.setup_memory vm mdle inst;
-  Mrun.setup_calltable vm mdle inst f_resolve (List.length (vm_init mdle));
-  List.iteri (add_input vm) !Flags.input_files;
+  Mrun.setup_calltable vm mdle inst f_resolve (List.length vm_code);
+  if !Flags.config_from_file then List.iteri (add_input vm) !Flags.input_files else
+  begin
+    add_input_data vm 0 "config" (create_config ());
+    List.iteri (fun i a -> add_input vm (i+1) a) !Flags.input_files;
+  end;
 (*  prerr_endline "Initialized"; *)
   vm
 

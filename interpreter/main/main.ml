@@ -123,6 +123,7 @@ let argspec = Arg.align
   "-debug-error", Arg.Set Flags.debug_error, " try to find out why the interpreter failed";
   "-m", Arg.Set Flags.merkle, " merkle proof mode";
   "-asmjs", Arg.Set Flags.asmjs, " pre-processing for asm.js";
+  "-config-from-file", Arg.Set Flags.config_from_file, " when this flag is set, the configuration file is the first specified file";
   "-micro", Arg.Set Flags.microstep, " merkle proof mode (microsteps)";
   "-init", Arg.Set Flags.init, " output initial state hash of a test case";
   "-init-vm", Arg.Set Flags.init_vm, " output initial vm of a test case";

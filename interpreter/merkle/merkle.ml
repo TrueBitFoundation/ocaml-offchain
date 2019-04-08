@@ -60,11 +60,11 @@ type inst =
  | OUTPUTDATA
  | INITCALLTABLE of int
  | INITCALLTYPE of int
- | SETSTACK of int
- | SETCALLSTACK of int
- | SETTABLE of int
- | SETGLOBALS of int
- | SETMEMORY of int
+ | SETSTACK
+ | SETCALLSTACK
+ | SETTABLE
+ | SETGLOBALS
+ | SETMEMORY
  | CUSTOM of int
  | BREAKPOINT of Int32.t
 
@@ -335,10 +335,18 @@ let init_system mdle inst =
   (* This is the last point that we can use to initialize metering *)
   let num_globals = List.length (global_imports (elem mdle)) + List.length mdle.globals in
   ( try
-      let initial_gas_limit = find_global_index (elem mdle) (Utf8.decode "GAS_LIMIT") in
+      let (* initial_gas_limit *) _ = find_global_index (elem mdle) (Utf8.decode "GAS_LIMIT") in
       let gas_limit = num_globals in
       let gas = num_globals + 1 in
-      [LOADGLOBAL initial_gas_limit; CONV (I64 I64Op.ExtendUI32); PUSH (I64 1000000L); BIN (I64 I64Op.Mul); STOREGLOBAL gas_limit; PUSH (I64 0L); STOREGLOBAL gas]
+      [PUSH (i 0); PUSH (i 5); INPUTDATA; CONV (I64 I64Op.ExtendUI32);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 6); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 7); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 8); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 9); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 10); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 11); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 256L); BIN (I64 I64Op.Mul); PUSH (i 0); PUSH (i 12); INPUTDATA; CONV (I64 I64Op.ExtendUI32); BIN (I64 I64Op.Add);
+       PUSH (I64 1000000L); BIN (I64 I64Op.Mul); STOREGLOBAL gas_limit; PUSH (I64 0L); STOREGLOBAL gas]
     with Not_found -> [] ) @
   simple_call mdle inst "__post_instantiate" @
   (if (try ignore (find_global_index (elem mdle) (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
@@ -373,24 +381,6 @@ let generic_stub m inst mname fname =
     try [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode "_finalizeSystem"), 0l); EXIT]
     with Not_found -> [STUB (mname ^ " . " ^ fname); EXIT]
 
-(*
-let generic_stub m inst mname fname =
-  try
-  [STUB (mname ^ " . " ^ fname);
-   CALL (find_function_index m inst (Utf8.decode "_callArguments"), 0l);
-   DROP_N;
-   CALL (find_function_index m inst (Utf8.decode "_callMemory"), 0l);
-   (* Just handle zero or one return values *)
-   CALL (find_function_index m inst (Utf8.decode "_callReturns"), 0l);
-   JUMPI (-2);
-   JUMP (-3);
-   LABEL (-2);
-   CALL (find_function_index m inst (Utf8.decode "_getReturn"), 0l); (* here we should do a type adjustment???? *)
-   LABEL (-3);
-   RETURN]
-  with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
-*)
-
 let mem_init_size m =
   if !Flags.run_wasm || !Flags.disable_float then Byteutil.pow2 (!Flags.memory_size - 13) else
   let open Ast in
@@ -402,6 +392,7 @@ let mem_init_size m =
     res := Int32.to_int min) (List.map (fun a -> a.it.mtype) m.memories);
   !res
 
+(*
 let vm_init m =
   [ PUSH (i (mem_init_size m)); GROW;
     SETSTACK !Flags.stack_size;
@@ -409,6 +400,15 @@ let vm_init m =
     SETCALLSTACK !Flags.call_size;
     SETGLOBALS !Flags.globals_size;
     SETTABLE !Flags.table_size ]
+*)
+
+let vm_init m =
+  [ PUSH (i (mem_init_size m)); GROW;
+    PUSH (i 0); PUSH (i 0); INPUTDATA; SETSTACK;
+    PUSH (i 0); PUSH (i 1); INPUTDATA; SETMEMORY;
+    PUSH (i 0); PUSH (i 2); INPUTDATA; SETTABLE;
+    PUSH (i 0); PUSH (i 3); INPUTDATA; SETGLOBALS;
+    PUSH (i 0); PUSH (i 4); INPUTDATA; SETCALLSTACK ]
 
 let flatten_tl lst =
   let rec do_flatten acc = function
@@ -547,7 +547,8 @@ let compile_test m func vs init inst =
          let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
          let gas_limit = num_globals in
          let gas = num_globals + 1 in
-         [CONV (I64 I64Op.ExtendUI32); LOADGLOBAL gas; BIN (I64 I64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas; (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (I64 I64Op.GtU); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
+         [CONV (I64 I64Op.ExtendUI32); LOADGLOBAL gas; BIN (I64 I64Op.Add); STOREGLOBAL gas; LOADGLOBAL gas;
+          (* STUB "env . _debugInt"; *) LOADGLOBAL gas_limit; CMP (I64 I64Op.GtU); JUMPI (-10); RETURN; LABEL (-10); UNREACHABLE]
        with Not_found -> [ STUB "env . _debugInt"; DROP 1; RETURN] else
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
