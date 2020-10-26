@@ -1,11 +1,9 @@
 
-open Merkle
 open Values
 open Mrun
 open Mbinary
 open Byteutil
-
-let trace = Merkle.trace
+open Sourceutil
 
 let to_hex a = "\"0x" ^ w256_to_string a ^ "\""
 
@@ -732,6 +730,18 @@ let vm_to_string vm =
   " \"stack_ptr\": " ^ string_of_int vm.bin_stack_ptr ^ "," ^
   " \"call_ptr\": " ^ string_of_int vm.bin_call_ptr ^ "," ^
   " \"memsize\": " ^ string_of_int vm.bin_memsize ^ " " ^
+  "}"
+
+let vm_io_to_string vm =
+  let code_bin = map_hash (fun v -> microp_word (get_code v)) vm.code in
+  let input_size_bin = map_hash u256 vm.input.file_size in
+  let input_name_bin = map_hash string_to_root vm.input.file_name in
+  let input_data_bin = map_hash bytes_to_root vm.input.file_data in
+  "{" ^
+  " \"code\": " ^ to_hex code_bin ^ "," ^
+  " \"input_size\": " ^ to_hex input_size_bin ^ "," ^
+  " \"input_name\": " ^ to_hex input_name_bin ^ "," ^
+  " \"input_data\": " ^ to_hex input_data_bin ^
   "}"
 
 let proof3_to_string (m, vm, loc) =

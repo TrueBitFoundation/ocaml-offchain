@@ -5,6 +5,7 @@ open Ast
 open Source
 open Types
 open Values
+open Sourceutil
 
 let (@) a b = List.rev_append (List.rev a) b
 
@@ -15,64 +16,11 @@ let _ =
   Hashtbl.add custom_calls "_readBlock" 1;
   Hashtbl.add custom_calls "_internalStep" 2
 
-let trace = Byteutil.trace
-
 (* perhaps we need to link the modules first *)
 
 (* have a separate call stack? *)
 
 (* perhaps the memory will include the stack? nope *)
-
-let value_bool v = not (v = I32 0l || v = I64 0L)
-
-let value_to_int = function
- | I32 i -> Int32.to_int i
- | I64 i -> Int64.to_int i
- | _ -> 0
-
-let value_to_int64 = function
- | I32 i -> Int64.of_int32 i
- | I64 i -> i
- | _ -> 0L
-
-let i x = I32 (Int32.of_int x)
-
-let is_float_op = function
- | I32 _ | I64 _ -> false
- | _ -> true
-
-let req_type = function
- | I32 I32Op.ExtendSI32 -> I32Type
- | I32 I32Op.ExtendUI32 -> I32Type
- | I32 I32Op.WrapI64 -> I64Type
- | I32 I32Op.TruncSF32 -> F32Type
- | I32 I32Op.TruncUF32 -> F32Type
- | I32 I32Op.TruncSF64 -> F64Type
- | I32 I32Op.TruncUF64 -> F64Type
- | I32 I32Op.ReinterpretFloat -> F32Type
- | I64 I64Op.ExtendSI32 -> I32Type
- | I64 I64Op.ExtendUI32 -> I32Type
- | I64 I64Op.WrapI64 -> I64Type
- | I64 I64Op.TruncSF32 -> F32Type
- | I64 I64Op.TruncUF32 -> F32Type
- | I64 I64Op.TruncSF64 -> F64Type
- | I64 I64Op.TruncUF64 -> F64Type
- | I64 I64Op.ReinterpretFloat -> F64Type
- | F32 F32Op.ConvertSI32 -> I32Type
- | F32 F32Op.ConvertUI32 -> I32Type
- | F32 F32Op.ConvertSI64 -> I64Type
- | F32 F32Op.ConvertUI64 -> I64Type
- | F32 F32Op.PromoteF32 -> F32Type
- | F32 F32Op.DemoteF64 -> F64Type
- | F32 F32Op.ReinterpretInt -> I32Type
- 
- | F64 F64Op.ConvertSI32 -> I32Type
- | F64 F64Op.ConvertUI32 -> I32Type
- | F64 F64Op.ConvertSI64 -> I64Type
- | F64 F64Op.ConvertUI64 -> I64Type
- | F64 F64Op.PromoteF32 -> F32Type
- | F64 F64Op.DemoteF64 -> F64Type
- | F64 F64Op.ReinterpretInt -> I64Type
 
 type inst =
  | EXIT
@@ -82,7 +30,7 @@ type inst =
  | JUMPI of int
  | JUMPZ of int
  | JUMPFORWARD of int (* size of jump table *)
- | CALL of int
+ | CALL of int * Int32.t
  | LABEL of int
  | RETURN
  | LOAD of loadop
@@ -95,7 +43,7 @@ type inst =
  | STOREGLOBAL of int
  | CURMEM
  | GROW                     (* Grow memory *)
- | CALLI                    (* indirect call *)
+ | CALLI of Int32.t                   (* indirect call (extra ID) *)
  | CHECKCALLI of Int64.t    (* check type of indirect call *)
  | PUSH of value                  (* constant *)
  | TEST of testop                    (* numeric test *)
@@ -118,6 +66,7 @@ type inst =
  | SETGLOBALS of int
  | SETMEMORY of int
  | CUSTOM of int
+ | BREAKPOINT of Int32.t
 
 type control = {
   target : int;
@@ -133,11 +82,10 @@ type context = {
   f_types2 : (Int32.t, func_type) Hashtbl.t;
   block_return : control list;
   mdle : Ast.module_';
+  add_points : bool;
 }
 
 (* Push the break points to stack? they can have own stack, also returns will have the same *)
-
-let rec make a n = if n = 0 then [] else a :: make a (n-1) 
 
 let rec adjust_stack_aux diff num =
   if num = 0 then [] else
@@ -151,8 +99,8 @@ let adjust_stack diff num =
   ( (* trace ("Adjusting stack: " ^ string_of_int num  ^ " return values, " ^ string_of_int diff ^ " extra values"); *)
     adjust_stack_aux diff num @ [DROP diff] )
 
-let rec compile ctx expr = compile' ctx expr.it
-and compile' ctx = function
+let rec compile ctx expr = compile' ctx (Int32.of_int expr.at.right.line) expr.it
+and compile' ctx id = function
  | Unreachable ->
    ctx, [UNREACHABLE]
  | Nop ->
@@ -194,15 +142,15 @@ and compile' ctx = function
    let ctx = {ctx with label=ctx.label+1; bptr=ctx.bptr+1; block_return={level=ctx.ptr+rets; rets=rets; target=start_label}::old_return} in
    let ctx, body = compile_block ctx lst in
    (* trace ("loop end " ^ string_of_int ctx.ptr); *)
-   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ body
+   {ctx with bptr=ctx.bptr-1; block_return=old_return}, [LABEL start_label] @ ( if ctx.add_points then [BREAKPOINT id] else [] ) @ body
  | If (ty, texp, fexp) ->
    (* trace ("if " ^ string_of_int ctx.ptr); *)
    let else_label = ctx.label in
    let end_label = ctx.label+1 in
    let a_ptr = ctx.ptr-1 in
    let ctx = {ctx with ptr=a_ptr; label=ctx.label+3} in
-   let ctx, tbody = compile' ctx (Block (ty, texp)) in
-   let ctx, fbody = compile' {ctx with ptr=a_ptr} (Block (ty, fexp)) in
+   let ctx, tbody = compile' ctx id (Block (ty, texp)) in
+   let ctx, fbody = compile' {ctx with ptr=a_ptr} id (Block (ty, fexp)) in
    ctx, [JUMPZ else_label] @ tbody @ [JUMP end_label; LABEL else_label] @ fbody @ [LABEL end_label]
  | Br x ->
    let num = Int32.to_int x.it in
@@ -251,11 +199,13 @@ and compile' ctx = function
    (* Will just push the pc *)
    (* trace ("Function call " ^ Int32.to_string v.it); *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, [CALL (Int32.to_int v.it)]
+   let br = if ctx.add_points then [BREAKPOINT id] else [] in
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par}, br @ [CALL (Int32.to_int v.it, id)] @ br
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
    (* trace ("call indirect type: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret)))); *)
-   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI]
+   let br = if ctx.add_points then [BREAKPOINT id] else [] in
+   {ctx with ptr=ctx.ptr+List.length ret-List.length par-1}, br @ [CHECKCALLI (Byteutil.ftype_hash (FuncType (par,ret))); CALLI id] @ br
  | Select ->
    (* trace "select"; *)
    let else_label = ctx.label in
@@ -285,12 +235,6 @@ and compile_block ctx = function
 
 (* Initialize local variables with correct types *)
 
-let type_to_str = function
- | I32Type -> "i32"
- | I64Type -> "i64"
- | F32Type -> "f32"
- | F64Type -> "f64"
-
 let find_export_name m num =
   let rec get_exports = function
    | [] -> "internal function"
@@ -314,7 +258,7 @@ let compile_func ctx idx func =
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals) ^ " type: " ^ Int32.to_string func.it.ftype.it);
   trace ("Type hash: " ^ Int64.to_string (Byteutil.ftype_hash (FuncType (par,ret))));
   (* Just params are now in the stack *)
-  let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} (Block (ret, func.it.body)) in
+  let ctx, body = compile' {ctx with ptr=ctx.ptr+List.length par+List.length func.it.locals} 0l (Block (ret, func.it.body)) in
   trace ("---- function end " ^ string_of_int ctx.ptr);
   ctx,
   ( if false (* !Flags.trace *) then [STUB (find_export_name ctx.mdle idx ^ " Idx " ^ string_of_int idx ^ " Params " ^ String.concat "," (List.map type_to_str par) ^  " Return " ^ String.concat "," (List.map type_to_str ret))] else [] ) @
@@ -343,97 +287,10 @@ let resolve_to n lst =
   List.map (resolve_inst tab) lst
 
 let resolve_inst2 tab = function
- | CALL l -> CALL (Hashtbl.find tab l)
+ | CALL (l, id) -> CALL (Hashtbl.find tab l, id)
  | a -> a
 
-let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle}
-
-let make_tables m =
-  let ftab = Hashtbl.create 10 in
-  let ttab = Hashtbl.create 10 in
-  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
-  let rec get_imports i = function
-   | [] -> []
-   | {it=im; _} :: tl ->
-     match im.idesc.it with
-     | FuncImport tvar ->
-        let ty = Hashtbl.find ttab tvar.it in
-        Hashtbl.add ftab (Int32.of_int i) ty;
-        im :: get_imports (i+1) tl
-     | _ -> get_imports i tl in
-  let f_imports = get_imports 0 m.imports in
-  let num_imports = List.length f_imports in
-  List.iteri (fun i f ->
-    let ty = Hashtbl.find ttab f.it.ftype.it in
-    Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
-  ftab, ttab
-
-let elem x = {it=x; at=no_region}
-
-let func_imports m =
-  let rec do_get = function
-   | [] -> []
-   | ({it={idesc={it=FuncImport _;_};_};_} as el)::tl -> el :: do_get tl
-   | _::tl -> do_get tl in
-  do_get m.it.imports
-
-let global_imports m =
-  let rec do_get = function
-   | [] -> []
-   | ({it={idesc={it=GlobalImport _;_};_};_} as el)::tl -> el :: do_get tl
-   | _::tl -> do_get tl in
-  do_get m.it.imports
-
-let other_imports m =
-  let rec do_get = function
-   | [] -> []
-   | {it={idesc={it=FuncImport _;_};_};_}::tl -> do_get tl
-   | {it={idesc={it=GlobalImport _;_};_};_}::tl -> do_get tl
-   | el::tl -> el :: do_get tl in
-  do_get m.it.imports
-
-let other_imports_nomem m =
-  let rec do_get = function
-   | [] -> []
-   | {it={idesc={it=FuncImport _;_};_};_}::tl -> do_get tl
-   | {it={idesc={it=GlobalImport _;_};_};_}::tl -> do_get tl
-   | {it={idesc={it=MemoryImport _;_};_};_}::tl -> do_get tl
-   | el::tl -> el :: do_get tl in
-  do_get m.it.imports
-
-let find_function m func =
-  let ftab = Hashtbl.create 10 in
-  let ttab = Hashtbl.create 10 in
-  List.iteri (fun i f -> Hashtbl.add ttab (Int32.of_int i) f.it) m.types;
-  let rec get_imports i = function
-   | [] -> []
-   | {it=im; _} :: tl ->
-     match im.idesc.it with
-     | FuncImport tvar ->
-        let ty = Hashtbl.find ttab tvar.it in
-        Hashtbl.add ftab (Int32.of_int i) ty;
-        im :: get_imports (i+1) tl
-     | _ -> get_imports i tl in
-  let num_imports = List.length (get_imports 0 m.imports) in
-  let entry = ref (-1) in
-  List.iteri (fun i f ->
-    if f = func then ( entry := i + num_imports )) m.funcs;
-  !entry
-
-let find_function_index m inst name =
-  ( match Instance.export inst name with
-  | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> find_function m func
-  | _ -> raise Not_found )
-
-let find_global_index m inst name =
-  let num_imports = 0l (* Int32.of_int (List.length (global_imports m)) *) in
-  let rec get_exports = function
-   | [] -> trace ("Cannot Find global: " ^ Utf8.encode name); raise Not_found
-   | {it=im; _} :: tl ->
-     match im.edesc.it with
-     | GlobalExport tvar -> if im.name = name then Int32.add tvar.it num_imports else get_exports tl
-     | _ -> get_exports tl in
-  Int32.to_int (get_exports m.it.exports)
+let empty_ctx mdle = {ptr=0; label=0; bptr=0; block_return=[]; f_types2=Hashtbl.create 1; f_types=Hashtbl.create 1; mdle; add_points=false}
 
 let malloc_string mdle malloc str =
   let open Memory in
@@ -445,16 +302,16 @@ let malloc_string mdle malloc str =
   done;
   res := [DUP 1; PUSH (i 0); STORE {ty=I32Type; align=0; offset=Int32.of_int (len-1); sz=Some Mem8}] :: !res;
   (* array address is left *)
-  [PUSH (i len); CALL malloc] @ List.flatten (List.rev (!res))
+  [PUSH (i len); CALL (malloc, 0l)] @ List.flatten (List.rev (!res))
 
 let make_args mdle inst lst =
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
   [PUSH (i (List.length lst)); (* argc *)
-   PUSH (i (List.length lst * 4)); CALL malloc] @ (* argv *)
+   PUSH (i (List.length lst * 4)); CALL (malloc, 0l)] @ (* argv *)
   List.flatten (List.mapi (fun i str -> [DUP 1] @ malloc_string mdle malloc str @ [STORE {ty=I32Type; align=0; offset=Int32.of_int (i*4 + !Flags.memory_offset); sz=None}]) lst)
 
 let simple_call mdle inst name =
-  try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name))]
+  try [STUB name; CALL (find_function_index mdle inst (Utf8.decode name), 0l)]
   with Not_found -> []
 
 let init_fs_stack mdle inst =
@@ -463,11 +320,13 @@ let init_fs_stack mdle inst =
   prerr_endline ("All globals " ^ string_of_int (List.length mdle.globals));
   let stack_max = List.length (global_imports (elem mdle)) + 3 in *)
   prerr_endline ("Warning: asm.js initialization is very dependant on the filesystem.wasm");
-  let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
-  let stack_ptr = len - 20 in (* this is the difficult place *)
+  let asmjs = find_global_index (elem mdle) (Utf8.decode "ASMJS") in
+  (* let len = List.length (global_imports (elem mdle)) + List.length mdle.globals in
+  let stack_ptr = len - 20 in *)
+  let stack_ptr = asmjs - 16 in (* this is the difficult place *)
   let stack_max = stack_ptr + 1 in
   let malloc = find_function_index mdle inst (Utf8.decode "_malloc") in
-  [PUSH (i 1024); CALL malloc; DUP 1; DUP 1;
+  [PUSH (i 1024); CALL (malloc, 0l); DUP 1; DUP 1;
    STOREGLOBAL stack_ptr;
    BIN (I32 I32Op.Add);
    STOREGLOBAL stack_max]
@@ -476,13 +335,13 @@ let init_system mdle inst =
   (* This is the last point that we can use to initialize metering *)
   let num_globals = List.length (global_imports (elem mdle)) + List.length mdle.globals in
   ( try
-      let initial_gas_limit = find_global_index (elem mdle) inst (Utf8.decode "GAS_LIMIT") in
+      let initial_gas_limit = find_global_index (elem mdle) (Utf8.decode "GAS_LIMIT") in
       let gas_limit = num_globals in
       let gas = num_globals + 1 in
       [LOADGLOBAL initial_gas_limit; CONV (I64 I64Op.ExtendUI32); PUSH (I64 1000000L); BIN (I64 I64Op.Mul); STOREGLOBAL gas_limit; PUSH (I64 0L); STOREGLOBAL gas]
     with Not_found -> [] ) @
   simple_call mdle inst "__post_instantiate" @
-  (if (try ignore (find_global_index (elem mdle) inst (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
+  (if (try ignore (find_global_index (elem mdle) (Utf8.decode "ASMJS")); true with Not_found -> false) then init_fs_stack mdle inst else [] ) @
   simple_call mdle inst "_initSystem"
 
 let find_initializers mdle =
@@ -511,20 +370,26 @@ let make_cxx_init mdle inst =
   [STUB "Initialization finished"] *)
 
 let generic_stub m inst mname fname =
+    try [STUB (mname ^ " . " ^ fname); CALL (find_function_index m inst (Utf8.decode "_finalizeSystem"), 0l); EXIT]
+    with Not_found -> [STUB (mname ^ " . " ^ fname); EXIT]
+
+(*
+let generic_stub m inst mname fname =
   try
   [STUB (mname ^ " . " ^ fname);
-   CALL (find_function_index m inst (Utf8.decode "_callArguments"));
+   CALL (find_function_index m inst (Utf8.decode "_callArguments"), 0l);
    DROP_N;
-   CALL (find_function_index m inst (Utf8.decode "_callMemory"));
+   CALL (find_function_index m inst (Utf8.decode "_callMemory"), 0l);
    (* Just handle zero or one return values *)
-   CALL (find_function_index m inst (Utf8.decode "_callReturns"));
+   CALL (find_function_index m inst (Utf8.decode "_callReturns"), 0l);
    JUMPI (-2);
    JUMP (-3);
    LABEL (-2);
-   CALL (find_function_index m inst (Utf8.decode "_getReturn")); (* here we should do a type adjustment???? *)
+   CALL (find_function_index m inst (Utf8.decode "_getReturn"), 0l); (* here we should do a type adjustment???? *)
    LABEL (-3);
    RETURN]
   with Not_found -> [STUB (mname ^ " . " ^ fname); RETURN]
+*)
 
 let mem_init_size m =
   if !Flags.run_wasm || !Flags.disable_float then Byteutil.pow2 (!Flags.memory_size - 13) else
@@ -551,10 +416,28 @@ let flatten_tl lst =
   | a::tl -> do_flatten (a @ acc) tl in
   do_flatten [] (List.rev lst)
 
-let kludge = ref (fun m -> 1)
+let generate_entry id_to_local (lst, others) =
+   let stack_size = List.length lst + others in
+   (* others will have to be moved to make space *)
+   let n = List.length lst in
+   gen n (fun i -> DUP 1) @ (* fillers *)
+   gen others (fun i -> DUP (others-i+n+1)) @ (* this should copy the others *)
+   List.flatten (List.mapi (fun i id -> [DUP (stack_size + List.assoc id_to_local id); SWAP (stack_size-i); DROP 1]) lst) (* access local variable, then write to filled location *)
+
+let generate_exit id_to_local (lst, others) =
+   (* let stack_size = List.length lst + others in *)
+   (* others will have to be moved over the hidden variables *)
+   let n = List.length lst in
+   List.flatten (gen others (fun i -> [DUP (others-i+1); SWAP (others-i+1+n); DROP 1])) @ (* this should copy the others *)
+   [DROP others]
 
 let compile_test m func vs init inst =
   (* debug_exports m; *)
+  (try
+      let g_ind = find_global_index (elem m) (Utf8.decode "MEMORY_OFFSET") in
+      let g = List.nth m.globals g_ind in
+      Flags.memory_offset := value_to_int (Eval.eval_const inst g.it.value)
+   with Not_found -> () );
   trace ("Function types: " ^ string_of_int (List.length m.types));
   trace ("Functions: " ^ string_of_int (List.length m.funcs));
   trace ("Tables: " ^ string_of_int (List.length m.tables));
@@ -586,7 +469,7 @@ let compile_test m func vs init inst =
   (* perhaps could do something with the function type *)
   (* one idea would be to use a debugging message *)
   let exit_code =
-    try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem")); EXIT]
+    try [CALL (find_function_index m inst (Utf8.decode "_finalizeSystem"), 0l); EXIT]
     with Not_found -> [EXIT] in
   let import_codes = List.map (fun im ->
      let mname = Utf8.encode im.module_name in
@@ -600,12 +483,12 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_outputData" then [OUTPUTDATA;RETURN] else
      if mname = "env" && fname = "_sbrk" then
        [STUB "sbrk";
-        LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
+        LOADGLOBAL (find_global_index (elem m) (Utf8.decode "DYNAMICTOP_PTR"));
         LOAD {ty=I32Type; align=0; offset=Int32.of_int !Flags.memory_offset; sz=None};
         DUP 1;
         DUP 3;
         BIN (I32 I32Op.Add);
-        LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "DYNAMICTOP_PTR"));
+        LOADGLOBAL (find_global_index (elem m) (Utf8.decode "DYNAMICTOP_PTR"));
         DUP 2;
         STORE {ty=I32Type; align=0; offset=Int32.of_int !Flags.memory_offset; sz=None};
         DUP 2;
@@ -616,22 +499,22 @@ let compile_test m func vs init inst =
      (* invoke index, a1, a2*)
      if mname = "env" && String.length fname > 7 && String.sub fname 0 7 = "invoke_" then
        let number = String.sub fname 7 (String.length fname - 7) in
-       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number))); RETURN] else
+       [CALL (find_function_index m inst (Utf8.decode ("dynCall_" ^ number)), 0l); RETURN] else
      if mname = "env" && String.length fname > 8 && String.sub fname 0 8 = "_invoke_" then
        let number = String.sub fname 8 (String.length fname - 8) in
-       try [ (* STUB fname; *) CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number))); RETURN]
+       try [ (* STUB fname; *) CALL (find_function_index m inst (Utf8.decode ("_dynCall_" ^ number)), 0l); RETURN]
        with Not_found ->
          prerr_endline ("Warning: cannot find dynamic call number " ^ number);
          [RETURN] else
      if mname = "env" && fname = "abort" then [UNREACHABLE] else
      if mname = "env" && fname = "_exit" then exit_code else
      if mname = "env" && fname = "getTotalMemory" then
-        try [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "TOTAL_MEMORY")); RETURN]
+        try [LOADGLOBAL (find_global_index (elem m) (Utf8.decode "TOTAL_MEMORY")); RETURN]
         with Not_found ->
         ( prerr_endline "Warning, cannot find global variable TOTAL_MEMORY. Use emscripten-module-wrapper to run files that were generated by emscripten";
           [PUSH (i (1024*1024*1500)); RETURN] ) else
      if mname = "env" && fname = "setTempRet0" then
-        try [STUB "setTempRet0 (found)"; CALL (find_function_index m inst (Utf8.decode ("setTempRet0"))); RETURN]
+        try [STUB "setTempRet0 (found)"; CALL (find_function_index m inst (Utf8.decode ("setTempRet0")), 0l); RETURN]
         with Not_found -> [STUB "setTempRet0"; DROP 1; RETURN] else
 (*     if mname = "env" && fname = "_rintf" then [UNA (F32 F32Op.Nearest); RETURN] else *)
      if mname = "env" && fname = "_rintf" then [STUB "rintf"; RETURN] else
@@ -640,7 +523,7 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_cosf" then [STUB "cosf"; RETURN] else
      if mname = "env" && fname = "_sinf" then [STUB "sinf"; RETURN] else
      if mname = "env" && fname = "pushFrame" then
-         let stack_limit = Int32.of_int (Byteutil.pow2 !Flags.stack_size - !kludge (elem m)) in
+         let stack_limit = Int32.of_int (Byteutil.pow2 !Flags.stack_size - Stacksize.check (elem m)) in
          let call_limit = Int32.of_int (Byteutil.pow2 !Flags.call_size - 1) in
          let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
          let call_stack = num_globals + 2 in
@@ -658,9 +541,9 @@ let compile_test m func vs init inst =
           PUSH (I32 0l); LOADGLOBAL frame_stack; BIN (I32 I32Op.Sub); STOREGLOBAL frame_stack;
           LOADGLOBAL call_stack; PUSH (I32 1l); BIN (I32 I32Op.Sub); STOREGLOBAL call_stack;
           RETURN; LABEL (-11); UNREACHABLE] else
-     if mname = "env" && fname = "usegas" then
+     if mname = "env" && fname = "usegas" || mname = "env" && fname = "gas" then
        try
-         let _ (* initial gas limit *) = find_global_index (elem m) inst (Utf8.decode "GAS_LIMIT") in
+         let _ (* initial gas limit *) = find_global_index (elem m) (Utf8.decode "GAS_LIMIT") in
          let num_globals = List.length (global_imports (elem m)) + List.length m.globals in
          let gas_limit = num_globals in
          let gas = num_globals + 1 in
@@ -669,13 +552,13 @@ let compile_test m func vs init inst =
      if mname = "env" && fname = "_debugString" then [STUB (mname ^ " . " ^ fname); RETURN] else
      if mname = "env" && fname = "_debugBuffer" then [STUB (mname ^ " . " ^ fname); DROP 1; RETURN] else
      if mname = "env" && fname = "_debugInt" then [STUB (mname ^ " . " ^ fname); RETURN] else
-     if mname = "env" && fname = "_getSystem" then [LOADGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
-     if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) inst (Utf8.decode "_system_ptr")); RETURN] else
+     if mname = "env" && fname = "_getSystem" then [LOADGLOBAL (find_global_index (elem m) (Utf8.decode "_system_ptr")); RETURN] else
+     if mname = "env" && fname = "_setSystem" then [STOREGLOBAL (find_global_index (elem m) (Utf8.decode "_system_ptr")); RETURN] else
      if mname = "env" && Hashtbl.mem custom_calls fname then [CUSTOM (Hashtbl.find custom_calls fname); RETURN] else
      generic_stub m inst mname fname ) f_imports in
   let module_codes = List.mapi (fun i f ->
      if f = func then trace "*************** CURRENT ";
-     compile_func {(empty_ctx m) with f_types2=ttab; f_types=ftab} (i + List.length f_imports) f) m.funcs in
+     compile_func {(empty_ctx m) with f_types2=ttab; f_types=ftab; add_points = !Flags.br_mode} (i + List.length f_imports) f) m.funcs in
   let f_resolve = Hashtbl.create 10 in
   let rec build n acc l_acc = function
    | [] -> acc
@@ -684,7 +567,7 @@ let compile_test m func vs init inst =
      trace ("Function " ^ string_of_int n ^ " at " ^ string_of_int l_acc);
      let x = resolve_to l_acc fcode in
      build (n+1) (x::acc) (List.length x + l_acc) tl in
-  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL !entry] @ exit_code in
+  let test_code = init @ List.map (fun v -> PUSH v) vs @ [CALL (!entry, 0l)] @ exit_code in
   let codes = build 0 [test_code] (List.length test_code) (import_codes @ List.map snd module_codes) in
   trace ("Here, working");
   let flat_code = flatten_tl (List.rev codes) in

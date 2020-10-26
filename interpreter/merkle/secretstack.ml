@@ -1,14 +1,10 @@
 
-open Merkle
 open Ast
 open Source
 open Types
+open Sourceutil
 
 (* Analyze stack *)
-
-let do_it x f = {x with it=f x.it}
-
-let it e = {it=e; at=no_region}
 
 type control = {
   rets : int;
@@ -26,18 +22,6 @@ type context = {
   mutable marked : Int32.t list;
   tctx : Valid.context;
 }
-
-let relabel lst =
-   let uniq = ref 1 in
-   let rec compile expr =
-      incr uniq;
-      {it=compile' expr.it; at={left=no_pos; right={file="label"; line= !uniq; column=0}}}
-   and compile' = function
-    | Block (ty, lst) -> Block (ty, List.map compile lst)
-    | Loop (ty, lst) -> Loop (ty, List.map compile lst)
-    | If (ty, texp, fexp) -> If (ty, List.map compile texp, List.map compile fexp)
-    | a -> a in
-  List.map compile lst
 
 (* Associating instructions with types *)
 let assoc_types ctx func =
@@ -61,17 +45,11 @@ let assoc_types ctx func =
 
 (* the idea would be to add local variables so that there are never hidden elements in the stack when making a call *)
 
-let rec popn n = function
- | a::tl when n > 0 -> popn (n-1) tl
- | lst -> lst
-
-let rec take n = function
- | a::tl when n > 0 -> a :: take (n-1) tl
- | lst -> []
-
 let una_stack id x = {x with stack=id::popn 1 x.stack}
 let bin_stack id x = {x with stack=id::popn 2 x.stack}
 let n_stack n id x = {x with stack=id::popn n x.stack}
+
+let info = Hashtbl.create 100
 
 let rec compile marked (ctx : context) expr = compile' marked ctx (Int32.of_int expr.at.right.line) expr.it
 and compile' marked ctx id = function
@@ -90,7 +68,13 @@ and compile' marked ctx id = function
  | Loop (_, lst) ->
    let old_return = ctx.block_return in
    let extra = ctx.ptr - ctx.locals in
-   if extra > 0 then trace ("loop start " ^ string_of_int extra);
+   (* we should mark the extra here, too *)
+   if extra > 0 then begin
+      trace ("loop start " ^ string_of_int extra);
+      let hidden = take extra ctx.stack in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (hidden, 0);
+   end;
    let ctx = {ctx with bptr=ctx.bptr+1; block_return={level=ctx.ptr; rets=0}::old_return} in
    let ctx = compile_block marked ctx lst in
    if extra > 0 then trace ("loop end " ^ string_of_int extra);
@@ -99,14 +83,22 @@ and compile' marked ctx id = function
    (* Will just push the pc *)
    let FuncType (par,ret) = Hashtbl.find ctx.f_types v.it in
    let extra = ctx.ptr - ctx.locals - List.length par in
-   if extra > 0 then trace ("call " ^ string_of_int extra);
-   marked := (take extra (popn (List.length par) ctx.stack)) @ !marked;
+   if extra > 0 then begin
+      trace ("call " ^ string_of_int extra);
+      let hidden = take extra (popn (List.length par) ctx.stack) in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (hidden, List.length par);
+   end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par; stack=make id (List.length ret) @ popn (List.length par) ctx.stack}
  | CallIndirect v ->
    let FuncType (par,ret) = Hashtbl.find ctx.f_types2 v.it in
    let extra = ctx.ptr - ctx.locals - List.length par - 1 in
-   if extra > 0 then trace ("calli " ^ string_of_int extra);
-   marked := (take extra (popn (List.length par+1) ctx.stack)) @ !marked;
+   if extra > 0 then begin
+      trace ("calli " ^ string_of_int extra ^ " adding info for " ^ Int32.to_string id);
+      let hidden = take extra (popn (List.length par+1) ctx.stack) in
+      marked := hidden @ !marked;
+      Hashtbl.add info id (hidden, List.length par+1);
+   end;
    {ctx with ptr=ctx.ptr+List.length ret-List.length par-1; stack=make id (List.length ret) @ popn (List.length par + 1) ctx.stack}
  | If (ty, texp, fexp) ->
    let a_ptr = ctx.ptr-1 in
@@ -128,7 +120,6 @@ and compile' marked ctx id = function
    let c = List.nth ctx.block_return num in
    {ctx with ptr=ctx.ptr - c.rets; stack=popn c.rets ctx.stack}
  | BrIf x ->
-   let num = Int32.to_int x.it in
    {ctx with ptr = ctx.ptr-1; stack=popn 1 ctx.stack}
  | BrTable (tab, def) ->
    let num = Int32.to_int def.it in
@@ -171,12 +162,13 @@ let tee_locals assoc func =
   and compile_list lst = List.flatten (List.map compile lst) in
   compile_list func.it.body
 
+let func_info = ref []
+
 let compile_func ctx func =
   let FuncType (par,ret) = Hashtbl.find ctx.f_types2 func.it.ftype.it in
   trace ("---- function start params:" ^ string_of_int (List.length par) ^ " locals: " ^ string_of_int (List.length func.it.locals));
   (* Just params are now in the stack *)
   let locals = List.length par + List.length func.it.locals in
-  let func = do_it func (fun f -> {f with body=relabel f.body}) in
   let res = assoc_types (Valid.func_context ctx.tctx func) func in
   let marked = ref [] in
   let ctx = compile' marked {ctx with ptr=locals; locals=locals} 0l (Block (ret, func.it.body)) in
@@ -187,8 +179,10 @@ let compile_func ctx func =
       | _ -> trace ("Warning: empty type") ; raise Not_found
      with Not_found -> ( trace ("Warning: cannot find type") ; I32Type)
      in
+  (* Association list from expression ids to local variables *)
   let marked = List.mapi (fun i x -> x, (find_type x, {it=Int32.of_int (i+locals); at=no_region})) !marked in
   trace ("---- function end " ^ string_of_int ctx.ptr);
+  func_info := !func_info @ [marked];
   do_it func (fun f -> {f with locals=f.locals@List.map (fun (_,(t,_)) -> t) marked; body=tee_locals marked func})
 
 let make_tables m =
@@ -211,7 +205,13 @@ let make_tables m =
     Hashtbl.add ftab (Int32.of_int (i + num_imports)) ty) m.funcs;
   ftab, ttab
 
+let relabel m =
+  do_it m (fun m ->
+     {m with funcs=List.map (fun func -> do_it func (fun f -> {f with body=relabel f.body})) m.funcs})
+
 let process m_ =
+  Hashtbl.clear info;
+  func_info := [];
   do_it m_ (fun m ->
      let ftab, ttab = make_tables m in
      let ctx = {

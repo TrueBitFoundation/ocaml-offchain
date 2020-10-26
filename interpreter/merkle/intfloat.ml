@@ -3,17 +3,15 @@ open Source
 open Ast
 open Types
 open Values
-open Merkle 
+open Sourceutil
 
 (* just simply merge two files *)
-
-let do_it x f = {x with it=f x.it}
 
 let simple_add n i = Int32.add i (Int32.of_int n)
 
 let merge a b =
   let funcs_a = a.it.funcs in
-  let num = List.length (Merkle.func_imports a) + List.length funcs_a in
+  let num = List.length (func_imports a) + List.length funcs_a in
   let num_ft = List.length a.it.types in
   let funcs_b = List.map (Merge.remap (simple_add num) (fun x -> x) (simple_add num_ft)) b.it.funcs in
   {a with it={(a.it) with funcs = funcs_a@funcs_b;
@@ -22,7 +20,7 @@ let merge a b =
      exports = a.it.exports@List.filter Merge.drop_table (List.map (Merge.remap_export (simple_add num) (fun x -> x) (simple_add num_ft) "") b.it.exports);
      elems = a.it.elems;
      types=a.it.types@b.it.types;
-     data=a.it.data@b.it.data@[Addglobals.generate_data (256, !Flags.memory_offset)]}}
+     data=a.it.data@b.it.data@[generate_data (256, !Flags.memory_offset)]}}
 
 let convert_type' = function
  | I32Type -> I32Type
@@ -155,13 +153,11 @@ let convert_float m =
   and convert_body lst = List.flatten (List.map convert_op lst) in
   let convert_func f = do_it f (fun f -> {f with body=convert_body f.body}) in
   let convert_global g = do_it g (fun g -> {value=do_it g.value convert_body; gtype=convert_gtype g.gtype}) in
-  Run.trace "Converting floats";
+  trace "Converting floats";
   do_it m (fun m -> {m with funcs=List.map convert_func m.funcs; globals=List.map convert_global m.globals})
 
 let process a b =
-  convert_float (convert_types (merge a b))
-  
-
-
-
+  let res = convert_float (convert_types (merge a b)) in
+  (* Need to add memory offset here *)
+  add_i32_global res "MEMORY_OFFSET" (!Flags.memory_offset)
 

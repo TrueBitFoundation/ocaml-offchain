@@ -171,6 +171,7 @@ let alu_byte = function
  | Convert (F64 F64Op.PromoteF32) -> op 0xbb
  | Convert (F64 F64Op.DemoteF64) -> assert false
  | Convert (F64 F64Op.ReinterpretInt) -> op 0xbf
+ | _ -> assert false
 
 let in_code_byte = function
  | NoIn -> 0x00
@@ -431,6 +432,7 @@ let rec makeMerkle16 arr idx level =
        if level = 0 then ( if idx < Array.length arr then arr.(idx) else ( (* prerr_endline "here" ; *) zeroword16 ) )
        else keccak (makeMerkle16 arr idx (level-1)) (makeMerkle16 arr (idx+pow2 (level-1)) (level-1)) in
      Hashtbl.add cache16 key res;
+(*     prerr_endline ("here " ^ w256_to_string res); *)
      res
 
 let rec makeMerkle arr idx level =

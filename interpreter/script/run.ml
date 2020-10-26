@@ -321,14 +321,16 @@ let add_input vm i fname =
   let open Mrun in
   vm.input.file_name.(i) <- terminate fname;
   let fname = if !Flags.input_out then fname ^ ".out" else fname in
-  let ch = open_in_bin fname in
-  let sz = in_channel_length ch in
-  vm.input.file_size.(i) <- sz;
-  let dta = Bytes.create sz in
-  really_input ch dta 0 sz;
-  close_in ch;
-  vm.input.file_data.(i) <- dta;
-  trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+  try
+    let ch = open_in_bin fname in
+    let sz = in_channel_length ch in
+    vm.input.file_size.(i) <- sz;
+    let dta = Bytes.create sz in
+    really_input ch dta 0 sz;
+    close_in ch;
+    vm.input.file_data.(i) <- dta;
+    trace ("Added file " ^ fname ^ ", " ^ string_of_int sz ^ " bytes")
+  with _ -> prerr_endline ("Warning: cannot find file " ^ fname )
 
 let output_files vm =
   let open Mrun in
@@ -391,6 +393,15 @@ let setup_vm inst mdle func vs =
 (*  prerr_endline "Initialized"; *)
   vm
 
+let get_code mdle =
+  let imports = Import.link mdle in
+  let inst = Eval.init mdle imports in
+  let func = match Instance.export inst (Utf8.decode "_main") with
+      | Some (Instance.ExternalFunc (Instance.AstFunc (_, func))) -> func
+      | _ -> raise (Failure "no main function") in
+  let vm = setup_vm inst mdle.it func [] in
+  Array.to_list vm.Mrun.code
+
 let take_array n arr =
   let res = ref [] in
   for i = 0 to n-1 do
@@ -418,6 +429,9 @@ let handle_exit vm selected =
   if selected && !Flags.output_proof then begin
      let vm_bin = Mbinary.vm_to_bin vm in
       Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_to_string vm_bin) (Mproof.to_hex (Mbinary.hash_io_bin vm_bin)) vm.step (print_file_names vm)
+  end;
+  if selected && !Flags.output_io_proof then begin
+      Printf.printf "{\"vm\": %s, \"hash\": %s, \"steps\": %i, \"files\": %s}\n" (Mproof.vm_io_to_string vm) (Mproof.to_hex (Mbinary.hash_io vm)) vm.step (print_file_names vm)
   end
 
 let run_test_aux vm =

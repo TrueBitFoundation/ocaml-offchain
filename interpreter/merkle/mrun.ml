@@ -2,6 +2,7 @@
 open Merkle
 open Values
 open Types
+open Sourceutil
 
 let rec pow2 n = if n = 0 then 1 else 2 * pow2 (n-1)
 
@@ -46,6 +47,7 @@ type alu_code =
  | DebugInt
  | DebugString
  | DebugBuffer
+ | Breakpoint
 
 type reg =
  | Reg1
@@ -262,7 +264,7 @@ let get_vm_string vm loc =
 let get_vm_buffer vm loc len =
   let res = ref "" in
 (*  let loc = ref (get_memory_int vm loc) in *)
-  for i = 0 to len - 1 do
+  for i = 0 to min (len - 1) 256 do
     res := !res ^ String.make 1 (get_memory_char vm (loc+i));
   done;
   !res
@@ -477,7 +479,7 @@ let write_register vm regs v = function
    set_input_name vm s2 s1 v
  | InputDataOut ->
    let s2 = value_to_int regs.reg1 in
-   let s1 = value_to_int regs.reg2 in
+(*   let s1 = value_to_int regs.reg2 in *)
    let v = value_to_int v in
    let s1 = if v < 0 then v + 256 else v in
    trace ("output data to file number " ^ string_of_int s2 ^ ": " ^ string_of_int s1);
@@ -630,7 +632,7 @@ let print_conv64 = function
  | I64Op.ReinterpretFloat -> "reinterpret"
 
 exception FloatsDisabled
-
+exception BreakpointExn
 
 let handle_alu vm r1 r2 r3 ireg = function
  | FixMemory (ty, sz) -> mem_load r2 r3 ty sz (value_to_int r1+value_to_int ireg)
@@ -687,11 +689,13 @@ let handle_alu vm r1 r2 r3 ireg = function
    let ptr = value_to_int (vm.stack.(vm.stack_ptr - 1)) in
    prerr_endline ("DEBUG: " ^ string_of_int ptr);
    i 0
+ | Breakpoint -> raise BreakpointExn
 
 open Ast
 
 let get_code = function
  | NOP -> noop
+ | BREAKPOINT _ -> {noop with alu_code=Breakpoint}
  | STUB _ -> noop
  | UNREACHABLE -> {noop with alu_code=Trap}
  | EXIT -> {noop with immed=I64 (Int64.of_int magic_pc); read_reg1 = Immed; pc_ch=StackReg}
@@ -699,9 +703,9 @@ let get_code = function
  | JUMPI x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJump; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPZ x -> {noop with immed=i x; read_reg1 = Immed; read_reg2 = StackIn0; read_reg3 = ReadPc; alu_code = CheckJumpZ; pc_ch=StackReg; stack_ch=StackDec}
  | JUMPFORWARD x -> {noop with immed=i x; read_reg1 = StackIn0; read_reg2 = ReadPc; alu_code = CheckJumpForward; pc_ch=StackReg; stack_ch=StackDec}
- | CALL x -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
+ | CALL (x, _) -> {noop with immed=i x; read_reg1=Immed; read_reg2 = ReadPc; write1 = (Reg2, CallOut); call_ch = StackInc; pc_ch=StackReg}
  | CHECKCALLI x -> {noop with immed=I64 x; read_reg1=StackIn0; read_reg2=TableTypeIn; alu_code=CheckDynamicCall; pc_ch=StackInc}
- | CALLI -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
+ | CALLI _ -> {noop with read_reg2=ReadPc; read_reg1=StackIn0; read_reg3=TableIn; pc_ch=StackReg3; write1 = (Reg2, CallOut); call_ch = StackInc; stack_ch=StackDec}
  | INPUTSIZE -> {noop with read_reg1=StackIn0; read_reg2=InputSizeIn; write1 = (Reg2, StackOut1)}
  | INPUTNAME -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputNameIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
  | INPUTDATA -> {noop with read_reg1=StackIn0; read_reg2=StackIn1; read_reg3=InputDataIn; write1 = (Reg3, StackOut2); stack_ch=StackDec}
@@ -864,17 +868,18 @@ let vm_step vm = match vm.code.(vm.pc) with
    vm.calltable_types.(x) <- value_to_int64 vm.stack.(vm.stack_ptr-1);
    vm.stack_ptr <- vm.stack_ptr - 1
  | EXIT -> vm.pc <- magic_pc
+ | BREAKPOINT _ -> raise BreakpointExn
  | UNREACHABLE -> raise (Eval.Trap (Source.no_region, "unreachable executed"))
  | JUMPFORWARD x ->
    let idx = value_to_int vm.stack.(vm.stack_ptr-1) in
    let idx = if idx < 0 || idx >= x then x else idx in
    vm.pc <- vm.pc + 1 + idx;
    vm.stack_ptr <- vm.stack_ptr - 1
- | CALL x ->
+ | CALL (x,_) ->
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
    vm.call_ptr <- vm.call_ptr + 1;
    vm.pc <- x
- | CALLI ->
+ | CALLI _ ->
    let addr = value_to_int vm.stack.(vm.stack_ptr-1) in
    vm.stack_ptr <- vm.stack_ptr - 1;
    vm.call_stack.(vm.call_ptr) <- vm.pc+1;
@@ -1151,6 +1156,7 @@ let trace_step vm =
  if Array.length vm.code <= vm.pc then "Microp" else
  match vm.code.(vm.pc) with
  | NOP -> "NOP"
+ | BREAKPOINT _ -> "BREAKPOINT"
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
@@ -1172,7 +1178,7 @@ let trace_step vm =
    let x = vm.stack.(vm.stack_ptr-1) in
    "JUMPZ " ^ (if not (value_bool x) then " jump" else " no jump") ^ " " ^ string_of_value x
  | JUMPFORWARD x -> "JUMPFORWARD " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | CALL x -> "CALL " ^ string_of_int x
+ | CALL (x,_) -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
  | LOAD x ->
@@ -1201,7 +1207,7 @@ let trace_step vm =
  | TEST op -> "TEST"
  | BIN op -> "BIN " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
  | CMP op -> "CMP " ^ string_of_value vm.stack.(vm.stack_ptr-2) ^ " " ^ string_of_value vm.stack.(vm.stack_ptr-1)
- | CALLI -> "CALLI"
+ | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
  | SETSTACK v -> "SETSTACK"
  | SETCALLSTACK v -> "SETCALLSTACK"
@@ -1212,6 +1218,7 @@ let trace_step vm =
 
 let trace_clean vm = match vm.code.(vm.pc) with
  | NOP -> "NOP"
+ | BREAKPOINT _ -> "BREAKPOINT"
  | STUB str -> "STUB " ^ str
  | UNREACHABLE -> "UNREACHABLE"
  | EXIT -> "EXIT"
@@ -1226,7 +1233,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | JUMPI x -> "JUMPI"
  | JUMPZ x -> "JUMPZ"
  | JUMPFORWARD x -> "JUMPFORWARD"
- | CALL x -> "CALL " ^ string_of_int x
+ | CALL (x,_) -> "CALL " ^ string_of_int x
  | LABEL _ -> "LABEL ???"
  | RETURN -> "RETURN"
  | LOAD x ->
@@ -1248,7 +1255,7 @@ let trace_clean vm = match vm.code.(vm.pc) with
  | TEST op -> "TEST"
  | BIN op -> "BIN"
  | CMP op -> "CMP"
- | CALLI -> "CALLI"
+ | CALLI _ -> "CALLI"
  | CHECKCALLI x -> "CHECKCALLI"
  | SETSTACK v -> "SETSTACK"
  | SETCALLSTACK v -> "SETCALLSTACK"

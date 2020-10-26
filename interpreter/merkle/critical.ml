@@ -3,10 +3,7 @@ open Ast
 open Source
 open Types
 open Values
-
-let do_it x f = {x with it=f x.it}
-
-let it e = {it=e; at=no_region}
+open Sourceutil
 
 (*
 type ctx = {
@@ -18,7 +15,7 @@ type ctx = {
 type ctx = {
   enter_loop : var;
   push_func : var;
-  enter_func : var;
+(*  enter_func : var; *)
   pop : var;
   loc : Int32.t;
   f_loops : Int32.t list;
@@ -46,9 +43,13 @@ let process_function ctx f =
     {f with body= (* List.map it [Const (it (I32 loc)); Call ctx.push_func] @ *) List.flatten (List.map (process_inst ctx) f.body)})
 
 let process m =
+(*
+  let m = Secretstack.relabel m in
+  let m = Secretstack.process m in
+*)
   do_it m (fun m ->
     (* add function types *)
-    let i_num = List.length (Merkle.func_imports (it m)) in
+    let i_num = List.length (func_imports (it m)) in
     let ftypes = m.types @ [
        it (FuncType ([], [I32Type]));
        it (FuncType ([I32Type], []));
@@ -64,14 +65,14 @@ let process m =
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "popFuncCritical"; idesc=it (FuncImport set_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "enterLoopCritical"; idesc=it (FuncImport pop_type)};
        it {module_name=Utf8.decode "env"; item_name=Utf8.decode "pushFuncCritical"; idesc=it (FuncImport set_type)};
-       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "enterFuncCritical"; idesc=it (FuncImport pop_type)};
+(*       it {module_name=Utf8.decode "env"; item_name=Utf8.decode "enterFuncCritical"; idesc=it (FuncImport pop_type)}; *)
     ] in
     let imps = m.imports @ added in
     let ctx = {
       pop = it (Int32.of_int (i_num+0));
       enter_loop = it (Int32.of_int (i_num+1));
       push_func = it (Int32.of_int (i_num+2));
-      enter_func = it (Int32.of_int (i_num+3));
+(*      enter_func = it (Int32.of_int (i_num+3)); *)
       f_loops = [];
       loc = 0l;
     } in

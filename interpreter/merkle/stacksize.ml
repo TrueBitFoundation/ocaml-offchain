@@ -1,8 +1,8 @@
 
-open Merkle
 open Ast
 open Source
 open Types
+open Sourceutil
 
 type control = {
   rets : int;
@@ -135,7 +135,7 @@ let check_func ctx func =
 let add_functions m =
   do_it m (fun m ->
     (* add function types *)
-    let i_num = List.length (Merkle.func_imports (it m)) in
+    let i_num = List.length (func_imports (it m)) in
     let ftypes = m.types @ [
        it (FuncType ([I32Type], []));
        ] in
@@ -170,7 +170,11 @@ let check m =
       f_types2=ttab; f_types=ftab;
       locals=0; stack=[] } in
    let lst = List.sort compare (List.map (fun x -> check_func ctx x) m.it.funcs) in
-   if lst <> [] then prerr_endline ("Highest " ^ string_of_int (List.hd (List.rev lst)))
+   if lst <> [] then
+     let highest = List.hd (List.rev lst) in
+     prerr_endline ("Highest " ^ string_of_int highest);
+     max 10 highest
+   else 10
 
 let process_func ctx push_f pop_f func =
    let limit = Int32.of_int (check_func ctx func) in
@@ -183,8 +187,9 @@ let process_func ctx push_f pop_f func =
 
 let process m =
    let m = add_functions m in
-   let push_f = Int32.of_int (List.length (Merkle.func_imports m) - 2) in
-   let pop_f = Int32.of_int (List.length (Merkle.func_imports m) - 1) in
+   let m = add_i32_global m "FRAME_MAX" (check m) in
+   let push_f = Int32.of_int (List.length (func_imports m) - 2) in
+   let pop_f = Int32.of_int (List.length (func_imports m) - 1) in
    let ftab, ttab = Secretstack.make_tables m.it in
    let ctx = {
       ptr=0; bptr=0; block_return=[]; 

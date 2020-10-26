@@ -39,6 +39,8 @@ let add_arg source = args := !args @ [source]
 
 let quote s = "\"" ^ String.escaped s ^ "\""
 
+let inter_mode = ref false
+
 let merge_mode = ref false
 let float_mode = ref false
 let float_error_mode = ref false
@@ -52,6 +54,7 @@ let underscore_mode = ref false
 let counter_mode = ref false
 let test_counter_mode = ref false
 let handle_nan_mode = ref false
+let dyncall_mode = ref false
 
 let critical_mode = ref false
 let buildstack_mode = ref false
@@ -81,6 +84,7 @@ let argspec = Arg.align
   "-t", Arg.Set Flags.trace, " trace execution";
   "-v", Arg.Unit banner, " show version";
 
+  "-inter", Arg.Set inter_mode, " start execution at an intermediate state";
   "-critical", Arg.Set critical_mode, " find the critical path to step";
   "-limit-stack", Arg.Set check_stack_mode, " check sizes of stack frames";
   "-build-stack", Arg.Set buildstack_mode, " build the stack for critical path";
@@ -106,6 +110,7 @@ let argspec = Arg.align
   "-counter", Arg.Set counter_mode, " add a counter variable to the file";
   "-test-counter", Arg.Set test_counter_mode, " add a counter variable to the file (new test version)";
   "-handle-nan", Arg.Set handle_nan_mode, " canonize floating point values to remove non-determinism";
+  "-dyncall", Arg.Set dyncall_mode, " simplify dynamic calls";
   "-add-globals", Arg.String (fun s -> globals_file := Some s), " add globals to the module";
   "-init-code", Arg.String (fun s -> add_arg ("(input " ^ quote s ^ ")") ; init_code := Some s), " output initial code for a wasm file";
   "-imports", Arg.Set print_imports, " print imports from the wasm file";
@@ -152,6 +157,7 @@ let argspec = Arg.align
   "-input", Arg.Set Flags.input_proof, " output information about input";
   "-input2", Arg.Set Flags.input_out, " output information about input";
   "-output", Arg.Set Flags.output_proof, " output information about output";
+  "-output-io", Arg.Set Flags.output_io_proof, " output information about output";
   "-sbrk-offset", Arg.Int (fun n -> Flags.sbrk_offset := Int32.of_int n), " memory offset used by sbrk";
   "-output-step", Arg.Int (fun x -> Flags.output_file_at := x), " for which step the file will be output";
   "-output-file", Arg.Int (fun x -> Flags.output_file_number := x), " which file will be output at the given step";
@@ -200,6 +206,9 @@ let () =
       Run.create_sexpr_file "critical.wast" () (fun () -> m);
       Run.create_binary_file "critical.wasm" () (fun () -> m)
     | _ -> () );
+    ( match !inter_mode, !lst with
+    | true, m :: _ -> Loadstate.run m
+    | _ -> () );
     ( match !secret_stack_mode, !lst with
     | true, m :: _ ->
       let m = Secretstack.process m in
@@ -223,6 +232,12 @@ let () =
       let m = Intfloat.process a b in
       Run.create_sexpr_file "intfloat.wast" () (fun () -> m);
       Run.create_binary_file "intfloat.wasm" () (fun () -> m)
+    | _ -> () );
+    ( match !dyncall_mode, !lst with
+    | true, a :: _ ->
+      let m = Dyncall.process a in
+      Run.create_sexpr_file "dyncall.wast" () (fun () -> m);
+      Run.create_binary_file "dyncall.wasm" () (fun () -> m)
     | _ -> () );
     ( match !float_error_mode, !lst with
     | true, a :: _ ->
@@ -294,7 +309,7 @@ let () =
     | true, m :: _ ->
       let open Source in
       let open Ast in
-      let lst = Merkle.func_imports m in
+      let lst = Sourceutil.func_imports m in
       let import_name n = "[\"" ^ Utf8.encode n.it.module_name ^ "\",\"" ^ Utf8.encode n.it.item_name ^ "\"]" in
       Printf.printf "[%s]\n" (String.concat ", " (List.map import_name lst))
     | _ -> () );

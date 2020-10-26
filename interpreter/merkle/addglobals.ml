@@ -4,7 +4,7 @@ open Merge
 open Ast
 open Types
 open Source
-open Merkle
+open Sourceutil
 
 (* remap function calls *)
 let rec remap_func' map gmap gmap2 ftmap = function
@@ -57,11 +57,11 @@ let add_import taken special imports map map2 num imp =
     let loc = Int32.of_int (List.length !imports) in
     Hashtbl.add map (Int32.of_int num) loc;
     imports := imp :: !imports;
-    Run.trace ("Got import " ^ name);
+    trace ("Got import " ^ name);
     Hashtbl.add taken name loc
   end else begin
     let loc = Hashtbl.find taken name in
-    Run.trace ("Dropping import " ^ name);
+    trace ("Dropping import " ^ name);
     Hashtbl.add map (Int32.of_int num) loc
   end;
   if Hashtbl.mem special name then begin
@@ -70,54 +70,41 @@ let add_import taken special imports map map2 num imp =
 
 let int_global i = GetGlobal {it=Int32.of_int i; at=no_region}
 
-let int_const y = Const (elem (Values.I32 (Int32.of_int y)))
-let int64_const y = Const (elem (Values.I64 y))
-let f64_const y = Const (elem (Values.F64 y))
-
-let int_binary i =
-  let res = Bytes.create 4 in
-  Bytes.set res 0 (Char.chr (i land 0xff));
-  Bytes.set res 1 (Char.chr ((i lsr 8) land 0xff));
-  Bytes.set res 2 (Char.chr ((i lsr 16) land 0xff));
-  Bytes.set res 3 (Char.chr ((i lsr 24) land 0xff));
-  Bytes.to_string res
-
-let generate_data (addr, i) : string segment =
-  elem {
-    offset=elem [elem (int_const (addr*4))];
-    index=elem 0l;
-    init=int_binary i;
-  }
-
 (* need to add a TOTAL_MEMORY global *)
 
-let add_i32_global m name tmem =
-  let open Types in
-  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it m (fun m -> {m with
-    globals=m.globals@[elem {value=elem [elem (int_const tmem)]; gtype=GlobalType (I32Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
-
-let add_i64_global m name tmem =
-  let open Types in
-  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it m (fun m -> {m with
-    globals=m.globals@[elem {value=elem [elem (int64_const tmem)]; gtype=GlobalType (I64Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
-
-let add_f64_global m name tmem =
-  let open Types in
-  let idx = Int32.of_int (List.length (global_imports m) + List.length m.it.globals) in
-  do_it m (fun m -> {m with
-    globals=m.globals@[elem {value=elem [elem (f64_const tmem)]; gtype=GlobalType (F64Type, Immutable)}];
-    exports=m.exports@[elem {name=Utf8.decode name; edesc=elem (GlobalExport (elem idx))}]})
-
-let has_import m name =
-  List.exists (fun im -> Utf8.encode im.it.item_name = name) m.it.imports
+let add_setters m =
+  let asmjs = find_global_index m (Utf8.decode "ASMJS") in
+  do_it m (fun m ->
+    (* add function types *)
+    let ftypes = m.types @ [
+       it (FuncType ([I32Type], []));
+       ] in
+    let ftypes_len = List.length m.types in
+    let set_type = it (Int32.of_int (ftypes_len)) in
+    let make_func num =
+      elem {
+        ftype = set_type;
+        locals = [];
+        body = List.map it [GetLocal (it 0l); SetGlobal (it num)];
+      } in
+    (* add exports *)
+    let fnum = List.length (func_imports (it m)) + List.length m.funcs in
+    let added = [
+       it {name=Utf8.decode "setHelperStack"; edesc=it (FuncExport (it (Int32.of_int fnum)))};
+       it {name=Utf8.decode "setHelperStackLimit"; edesc=it (FuncExport (it (Int32.of_int (fnum+1))))};
+    ] in
+    let stack_ptr = asmjs - 16 in (* this is the difficult place *)
+    let stack_max = stack_ptr + 1 in
+    let set1 = make_func (Int32.of_int stack_ptr) in
+    let set2 = make_func (Int32.of_int stack_max) in
+    {m with funcs=m.funcs @ [set1; set2];
+            types=ftypes;
+            exports=m.exports @ added; })
 
 let add_globals m fn =
   let globals, mem, tmem = load_file fn in
-  let m = if !Flags.asmjs then add_i32_global m "ASMJS" 0 else m in
+  let m =
+     if !Flags.asmjs then add_setters (add_i32_global m "ASMJS" 1) else m in
   let m = add_i32_global m "TOTAL_MEMORY" tmem in
   (* let m = add_i32_global m "GAS" 0 in *)
   let m = add_i32_global m "GAS_LIMIT" (!Flags.gas_limit) in
@@ -141,7 +128,7 @@ let add_globals m fn =
     let name = "_env_" ^ x in
     let inst = Const (elem (Values.I32 (Int32.of_int y))) in
     Hashtbl.add special_globals name inst;
-    Run.trace ("Blah " ^ name ^ " fddd " ^ string_of_int (555+i));
+    trace ("Blah " ^ name ^ " fddd " ^ string_of_int (555+i));
     Hashtbl.add taken_globals name (Int32.add 555l (Int32.of_int i)) in
   List.iteri reserve_export globals;
   List.iteri (fun n x -> add_import taken_globals special_globals g_imports gmap1 gmap2 n x) (global_imports m);
@@ -153,10 +140,10 @@ let add_globals m fn =
   let offset_ga = num_g - num_ga in
 
   List.iteri (fun i _ ->
-    Run.trace ("global " ^ string_of_int (i+num_ga) ^ " -> " ^ string_of_int (i + num_ga + offset_ga));
+    trace ("global " ^ string_of_int (i+num_ga) ^ " -> " ^ string_of_int (i + num_ga + offset_ga));
     Hashtbl.add gmap1 (Int32.of_int (i + num_ga)) (Int32.of_int (i + num_ga + offset_ga))) m.it.globals;
 
-  List.iter (fun (x,y) -> Run.trace ("Global " ^ x ^ " = " ^ string_of_int y)) globals;
+  List.iter (fun (x,y) -> trace ("Global " ^ x ^ " = " ^ string_of_int y)) globals;
   (* initialize these globals differently *)
   (* when initializing globals, cannot access previous globals *)
   (* remap exports *)
@@ -164,7 +151,7 @@ let add_globals m fn =
   (* funcs will have to be remapped *)
   let funcs_a = List.map (remap (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.funcs in
   (* table elements have to be remapped *)
-  Run.trace ("Remapping globals");
+  trace ("Remapping globals");
   let new_data = List.map generate_data mem in
   let mem_size = Int32.of_int (Byteutil.pow2 (!Flags.memory_size - 13)) in
   let mem = {
@@ -172,9 +159,15 @@ let add_globals m fn =
      module_name=Utf8.decode "env";
      item_name=Utf8.decode "memory";
   } in
+  let table = if other_imports_nomem m = [] then [] else [
+  elem {idesc=elem (TableImport (TableType ({min=100000l; max=None}, AnyFuncType)));
+     module_name=Utf8.decode "env";
+     item_name=Utf8.decode "table";
+  }
+  ] in
   {m with it={(m.it) with funcs = funcs_a; data=m.it.data@new_data;
      globals = List.map (remap_global (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.globals;
-     imports = List.rev !g_imports @ func_imports m @ other_imports_nomem m @ [elem mem];
+     imports = List.rev !g_imports @ func_imports m @ table @ [elem mem];
      exports = exports_a;
      elems = List.map (remap_elem_segments (fun x -> x) (Hashtbl.find gmap1) (Hashtbl.find gmap2) ftmap1) m.it.elems;
   }}

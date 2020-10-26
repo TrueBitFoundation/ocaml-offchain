@@ -16,6 +16,8 @@ let debug_error = ref false
 
 let disable_float = ref false
 
+let br_mode = ref false
+
 let trace_from = ref (-1)
 
 let insert_error = ref (-1)
@@ -70,6 +72,7 @@ let input_all_file_proofs = ref false
 let input_proof = ref false
 let input_out = ref false
 let output_proof = ref false
+let output_io_proof = ref false
 
 let sbrk_offset = ref 0l
 
